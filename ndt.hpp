@@ -21,7 +21,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 1;
+constexpr uint64_t api_minor = 2;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint64_t nettest_middlebox = 1 << 0;
@@ -102,6 +102,9 @@ public:
   bool run_upload() noexcept;
 
   // Low-level API
+
+  bool connect_tcp(const std::string &hostname, const std::string &port,
+                   Socket *sock) noexcept;
 
   bool msg_write_json(uint8_t code, const std::string &msg) noexcept;
 

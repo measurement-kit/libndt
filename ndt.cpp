@@ -104,38 +104,7 @@ void Ndt::on_debug(const std::string &msg) noexcept {
 
 bool Ndt::connect() noexcept {
   assert(sock == -1);
-  addrinfo hints{};
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
-  addrinfo *rp = nullptr;
-  int rv = this->getaddrinfo(hostname.data(), port.data(), &hints, &rp);
-  if (rv != 0) {
-    EMIT_DEBUG("getaddrinfo() can't parse numeric host");
-    hints.ai_flags &= ~AI_NUMERICHOST;
-    rv = this->getaddrinfo(hostname.data(), port.data(), &hints, &rp);
-    if (rv != 0) {
-      EMIT_WARNING("getaddrinfo() failed: " << gai_strerror(rv));
-      return false;
-    }
-    // FALLTHROUGH
-  }
-  EMIT_DEBUG("getaddrinfo(): okay");
-  for (auto aip = rp; (aip); aip = aip->ai_next) {
-    sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
-    if (sock == -1) {
-      EMIT_WARNING("socket() failed: " << get_last_error());
-      continue;
-    }
-    if (this->connect(sock, aip->ai_addr, aip->ai_addrlen) == 0) {
-      EMIT_DEBUG("connect(): okay");
-      break;
-    }
-    EMIT_WARNING("connect() failed: " << get_last_error());
-    this->closesocket(sock);
-    sock = -1;
-  }
-  this->freeaddrinfo(rp);
-  return sock != -1;
+  return connect_tcp(hostname, port, &sock);
 }
 
 bool Ndt::send_login() noexcept {
@@ -361,37 +330,13 @@ bool Ndt::run_download() noexcept {
     }
   }
 
-  addrinfo hints{};
-  hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
-  hints.ai_socktype = SOCK_STREAM;
-  addrinfo *rp = nullptr;
-  auto rv = this->getaddrinfo(hostname.data(), port.data(), &hints, &rp);
-  if (rv != 0) {
-    hints.ai_flags &= ~AI_NUMERICHOST;
-    rv = this->getaddrinfo(hostname.data(), port.data(), &hints, &rp);
-    if (rv != 0) {
-      EMIT_WARNING("run_download: getaddrinfo() failed: " << gai_strerror(rv));
-      return rv;
-    }
-    // FALLTHROUGH
-  }
   for (uint8_t i = 0; i < nflows; ++i) {
-    for (auto aip = rp; (aip); aip = aip->ai_next) {
-      auto sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
-      if (sock == -1) {
-        EMIT_WARNING("run_download: socket() failed: " << get_last_error());
-        continue;
-      }
-      if (this->connect(sock, aip->ai_addr, aip->ai_addrlen) == 0) {
-        EMIT_DEBUG("run_download: connect() okay");
-        dload_socks.push_back(sock);
-        break;
-      }
-      EMIT_WARNING("run_download: connect() failed: " << get_last_error());
-      this->closesocket(sock);
+    Socket sock = -1;
+    if (!connect_tcp(hostname, port, &sock)) {
+      break;
     }
+    dload_socks.push_back(sock);
   }
-  this->freeaddrinfo(rp);
   if (dload_socks.size() != nflows) {
     EMIT_WARNING("run_download: not all connect succeeded");
     return false;
@@ -540,6 +485,42 @@ bool Ndt::run_meta() noexcept {
 bool Ndt::run_upload() noexcept { return false; }
 
 // Low-level API
+
+bool Ndt::connect_tcp(const std::string &hostname, const std::string &port,
+                      Socket *sock) noexcept {
+  assert(sock != nullptr);
+  addrinfo hints{};
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
+  addrinfo *rp = nullptr;
+  int rv = this->getaddrinfo(hostname.data(), port.data(), &hints, &rp);
+  if (rv != 0) {
+    hints.ai_flags &= ~AI_NUMERICHOST;
+    rv = this->getaddrinfo(hostname.data(), port.data(), &hints, &rp);
+    if (rv != 0) {
+      EMIT_WARNING("getaddrinfo() failed: " << gai_strerror(rv));
+      return false;
+    }
+    // FALLTHROUGH
+  }
+  EMIT_DEBUG("getaddrinfo(): okay");
+  for (auto aip = rp; (aip); aip = aip->ai_next) {
+    *sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
+    if (*sock == -1) {
+      EMIT_WARNING("socket() failed: " << get_last_error());
+      continue;
+    }
+    if (this->connect(*sock, aip->ai_addr, aip->ai_addrlen) == 0) {
+      EMIT_DEBUG("connect(): okay");
+      break;
+    }
+    EMIT_WARNING("connect() failed: " << get_last_error());
+    this->closesocket(*sock);
+    *sock = -1;
+  }
+  this->freeaddrinfo(rp);
+  return *sock != -1;
+}
 
 bool Ndt::msg_write_json(uint8_t code, const std::string &msg) noexcept {
   EMIT_DEBUG("msg_write_json: message to send: " << msg);
