@@ -1,5 +1,5 @@
-#ifndef MEASUREMENT_KIT_LIBNDT_NDT_HPP
-#define MEASUREMENT_KIT_LIBNDT_NDT_HPP
+#ifndef MEASUREMENT_KIT_LIBNDT_LIBNDT_HPP
+#define MEASUREMENT_KIT_LIBNDT_LIBNDT_HPP
 
 #ifndef _WIN32
 #include <netdb.h>
@@ -22,7 +22,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 9;
+constexpr uint64_t api_minor = 10;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
@@ -86,7 +86,7 @@ class NdtSettings {
   double max_runtime = default_max_runtime;
 };
 
-class Ndt {
+class Client {
  public:
   // Top-level API
 
@@ -179,8 +179,8 @@ class Ndt {
   //
   // See <https://herbsutter.com/gotw/_100/>.
 
-  Ndt() noexcept;
-  virtual ~Ndt() noexcept;
+  Client() noexcept;
+  virtual ~Client() noexcept;
 
  private:
   class Impl;

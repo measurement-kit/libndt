@@ -1,4 +1,4 @@
-#include "ndt.hpp"
+#include "libndt.hpp"
 
 #ifdef _WIN32
 // TODO(bassosimone): add here Win32 specific headers
@@ -58,7 +58,7 @@ namespace libndt {
 #define OS_ERROR_IS_EINTR() (errno == EINTR)
 #endif
 
-class Ndt::Impl {
+class Client::Impl {
  public:
   Socket sock = -1;
   std::vector<uint64_t> granted_suite;
@@ -89,7 +89,7 @@ static double compute_speed(uint64_t data, double elapsed) noexcept {
 
 // Top-level API
 
-bool Ndt::run() noexcept {
+bool Client::run() noexcept {
   if (!connect()) {
     return false;
   }
@@ -129,21 +129,21 @@ bool Ndt::run() noexcept {
   return true;
 }
 
-void Ndt::on_warning(const std::string &msg) noexcept {
+void Client::on_warning(const std::string &msg) noexcept {
   std::clog << "[!] " << msg << std::endl;
 }
 
-void Ndt::on_info(const std::string &msg) noexcept {
+void Client::on_info(const std::string &msg) noexcept {
   std::clog << msg << std::endl;
 }
 
-void Ndt::on_debug(const std::string &msg) noexcept {
+void Client::on_debug(const std::string &msg) noexcept {
   std::clog << "[D] " << msg << std::endl;
 }
 
-void Ndt::on_performance(uint8_t tid, uint8_t nflows, uint64_t measured_bytes,
-                         double measured_interval, double elapsed_time,
-                         double max_runtime) noexcept {
+void Client::on_performance(uint8_t tid, uint8_t nflows,
+                            uint64_t measured_bytes, double measured_interval,
+                            double elapsed_time, double max_runtime) noexcept {
   auto speed = compute_speed(measured_bytes, measured_interval);
   EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
                   << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
@@ -154,27 +154,27 @@ void Ndt::on_performance(uint8_t tid, uint8_t nflows, uint64_t measured_bytes,
                   << std::right << speed << " kbit/s");
 }
 
-void Ndt::on_web100(std::string name, std::string value) noexcept {
+void Client::on_web100(std::string name, std::string value) noexcept {
   EMIT_INFO("  - " << name << ": " << value);
 }
 
-void Ndt::on_summary(std::string name, std::string value) noexcept {
+void Client::on_summary(std::string name, std::string value) noexcept {
   EMIT_INFO("  - " << name << ": " << value);
 }
 
 // High-level API
 
-bool Ndt::connect() noexcept {
+bool Client::connect() noexcept {
   assert(impl->sock == -1);
   return connect_tcp(settings.hostname, settings.port, &impl->sock);
 }
 
-bool Ndt::send_login() noexcept {
+bool Client::send_login() noexcept {
   assert(impl->sock != -1);
   return msg_write_login();
 }
 
-bool Ndt::recv_kickoff() noexcept {
+bool Client::recv_kickoff() noexcept {
   assert(impl->sock != -1);
   char buf[msg_kickoff_size];
   for (Size off = 0; off < msg_kickoff_size;) {
@@ -192,7 +192,7 @@ bool Ndt::recv_kickoff() noexcept {
   return true;
 }
 
-bool Ndt::wait_in_queue() noexcept {
+bool Client::wait_in_queue() noexcept {
   assert(impl->sock != -1);
   std::string message;
   if (!msg_expect(msg_srv_queue, &message)) {
@@ -207,7 +207,7 @@ bool Ndt::wait_in_queue() noexcept {
   return true;
 }
 
-bool Ndt::recv_version() noexcept {
+bool Client::recv_version() noexcept {
   assert(impl->sock != -1);
   std::string message;
   if (!msg_expect(msg_login, &message)) {
@@ -218,7 +218,7 @@ bool Ndt::recv_version() noexcept {
   return true;
 }
 
-bool Ndt::recv_tests_ids() noexcept {
+bool Client::recv_tests_ids() noexcept {
   assert(impl->sock != -1);
   std::string message;
   if (!msg_expect(msg_login, &message)) {
@@ -239,7 +239,7 @@ bool Ndt::recv_tests_ids() noexcept {
   return true;
 }
 
-bool Ndt::run_tests() noexcept {
+bool Client::run_tests() noexcept {
   for (auto &tid : impl->granted_suite) {
     switch (tid) {
       case nettest_upload:
@@ -269,7 +269,7 @@ bool Ndt::run_tests() noexcept {
   return true;
 }
 
-bool Ndt::recv_results_and_logout() noexcept {
+bool Client::recv_results_and_logout() noexcept {
   assert(impl->sock != -1);
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
@@ -304,7 +304,7 @@ bool Ndt::recv_results_and_logout() noexcept {
   return false;  // Too many loops
 }
 
-bool Ndt::wait_close() noexcept {
+bool Client::wait_close() noexcept {
   fd_set readset;
   FD_ZERO(&readset);
   FD_SET(impl->sock, &readset);
@@ -331,7 +331,7 @@ bool Ndt::wait_close() noexcept {
 
 // Mid-level API
 
-bool Ndt::run_download() noexcept {
+bool Client::run_download() noexcept {
   std::string port;
   uint8_t nflows = 1;
   if (!msg_expect_test_prepare(&port, &nflows)) {
@@ -469,7 +469,7 @@ bool Ndt::run_download() noexcept {
   return false;  // Too many loops
 }
 
-bool Ndt::run_meta() noexcept {
+bool Client::run_meta() noexcept {
   if (!msg_expect_empty(msg_test_prepare)) {
     return false;
   }
@@ -495,7 +495,7 @@ bool Ndt::run_meta() noexcept {
   return true;
 }
 
-bool Ndt::run_upload() noexcept {
+bool Client::run_upload() noexcept {
   char buf[8192];
   random_printable_fill(buf, sizeof(buf));
 
@@ -594,8 +594,8 @@ bool Ndt::run_upload() noexcept {
 
 // Low-level API
 
-bool Ndt::connect_tcp(const std::string &hostname, const std::string &port,
-                      Socket *sock) noexcept {
+bool Client::connect_tcp(const std::string &hostname, const std::string &port,
+                         Socket *sock) noexcept {
   assert(sock != nullptr);
   addrinfo hints{};
   hints.ai_socktype = SOCK_STREAM;
@@ -630,7 +630,7 @@ bool Ndt::connect_tcp(const std::string &hostname, const std::string &port,
   return *sock != -1;
 }
 
-bool Ndt::msg_write_login() noexcept {
+bool Client::msg_write_login() noexcept {
   static_assert(sizeof(settings.test_suite) == 1, "test_suite too large");
   uint8_t code = 0;
   settings.test_suite |= nettest_status | nettest_meta;
@@ -678,7 +678,7 @@ bool Ndt::msg_write_login() noexcept {
   return true;
 }
 
-bool Ndt::msg_write(uint8_t code, std::string &&msg) noexcept {
+bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
   EMIT_DEBUG("msg_write: message to send: " << msg);
   std::string s;
   switch (settings.proto) {
@@ -706,7 +706,7 @@ bool Ndt::msg_write(uint8_t code, std::string &&msg) noexcept {
   return true;
 }
 
-bool Ndt::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
+bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
   {
     EMIT_DEBUG("msg_write_legacy: raw message: " << msg);
     EMIT_DEBUG("msg_write_legacy: message length: " << msg.size());
@@ -744,8 +744,8 @@ bool Ndt::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
   return true;
 }
 
-bool Ndt::msg_expect_test_prepare(std::string *pport,
-                                  uint8_t *pnflows) noexcept {
+bool Client::msg_expect_test_prepare(std::string *pport,
+                                     uint8_t *pnflows) noexcept {
   // Both download and upload tests send the same options vector containing
   // the port (non-extended case) and other parameters (otherwise). Currently
   // we only honour the port and the number of flows parameters.
@@ -798,7 +798,7 @@ bool Ndt::msg_expect_test_prepare(std::string *pport,
   return true;
 }
 
-bool Ndt::msg_expect_empty(uint8_t expected_code) noexcept {
+bool Client::msg_expect_empty(uint8_t expected_code) noexcept {
   std::string s;
   if (!msg_expect(expected_code, &s)) {
     return false;
@@ -810,7 +810,7 @@ bool Ndt::msg_expect_empty(uint8_t expected_code) noexcept {
   return true;
 }
 
-bool Ndt::msg_expect(uint8_t expected_code, std::string *s) noexcept {
+bool Client::msg_expect(uint8_t expected_code, std::string *s) noexcept {
   uint8_t code = 0;
   if (!msg_read(&code, s)) {
     return false;
@@ -822,7 +822,7 @@ bool Ndt::msg_expect(uint8_t expected_code, std::string *s) noexcept {
   return true;
 }
 
-bool Ndt::msg_read(uint8_t *code, std::string *msg) noexcept {
+bool Client::msg_read(uint8_t *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   std::string s;
   if (!msg_read_legacy(code, &s)) {
@@ -857,7 +857,7 @@ bool Ndt::msg_read(uint8_t *code, std::string *msg) noexcept {
   return true;
 }
 
-bool Ndt::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
+bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   uint16_t len = 0;
   {
@@ -910,7 +910,7 @@ bool Ndt::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
 #define OS_EINVAL EINVAL
 #endif
 
-int Ndt::get_last_error() noexcept {
+int Client::get_last_error() noexcept {
 #ifdef _WIN32
   return GetLastError();
 #else
@@ -918,7 +918,7 @@ int Ndt::get_last_error() noexcept {
 #endif
 }
 
-void Ndt::set_last_error(int err) noexcept {
+void Client::set_last_error(int err) noexcept {
 #ifdef _WIN32
   SetLastError(err);
 #else
@@ -926,22 +926,22 @@ void Ndt::set_last_error(int err) noexcept {
 #endif
 }
 
-int Ndt::getaddrinfo(const char *domain, const char *port,
-                     const addrinfo *hints, addrinfo **res) noexcept {
+int Client::getaddrinfo(const char *domain, const char *port,
+                        const addrinfo *hints, addrinfo **res) noexcept {
   return ::getaddrinfo(domain, port, hints, res);
 }
 
-void Ndt::freeaddrinfo(addrinfo *aip) noexcept { ::freeaddrinfo(aip); }
+void Client::freeaddrinfo(addrinfo *aip) noexcept { ::freeaddrinfo(aip); }
 
-Socket Ndt::socket(int domain, int type, int protocol) noexcept {
+Socket Client::socket(int domain, int type, int protocol) noexcept {
   return (Socket)::socket(domain, type, protocol);
 }
 
-int Ndt::connect(Socket fd, const sockaddr *sa, SockLen len) noexcept {
+int Client::connect(Socket fd, const sockaddr *sa, SockLen len) noexcept {
   return ::connect(AS_OS_SOCKET(fd), sa, AS_OS_SOCKLEN(len));
 }
 
-Ssize Ndt::recv(Socket fd, void *base, Size count) noexcept {
+Ssize Client::recv(Socket fd, void *base, Size count) noexcept {
   if (count > OS_SSIZE_MAX) {
     set_last_error(OS_EINVAL);
     return -1;
@@ -950,7 +950,7 @@ Ssize Ndt::recv(Socket fd, void *base, Size count) noexcept {
                        AS_OS_BUFFER_LEN(count), 0);
 }
 
-Ssize Ndt::send(Socket fd, const void *base, Size count) noexcept {
+Ssize Client::send(Socket fd, const void *base, Size count) noexcept {
   if (count > OS_SSIZE_MAX) {
     set_last_error(OS_EINVAL);
     return -1;
@@ -959,9 +959,11 @@ Ssize Ndt::send(Socket fd, const void *base, Size count) noexcept {
                        AS_OS_BUFFER_LEN(count), 0);
 }
 
-int Ndt::shutdown(Socket fd, int how) noexcept { return ::shutdown(fd, how); }
+int Client::shutdown(Socket fd, int how) noexcept {
+  return ::shutdown(fd, how);
+}
 
-int Ndt::closesocket(Socket fd) noexcept {
+int Client::closesocket(Socket fd) noexcept {
 #ifdef _WIN32
   return ::closesocket(fd);
 #else
@@ -969,21 +971,21 @@ int Ndt::closesocket(Socket fd) noexcept {
 #endif
 }
 
-int Ndt::select(int numfd, fd_set *readset, fd_set *writeset, fd_set *exceptset,
-                timeval *timeout) noexcept {
+int Client::select(int numfd, fd_set *readset, fd_set *writeset,
+                   fd_set *exceptset, timeval *timeout) noexcept {
   return ::select(numfd, readset, writeset, exceptset, timeout);
 }
 
-long long Ndt::strtonum(const char *s, long long minval, long long maxval,
-                        const char **errp) noexcept {
+long long Client::strtonum(const char *s, long long minval, long long maxval,
+                           const char **errp) noexcept {
   return ::strtonum(s, minval, maxval, errp);
 }
 
 // Constructor and destructor
 
-Ndt::Ndt() noexcept { impl.reset(new Ndt::Impl); }
+Client::Client() noexcept { impl.reset(new Client::Impl); }
 
-Ndt::~Ndt() noexcept {
+Client::~Client() noexcept {
   if (impl->sock != -1) {
     this->closesocket(impl->sock);
   }
