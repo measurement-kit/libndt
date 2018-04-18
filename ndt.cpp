@@ -359,10 +359,11 @@ bool Ndt::run_download() noexcept {
       }
       timeval tv{};
       tv.tv_usec = 250000;
-      if (this->select(maxsock + 1, &set, nullptr, nullptr, &tv) <= 0) {
+      if (this->select(maxsock + 1, &set, nullptr, nullptr, &tv) < 0) {
         EMIT_WARNING("run_download: select() failed: " << get_last_error());
         return false;
       }
+      // Implementation note: in case of timeout just fall through
       for (auto &fd : impl->dload_socks) {
         if (FD_ISSET(fd, &set)) {
           Ssize n = this->recv(fd, buf, sizeof(buf));
