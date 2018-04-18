@@ -950,7 +950,8 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
     len = ntohs(len);
     EMIT_DEBUG("msg_read_legacy: message length: " << len);
   }
-  char buf[len];
+  char buf[UINT16_MAX];
+  assert(len <= sizeof(buf));
   for (Size off = 0; off < len;) {
     Ssize n = this->recv(impl->sock, buf + off, len - off);
     if (n <= 0) {
