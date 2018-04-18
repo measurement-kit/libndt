@@ -9,6 +9,7 @@
 #endif
 
 #include <chrono>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 
@@ -376,7 +377,7 @@ bool Ndt::run_download() noexcept {
             break;
           }
           if (n == 0) {
-            EMIT_WARNING("run_download: recv() failed: EOF");
+            EMIT_DEBUG("run_download: recv(): EOF");
             done = true;
             break;
           }
@@ -390,8 +391,11 @@ bool Ndt::run_download() noexcept {
         auto speed = (recent_data * 8.0) / 1000.0 / elapsed.count();
         recent_data = 0;
         prev = now;
-        EMIT_INFO("elapsed: " << elapsed.count() << " speed: " << speed
-                              << "kbit/s");
+        EMIT_INFO("num_flows: " << (int)nflows << " elapsed: " << std::fixed
+                                << std::setprecision(3) << elapsed.count()
+                                << " s; speed: " << std::setprecision(0)
+                                << std::setw(8) << std::right << speed
+                                << " kbit/s");
       }
     }
     for (auto &fd : dload_socks) {
@@ -726,9 +730,7 @@ Ssize Ndt::send(Socket fd, const void *base, Size count) noexcept {
                        AS_OS_BUFFER_LEN(count), 0);
 }
 
-int Ndt::shutdown(Socket fd, int how) noexcept {
-  return ::shutdown(fd, how);
-}
+int Ndt::shutdown(Socket fd, int how) noexcept { return ::shutdown(fd, how); }
 
 int Ndt::closesocket(Socket fd) noexcept {
 #ifdef _WIN32
