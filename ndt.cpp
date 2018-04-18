@@ -20,7 +20,7 @@
 namespace measurement_kit {
 namespace libndt {
 
-// Top-level API
+// Private utils
 
 #define EMIT_WARNING(statements)          \
   do {                                    \
@@ -48,6 +48,16 @@ namespace libndt {
       on_debug(ss.str());               \
     }                                   \
   } while (0)
+
+class Ndt::Impl {
+public:
+  Socket sock = -1;
+  std::vector<uint64_t> granted_suite;
+  std::vector<Socket> dload_socks;
+  std::vector<Socket> upload_socks;
+};
+
+// Top-level API
 
 bool Ndt::run() noexcept {
   if (!connect()) {
@@ -104,20 +114,20 @@ void Ndt::on_debug(const std::string &msg) noexcept {
 // High-level API
 
 bool Ndt::connect() noexcept {
-  assert(sock == -1);
-  return connect_tcp(hostname, port, &sock);
+  assert(impl->sock == -1);
+  return connect_tcp(hostname, port, &impl->sock);
 }
 
 bool Ndt::send_login() noexcept {
-  assert(sock != -1);
+  assert(impl->sock != -1);
   return msg_write_login();
 }
 
 bool Ndt::recv_kickoff() noexcept {
-  assert(sock != -1);
+  assert(impl->sock != -1);
   char buf[msg_kickoff_size];
   for (Size off = 0; off < msg_kickoff_size;) {
-    Ssize n = this->recv(sock, buf + off, sizeof(buf) - off);
+    Ssize n = this->recv(impl->sock, buf + off, sizeof(buf) - off);
     if (n <= 0) {
       EMIT_WARNING("recv_kickoff: recv() failed: " << get_last_error());
       return false;
@@ -132,7 +142,7 @@ bool Ndt::recv_kickoff() noexcept {
 }
 
 bool Ndt::wait_in_queue() noexcept {
-  assert(sock != -1);
+  assert(impl->sock != -1);
   std::string message;
   if (!msg_expect(msg_srv_queue, &message)) {
     return false;
@@ -147,7 +157,7 @@ bool Ndt::wait_in_queue() noexcept {
 }
 
 bool Ndt::recv_version() noexcept {
-  assert(sock != -1);
+  assert(impl->sock != -1);
   std::string message;
   if (!msg_expect(msg_login, &message)) {
     return false;
@@ -158,7 +168,7 @@ bool Ndt::recv_version() noexcept {
 }
 
 bool Ndt::recv_tests_ids() noexcept {
-  assert(sock != -1);
+  assert(impl->sock != -1);
   std::string message;
   if (!msg_expect(msg_login, &message)) {
     return false;
@@ -173,13 +183,13 @@ bool Ndt::recv_tests_ids() noexcept {
                    << cur.data() << " (error: " << errstr << ")");
       return false;
     }
-    granted_suite.push_back(tid);
+    impl->granted_suite.push_back(tid);
   }
   return true;
 }
 
 bool Ndt::run_tests() noexcept {
-  for (auto &tid : granted_suite) {
+  for (auto &tid : impl->granted_suite) {
     switch (tid) {
       case nettest_upload:
       case nettest_upload_ext:
@@ -210,7 +220,7 @@ bool Ndt::run_tests() noexcept {
 }
 
 bool Ndt::recv_results_and_logout() noexcept {
-  assert(sock != -1);
+  assert(impl->sock != -1);
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
     uint8_t code = 0;
@@ -248,21 +258,21 @@ bool Ndt::recv_results_and_logout() noexcept {
 bool Ndt::wait_close() noexcept {
   fd_set readset;
   FD_ZERO(&readset);
-  FD_SET(sock, &readset);
+  FD_SET(impl->sock, &readset);
   timeval tv{};
   tv.tv_sec = 1;
-  auto rv = this->select(sock + 1, &readset, nullptr, nullptr, &tv);
+  auto rv = this->select(impl->sock + 1, &readset, nullptr, nullptr, &tv);
   if (rv < 0) {
     EMIT_WARNING("wait_close(): select() failed: " << get_last_error());
     return false;
   }
   if (rv == 0) {
     EMIT_DEBUG("wait_close(): timeout waiting for server to close connection");
-    (void)this->shutdown(sock, SHUT_RDWR);
+    (void)this->shutdown(impl->sock, SHUT_RDWR);
     return true;  // be tolerant
   }
   char data;
-  auto n = this->recv(sock, &data, sizeof(data));
+  auto n = this->recv(impl->sock, &data, sizeof(data));
   if (n != 0) {
     EMIT_WARNING("wait_close(): server did not close connection");
     return false;
@@ -321,9 +331,9 @@ bool Ndt::run_download() noexcept {
     if (!connect_tcp(hostname, port, &sock)) {
       break;
     }
-    dload_socks.push_back(sock);
+    impl->dload_socks.push_back(sock);
   }
-  if (dload_socks.size() != nflows) {
+  if (impl->dload_socks.size() != nflows) {
     EMIT_WARNING("run_download: not all connect succeeded");
     return false;
   }
@@ -343,7 +353,7 @@ bool Ndt::run_download() noexcept {
       Socket maxsock = -1;
       fd_set set;
       FD_ZERO(&set);
-      for (auto &fd : dload_socks) {
+      for (auto &fd : impl->dload_socks) {
         FD_SET(fd, &set);
         maxsock = (std::max)(maxsock, fd);
       }
@@ -353,7 +363,7 @@ bool Ndt::run_download() noexcept {
         EMIT_WARNING("run_download: select() failed: " << get_last_error());
         return false;
       }
-      for (auto &fd : dload_socks) {
+      for (auto &fd : impl->dload_socks) {
         if (FD_ISSET(fd, &set)) {
           Ssize n = this->recv(fd, buf, sizeof(buf));
           if (n < 0) {
@@ -383,7 +393,7 @@ bool Ndt::run_download() noexcept {
                                 << " kbit/s");
       }
     }
-    for (auto &fd : dload_socks) {
+    for (auto &fd : impl->dload_socks) {
       (void)shutdown(fd, SHUT_RDWR);
     }
     auto now = std::chrono::steady_clock::now();
@@ -590,7 +600,7 @@ bool Ndt::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
     EMIT_DEBUG("msg_write_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
     for (Size off = 0; off < sizeof(header);) {
-      Ssize n = this->send(sock, header + off, sizeof(header) - off);
+      Ssize n = this->send(impl->sock, header + off, sizeof(header) - off);
       if (n <= 0) {
         EMIT_WARNING("msg_write_legacy: send() failed: " << get_last_error());
         return false;
@@ -600,7 +610,7 @@ bool Ndt::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
     EMIT_DEBUG("msg_write_legacy: sent message header");
   }
   for (Size off = 0; off < msg.size();) {
-    Ssize n = this->send(sock, msg.data() + off, msg.size() - off);
+    Ssize n = this->send(impl->sock, msg.data() + off, msg.size() - off);
     if (n <= 0) {
       EMIT_WARNING("msg_write_legacy: send() failed: " << get_last_error());
       return false;
@@ -676,7 +686,7 @@ bool Ndt::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   {
     char header[3];
     for (Size off = 0; off < sizeof(header);) {
-      Ssize n = this->recv(sock, header + off, sizeof(header) - off);
+      Ssize n = this->recv(impl->sock, header + off, sizeof(header) - off);
       if (n <= 0) {
         EMIT_WARNING("msg_read_legacy: recv() failed: " << get_last_error());
         return false;
@@ -693,7 +703,7 @@ bool Ndt::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   }
   char buf[len];
   for (Size off = 0; off < len;) {
-    Ssize n = this->recv(sock, buf + off, len - off);
+    Ssize n = this->recv(impl->sock, buf + off, len - off);
     if (n <= 0) {
       EMIT_WARNING("msg_read_legacy: recv() failed: " << get_last_error());
       return false;
@@ -794,16 +804,18 @@ long long Ndt::strtonum(const char *s, long long minval, long long maxval,
 
 // Constructor and destructor
 
-Ndt::Ndt() noexcept {}
+Ndt::Ndt() noexcept {
+  impl.reset(new Ndt::Impl);
+}
 
 Ndt::~Ndt() noexcept {
-  if (sock != -1) {
+  if (impl->sock != -1) {
+    this->closesocket(impl->sock);
+  }
+  for (auto &sock : impl->dload_socks) {
     this->closesocket(sock);
   }
-  for (auto &sock : dload_socks) {
-    this->closesocket(sock);
-  }
-  for (auto &sock : upload_socks) {
+  for (auto &sock : impl->upload_socks) {
     this->closesocket(sock);
   }
 }

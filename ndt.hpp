@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -70,7 +71,7 @@ enum class NdtProtocol {
 };
 
 class Ndt {
-public:
+ public:
   // Settings
 
   std::string hostname;
@@ -78,8 +79,8 @@ public:
   uint8_t test_suite = 0;
   uint64_t verbosity = verbosity_quiet;
   std::map<std::string, std::string> metadata{
-    {"client.version", "v3.7.0"},
-    {"client.application", "measurement-kit/libndt"},
+      {"client.version", "v3.7.0"},
+      {"client.application", "measurement-kit/libndt"},
   };
   NdtProtocol proto = NdtProtocol::proto_legacy;
 
@@ -149,18 +150,23 @@ public:
   virtual long long strtonum(const char *s, long long minval, long long maxval,
                              const char **err) noexcept;
 
-  // Constructor and destructor
+  // Constructor and destructor.
+  //
+  // Implementation note: this is the classic implementation of the pimpl
+  // pattern where we use a unique pointer, constructor and destructor are
+  // defined in the ndt.cpp file so the code compiles, and copy/move
+  // constructors and operators are not defined, thus resulting deleted.
+  //
+  // See <https://herbsutter.com/gotw/_100/>.
 
   Ndt() noexcept;
   virtual ~Ndt() noexcept;
 
-private:
-  Socket sock = -1;
-  std::vector<uint64_t> granted_suite;
-  std::vector<Socket> dload_socks;
-  std::vector<Socket> upload_socks;
+ private:
+  class Impl;
+  std::unique_ptr<Impl> impl;
 };
 
-} // namespace libndt
-} // namespace measurement_kit
+}  // namespace libndt
+}  // namespace measurement_kit
 #endif
