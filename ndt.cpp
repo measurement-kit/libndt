@@ -300,47 +300,10 @@ bool Ndt::wait_close() noexcept {
 // Mid-level API
 
 bool Ndt::run_download() noexcept {
-  std::vector<std::string> options;
-  {
-    std::string message;
-    if (!msg_expect(msg_test_prepare, &message)) {
-      return false;
-    }
-    std::istringstream ss{message};
-    std::string cur;
-    while ((std::getline(ss, cur, ' '))) {
-      options.push_back(cur);
-    }
-  }
-  if (options.size() < 1) {
-    EMIT_WARNING("run_download: too little options");
-    return false;
-  }
-
-  // Here we are being liberal; in theory we should only accept the
-  // extra parameters when the test is S2C_EXT.
-
   std::string port;
-  {
-    const char *error = nullptr;
-    (void)this->strtonum(options[0].data(), 1, UINT16_MAX, &error);
-    if (error != nullptr) {
-      EMIT_WARNING("run_download: cannot parse port");
-      return false;
-    }
-    port = options[0];
-  }
-
-  // We do not parse fields that we don't use.
-
   uint8_t nflows = 1;
-  if (options.size() >= 6) {
-    const char *error = nullptr;
-    nflows = this->strtonum(options[5].c_str(), 1, 16, &error);
-    if (error != nullptr) {
-      EMIT_WARNING("run_download: cannot parse num-flows");
-      return false;
-    }
+  if (!msg_expect_test_prepare(&port, &nflows)) {
+    return false;
   }
 
   for (uint8_t i = 0; i < nflows; ++i) {
@@ -503,41 +466,13 @@ bool Ndt::run_upload() noexcept {
   char buf[8192];
   random_printable_fill(buf, sizeof (buf));
 
-  // TODO(bassosimone): factor this common code between c2s and s2c
-  std::vector<std::string> options;
-  {
-    std::string message;
-    if (!msg_expect(msg_test_prepare, &message)) {
-      return false;
-    }
-    std::istringstream ss{message};
-    std::string cur;
-    while ((std::getline(ss, cur, ' '))) {
-      options.push_back(cur);
-    }
-  }
-  if (options.size() < 1) {
-    EMIT_WARNING("run_upload: too little options");
+  std::string port;
+  uint8_t nflows = 1;
+  if (!msg_expect_test_prepare(&port, &nflows)) {
     return false;
   }
+  assert(nflows == 1); // C2S_EXT not yet implemented
 
-  // Here we are being liberal; in theory we should only accept the
-  // extra parameters when the test is S2C_EXT.
-
-  std::string port;
-  {
-    const char *error = nullptr;
-    (void)this->strtonum(options[0].data(), 1, UINT16_MAX, &error);
-    if (error != nullptr) {
-      EMIT_WARNING("run_upload: cannot parse port");
-      return false;
-    }
-    port = options[0];
-  }
-
-  // We do not parse fields that we don't use.
-
-  constexpr auto nflows = 1;
   {
     Socket sock = -1;
     if (!connect_tcp(settings.hostname, port, &sock)) {
@@ -777,6 +712,60 @@ bool Ndt::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
     off += (Size)n;
   }
   EMIT_DEBUG("msg_write_legacy: sent message body");
+  return true;
+}
+
+bool Ndt::msg_expect_test_prepare(std::string *pport,
+                                  uint8_t *pnflows) noexcept {
+  // Both download and upload tests send the same options vector containing
+  // the port (non-extended case) and other parameters (otherwise). Currently
+  // we only honour the port and the number of flows parameters.
+
+  std::vector<std::string> options;
+  {
+    std::string message;
+    if (!msg_expect(msg_test_prepare, &message)) {
+      return false;
+    }
+    std::istringstream ss{message};
+    std::string cur;
+    while ((std::getline(ss, cur, ' '))) {
+      options.push_back(cur);
+    }
+  }
+  if (options.size() < 1) {
+    EMIT_WARNING("msg_expect_test_prepare: not enough options in vector");
+    return false;
+  }
+
+  std::string port;
+  {
+    const char *error = nullptr;
+    (void)this->strtonum(options[0].data(), 1, UINT16_MAX, &error);
+    if (error != nullptr) {
+      EMIT_WARNING("msg_expect_test_prepare: cannot parse port");
+      return false;
+    }
+    port = options[0];
+  }
+
+  // Here we are being liberal; in theory we should only accept the
+  // extra parameters when the test is extended.
+  //
+  // Also, we do not parse fields that we don't use.
+
+  uint8_t nflows = 1;
+  if (options.size() >= 6) {
+    const char *error = nullptr;
+    nflows = this->strtonum(options[5].c_str(), 1, 16, &error);
+    if (error != nullptr) {
+      EMIT_WARNING("msg_expect_test_prepare: cannot parse num-flows");
+      return false;
+    }
+  }
+
+  *pport = port;
+  *pnflows = nflows;
   return true;
 }
 
