@@ -22,31 +22,31 @@ namespace libndt {
 
 // Top-level API
 
-#define EMIT_WARNING(statements)                                               \
-  do {                                                                         \
-    if (verbosity >= verbosity_warning) {                                      \
-      std::stringstream ss;                                                    \
-      ss << statements;                                                        \
-      on_warning(ss.str());                                                    \
-    }                                                                          \
+#define EMIT_WARNING(statements)          \
+  do {                                    \
+    if (verbosity >= verbosity_warning) { \
+      std::stringstream ss;               \
+      ss << statements;                   \
+      on_warning(ss.str());               \
+    }                                     \
   } while (0)
 
-#define EMIT_INFO(statements)                                                  \
-  do {                                                                         \
-    if (verbosity >= verbosity_info) {                                         \
-      std::stringstream ss;                                                    \
-      ss << statements;                                                        \
-      on_info(ss.str());                                                       \
-    }                                                                          \
+#define EMIT_INFO(statements)          \
+  do {                                 \
+    if (verbosity >= verbosity_info) { \
+      std::stringstream ss;            \
+      ss << statements;                \
+      on_info(ss.str());               \
+    }                                  \
   } while (0)
 
-#define EMIT_DEBUG(statements)                                                 \
-  do {                                                                         \
-    if (verbosity >= verbosity_debug) {                                        \
-      std::stringstream ss;                                                    \
-      ss << statements;                                                        \
-      on_debug(ss.str());                                                      \
-    }                                                                          \
+#define EMIT_DEBUG(statements)          \
+  do {                                  \
+    if (verbosity >= verbosity_debug) { \
+      std::stringstream ss;             \
+      ss << statements;                 \
+      on_debug(ss.str());               \
+    }                                   \
   } while (0)
 
 bool Ndt::run() noexcept {
@@ -110,22 +110,7 @@ bool Ndt::connect() noexcept {
 
 bool Ndt::send_login() noexcept {
   assert(sock != -1);
-  test_suite |= nettest_status | nettest_meta;
-  nlohmann::json msg{
-      {"msg", ndt_version_compat},
-      {"tests", std::to_string(test_suite)},
-  };
-  std::string serio;
-  try {
-    serio = msg.dump();
-  } catch (nlohmann::json::exception &) {
-    return false;
-  }
-  EMIT_DEBUG("serialized EXTENDED_LOGIN message: " << serio);
-  if (!msg_write(msg_extended_login, serio)) {
-    return false;
-  }
-  return true;
+  return msg_write_login();
 }
 
 bool Ndt::recv_kickoff() noexcept {
@@ -196,29 +181,29 @@ bool Ndt::recv_tests_ids() noexcept {
 bool Ndt::run_tests() noexcept {
   for (auto &tid : granted_suite) {
     switch (tid) {
-    case nettest_upload:
-    case nettest_upload_ext:
-      EMIT_INFO("running upload test");
-      if (!run_upload()) {
+      case nettest_upload:
+      case nettest_upload_ext:
+        EMIT_INFO("running upload test");
+        if (!run_upload()) {
+          return false;
+        }
+        break;
+      case nettest_meta:
+        EMIT_INFO("running meta test");
+        if (!run_meta()) {
+          return false;
+        }
+        break;
+      case nettest_download:
+      case nettest_download_ext:
+        EMIT_INFO("running download test");
+        if (!run_download()) {
+          return false;
+        }
+        break;
+      default:
+        EMIT_WARNING("run_tests(): unexpected test id");
         return false;
-      }
-      break;
-    case nettest_meta:
-      EMIT_INFO("running meta test");
-      if (!run_meta()) {
-        return false;
-      }
-      break;
-    case nettest_download:
-    case nettest_download_ext:
-      EMIT_INFO("running download test");
-      if (!run_download()) {
-        return false;
-      }
-      break;
-    default:
-      EMIT_WARNING("run_tests(): unexpected test id");
-      return false;
     }
   }
   return true;
@@ -226,10 +211,10 @@ bool Ndt::run_tests() noexcept {
 
 bool Ndt::recv_results_and_logout() noexcept {
   assert(sock != -1);
-  for (auto i = 0; i < max_loops; ++i) { // don't loop forever
+  for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
     uint8_t code = 0;
-    if (!msg_read_json(&code, &message)) {
+    if (!msg_read(&code, &message)) {
       return false;
     }
     if (code != msg_results && code != msg_logout) {
@@ -257,7 +242,7 @@ bool Ndt::recv_results_and_logout() noexcept {
     }
   }
   EMIT_WARNING("recv_results_and_logout: too many msg_results messages");
-  return false; // Too many loops
+  return false;  // Too many loops
 }
 
 bool Ndt::wait_close() noexcept {
@@ -274,7 +259,7 @@ bool Ndt::wait_close() noexcept {
   if (rv == 0) {
     EMIT_DEBUG("wait_close(): timeout waiting for server to close connection");
     (void)this->shutdown(sock, SHUT_RDWR);
-    return true; // be tolerant
+    return true;  // be tolerant
   }
   char data;
   auto n = this->recv(sock, &data, sizeof(data));
@@ -411,7 +396,7 @@ bool Ndt::run_download() noexcept {
   {
     uint8_t code = 0;
     std::string message;
-    if (!msg_read(&code, &message)) { // non JSON on purpose
+    if (!msg_read_legacy(&code, &message)) {  // legacy on purpose!
       return false;
     }
     if (code != msg_test_msg) {
@@ -421,14 +406,14 @@ bool Ndt::run_download() noexcept {
     EMIT_DEBUG("run_download: server computed speed: " << message);
   }
 
-  if (!msg_write_json(msg_test_msg, std::to_string(client_side_speed))) {
+  if (!msg_write(msg_test_msg, std::to_string(client_side_speed))) {
     return false;
   }
 
-  for (auto i = 0; i < max_loops; ++i) { // don't loop forever
+  for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
     uint8_t code = 0;
-    if (!msg_read_json(&code, &message)) {
+    if (!msg_read(&code, &message)) {
       return false;
     }
     if (code != msg_test_msg && code != msg_test_finalize) {
@@ -457,7 +442,7 @@ bool Ndt::run_download() noexcept {
   }
 
   EMIT_WARNING("run_download: too many msg_test_msg messages");
-  return false; // Too many loops
+  return false;  // Too many loops
 }
 
 bool Ndt::run_meta() noexcept {
@@ -471,11 +456,11 @@ bool Ndt::run_meta() noexcept {
   for (auto &kv : metadata) {
     std::stringstream ss;
     ss << kv.first << ":" << kv.second;
-    if (!msg_write_json(msg_test_msg, ss.str())) {
+    if (!msg_write(msg_test_msg, ss.str())) {
       return false;
     }
   }
-  if (!msg_write_json(msg_test_msg, "")) {
+  if (!msg_write(msg_test_msg, "")) {
     return false;
   }
 
@@ -526,27 +511,72 @@ bool Ndt::connect_tcp(const std::string &hostname, const std::string &port,
   return *sock != -1;
 }
 
-bool Ndt::msg_write_json(uint8_t code, const std::string &msg) noexcept {
-  EMIT_DEBUG("msg_write_json: message to send: " << msg);
-  nlohmann::json json;
-  json["msg"] = msg;
-  std::string s;
-  try {
-    s = json.dump();
-  } catch (const nlohmann::json::exception &) {
-    EMIT_WARNING("msg_write_json: cannot serialize JSON");
-    return false;
+bool Ndt::msg_write_login() noexcept {
+  uint8_t code = 0;
+  test_suite |= nettest_status | nettest_meta;
+  std::string serio;
+  switch (proto) {
+    case NdtProtocol::proto_legacy: {
+      serio = std::string{(char *)&test_suite, sizeof(test_suite)};
+      code = msg_login;
+      break;
+    }
+    case NdtProtocol::proto_json: {
+      code = msg_extended_login;
+      nlohmann::json msg{
+          {"msg", ndt_version_compat},
+          {"tests", std::to_string((int)test_suite)},
+      };
+      try {
+        serio = msg.dump();
+      } catch (nlohmann::json::exception &) {
+        return false;
+      }
+      break;
+    }
+    default:
+      EMIT_WARNING("msg_write_login: protocol not supported");
+      return false;
   }
-  if (!msg_write(code, s)) {
+  assert(code != 0);
+  if (!msg_write_legacy(code, serio)) {
     return false;
   }
   return true;
 }
 
 bool Ndt::msg_write(uint8_t code, const std::string &msg) noexcept {
+  EMIT_DEBUG("msg_write: message to send: " << msg);
+  std::string s;
+  switch (proto) {
+    case NdtProtocol::proto_legacy: {
+      s = msg; // TODO(bassosimone): we can avoid this string copy
+      break;
+    }
+    case NdtProtocol::proto_json: {
+      nlohmann::json json;
+      json["msg"] = msg;
+      try {
+        s = json.dump();
+      } catch (const nlohmann::json::exception &) {
+        EMIT_WARNING("msg_write: cannot serialize JSON");
+        return false;
+      }
+    }
+    default:
+      EMIT_WARNING("msg_write: protocol not supported");
+      return false;
+  }
+  if (!msg_write_legacy(code, std::move(s))) {
+    return false;
+  }
+  return true;
+}
+
+bool Ndt::msg_write_legacy(uint8_t code, const std::string &msg) noexcept {
   {
-    EMIT_DEBUG("msg_write: raw message: " << msg);
-    EMIT_DEBUG("msg_write: message length: " << msg.size());
+    EMIT_DEBUG("msg_write_legacy: raw message: " << msg);
+    EMIT_DEBUG("msg_write_legacy: message length: " << msg.size());
     char header[3];
     header[0] = code;
     if (msg.size() > UINT16_MAX) {
@@ -556,28 +586,28 @@ bool Ndt::msg_write(uint8_t code, const std::string &msg) noexcept {
     uint16_t len = msg.size();
     len = htons(len);
     memcpy(&header[1], &len, sizeof(len));
-    EMIT_DEBUG("msg_write: header[0] (type): " << (int)header[0]);
-    EMIT_DEBUG("msg_write: header[1] (len-high): " << (int)header[1]);
-    EMIT_DEBUG("msg_write: header[2] (len-low): " << (int)header[2]);
+    EMIT_DEBUG("msg_write_legacy: header[0] (type): " << (int)header[0]);
+    EMIT_DEBUG("msg_write_legacy: header[1] (len-high): " << (int)header[1]);
+    EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
     for (Size off = 0; off < sizeof(header);) {
       Ssize n = this->send(sock, header + off, sizeof(header) - off);
       if (n <= 0) {
-        EMIT_WARNING("msg_write: send() failed: " << get_last_error());
+        EMIT_WARNING("msg_write_legacy: send() failed: " << get_last_error());
         return false;
       }
       off += (Size)n;
     }
-    EMIT_DEBUG("msg_write: sent message header");
+    EMIT_DEBUG("msg_write_legacy: sent message header");
   }
   for (Size off = 0; off < msg.size();) {
     Ssize n = this->send(sock, msg.data() + off, msg.size() - off);
     if (n <= 0) {
-      EMIT_WARNING("msg_write: send() failed: " << get_last_error());
+      EMIT_WARNING("msg_write_legacy: send() failed: " << get_last_error());
       return false;
     }
     off += (Size)n;
   }
-  EMIT_DEBUG("msg_write: sent message body");
+  EMIT_DEBUG("msg_write_legacy: sent message body");
   return true;
 }
 
@@ -595,7 +625,7 @@ bool Ndt::msg_expect_empty(uint8_t expected_code) noexcept {
 
 bool Ndt::msg_expect(uint8_t expected_code, std::string *s) noexcept {
   uint8_t code = 0;
-  if (!msg_read_json(&code, s)) {
+  if (!msg_read(&code, s)) {
     return false;
   }
   if (code != expected_code) {
@@ -605,30 +635,42 @@ bool Ndt::msg_expect(uint8_t expected_code, std::string *s) noexcept {
   return true;
 }
 
-bool Ndt::msg_read_json(uint8_t *code, std::string *msg) noexcept {
+bool Ndt::msg_read(uint8_t *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   std::string s;
-  if (!msg_read(code, &s)) {
+  if (!msg_read_legacy(code, &s)) {
     return false;
   }
-  nlohmann::json json;
-  try {
-    json = nlohmann::json::parse(s);
-  } catch (const nlohmann::json::exception &) {
-    EMIT_WARNING("msg_read_json: cannot parse JSON");
-    return false;
+  switch (proto) {
+    case NdtProtocol::proto_legacy: {
+      std::swap(s, *msg);
+      break;
+    }
+    case NdtProtocol::proto_json: {
+      nlohmann::json json;
+      try {
+        json = nlohmann::json::parse(s);
+      } catch (const nlohmann::json::exception &) {
+        EMIT_WARNING("msg_read: cannot parse JSON");
+        return false;
+      }
+      try {
+        *msg = json["msg"];
+      } catch (const nlohmann::json::exception &) {
+        EMIT_WARNING("msg_read: cannot find 'msg' field");
+        return false;
+      }
+      break;
+    }
+    default:
+      EMIT_WARNING("msg_read: protocol not supported");
+      return false;
   }
-  try {
-    *msg = json["msg"];
-  } catch (const nlohmann::json::exception &) {
-    EMIT_WARNING("msg_read_json: cannot find 'msg' field");
-    return false;
-  }
-  EMIT_DEBUG("msg_read_json: message: " << *msg);
+  EMIT_DEBUG("msg_read: message: " << *msg);
   return true;
 }
 
-bool Ndt::msg_read(uint8_t *code, std::string *msg) noexcept {
+bool Ndt::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   uint16_t len = 0;
   {
@@ -636,30 +678,30 @@ bool Ndt::msg_read(uint8_t *code, std::string *msg) noexcept {
     for (Size off = 0; off < sizeof(header);) {
       Ssize n = this->recv(sock, header + off, sizeof(header) - off);
       if (n <= 0) {
-        EMIT_WARNING("msg_read: recv() failed: " << get_last_error());
+        EMIT_WARNING("msg_read_legacy: recv() failed: " << get_last_error());
         return false;
       }
       off += (Size)n;
     }
-    EMIT_DEBUG("msg_read: header[0] (type): " << (int)header[0]);
-    EMIT_DEBUG("msg_read: header[1] (len-high): " << (int)header[1]);
-    EMIT_DEBUG("msg_read: header[2] (len-low): " << (int)header[2]);
+    EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)header[0]);
+    EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)header[1]);
+    EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)header[2]);
     *code = header[0];
     memcpy(&len, &header[1], sizeof(len));
     len = ntohs(len);
-    EMIT_DEBUG("msg_read: message length: " << len);
+    EMIT_DEBUG("msg_read_legacy: message length: " << len);
   }
   char buf[len];
   for (Size off = 0; off < len;) {
     Ssize n = this->recv(sock, buf + off, len - off);
     if (n <= 0) {
-      EMIT_WARNING("msg_read: recv() failed: " << get_last_error());
+      EMIT_WARNING("msg_read_legacy: recv() failed: " << get_last_error());
       return false;
     }
     off += (Size)n;
   }
   *msg = std::string{buf, len};
-  EMIT_DEBUG("msg_read: raw message: " << *msg);
+  EMIT_DEBUG("msg_read_legacy: raw message: " << *msg);
   return true;
 }
 
@@ -766,5 +808,5 @@ Ndt::~Ndt() noexcept {
   }
 }
 
-} // namespace libndt
-} // namespace measurement_kit
+}  // namespace libndt
+}  // namespace measurement_kit

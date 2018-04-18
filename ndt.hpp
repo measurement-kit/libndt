@@ -21,17 +21,17 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 2;
+constexpr uint64_t api_minor = 3;
 constexpr uint64_t api_patch = 0;
 
-constexpr uint64_t nettest_middlebox = 1 << 0;
-constexpr uint64_t nettest_upload = 1 << 1;
-constexpr uint64_t nettest_download = 1 << 2;
-constexpr uint64_t nettest_simple_firewall = 1 << 3;
-constexpr uint64_t nettest_status = 1 << 4;
-constexpr uint64_t nettest_meta = 1 << 5;
-constexpr uint64_t nettest_upload_ext = 1 << 6;
-constexpr uint64_t nettest_download_ext = 1 << 7;
+constexpr uint8_t nettest_middlebox = 1 << 0;
+constexpr uint8_t nettest_upload = 1 << 1;
+constexpr uint8_t nettest_download = 1 << 2;
+constexpr uint8_t nettest_simple_firewall = 1 << 3;
+constexpr uint8_t nettest_status = 1 << 4;
+constexpr uint8_t nettest_meta = 1 << 5;
+constexpr uint8_t nettest_upload_ext = 1 << 6;
+constexpr uint8_t nettest_download_ext = 1 << 7;
 
 constexpr uint8_t msg_comm_failure = 0;
 constexpr uint8_t msg_srv_queue = 1;
@@ -63,18 +63,25 @@ using Ssize = int64_t;
 using Socket = int64_t;
 using SockLen = int;
 
+enum class NdtProtocol {
+  proto_legacy = 0,
+  proto_json = 1,
+  proto_websockets = 2
+};
+
 class Ndt {
 public:
   // Settings
 
   std::string hostname;
   std::string port;
-  uint64_t test_suite = 0;
+  uint8_t test_suite = 0;
   uint64_t verbosity = verbosity_quiet;
   std::map<std::string, std::string> metadata{
     {"client.version", "v3.7.0"},
     {"client.application", "measurement-kit/libndt"},
   };
+  NdtProtocol proto = NdtProtocol::proto_legacy;
 
   // Top-level API
 
@@ -106,17 +113,19 @@ public:
   bool connect_tcp(const std::string &hostname, const std::string &port,
                    Socket *sock) noexcept;
 
-  bool msg_write_json(uint8_t code, const std::string &msg) noexcept;
+  bool msg_write_login() noexcept;
 
   bool msg_write(uint8_t code, const std::string &msg) noexcept;
+
+  bool msg_write_legacy(uint8_t code, const std::string &msg) noexcept;
 
   bool msg_expect_empty(uint8_t code) noexcept;
 
   bool msg_expect(uint8_t code, std::string *msg) noexcept;
 
-  bool msg_read_json(uint8_t *code, std::string *msg) noexcept;
-
   bool msg_read(uint8_t *code, std::string *msg) noexcept;
+
+  bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
 
   // Dependencies
 
