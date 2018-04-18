@@ -73,9 +73,22 @@ int main(int, char **argv) {
     std::clog << "will use host: " << cmdline.pos_args()[1] << std::endl;
   }
 
+#ifndef _WIN32
   // Make sure you ignore SIGPIPE because you're quite likely to receive
   // one at the end of the uploading phase of the NDT test.
   (void)signal(SIGPIPE, SIG_IGN);
+#endif
+
+#ifdef _WIN32
+  {
+    WORD requested = MAKEWORD(2, 2);
+    WSADATA data;
+    if (::WSAStartup(requested, &data) != 0) {
+      std::clog << "fatal: WSAStartup() failed" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+#endif
 
   bool rv = client.run();
   return (rv) ? EXIT_SUCCESS : EXIT_FAILURE;

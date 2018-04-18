@@ -4,9 +4,7 @@
 
 #include "libndt.hpp"
 
-#ifdef _WIN32
-// TODO(bassosimone): add here Win32 specific headers
-#else
+#ifndef _WIN32
 #include <errno.h>
 #include <limits.h>
 #include <unistd.h>
@@ -59,9 +57,11 @@ namespace libndt {
 #ifdef _WIN32
 #define OS_ERROR_IS_EPIPE() (false)
 #define OS_ERROR_IS_EINTR() (false)
+#define OS_SHUT_RDWR SD_BOTH
 #else
 #define OS_ERROR_IS_EPIPE() (errno == EPIPE)
 #define OS_ERROR_IS_EINTR() (errno == EINTR)
+#define OS_SHUT_RDWR SHUT_RDWR
 #endif
 
 class Client::Impl {
@@ -378,14 +378,16 @@ bool Client::wait_close() noexcept {
   FD_SET(impl->sock, &readset);
   timeval tv{};
   tv.tv_sec = 1;
-  auto rv = this->select(impl->sock + 1, &readset, nullptr, nullptr, &tv);
+  // Note: cast to `int` safe because on Unix sockets are `int`s and on
+  // Windows instead the first argment to select() is ignored.
+  auto rv = this->select((int)impl->sock + 1, &readset, nullptr, nullptr, &tv);
   if (rv < 0 && !OS_ERROR_IS_EINTR()) {
     EMIT_WARNING("wait_close(): select() failed: " << get_last_error());
     return false;
   }
   if (rv <= 0) {
     EMIT_DEBUG("wait_close(): timeout or EINTR waiting for EOF on connection");
-    (void)this->shutdown(impl->sock, SHUT_RDWR);
+    (void)this->shutdown(impl->sock, OS_SHUT_RDWR);
     return true;  // be tolerant
   }
   char data;
@@ -440,7 +442,8 @@ bool Client::run_download() noexcept {
       }
       timeval tv{};
       tv.tv_usec = 250000;
-      auto rv = this->select(maxsock + 1, &set, nullptr, nullptr, &tv);
+      // Cast to `int` safe as explained above.
+      auto rv = this->select((int)maxsock + 1, &set, nullptr, nullptr, &tv);
       if (rv < 0 && !OS_ERROR_IS_EINTR()) {
         EMIT_WARNING("run_download: select() failed: " << get_last_error());
         return false;
@@ -480,7 +483,7 @@ bool Client::run_download() noexcept {
       }
     }
     for (auto &fd : dload_socks.sockets) {
-      (void)this->shutdown(fd, SHUT_RDWR);
+      (void)this->shutdown(fd, OS_SHUT_RDWR);
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -604,7 +607,8 @@ bool Client::run_upload() noexcept {
       }
       timeval tv{};
       tv.tv_usec = 250000;
-      auto rv = this->select(maxsock + 1, nullptr, &set, nullptr, &tv);
+      // Cast to `int` safe as explained above.
+      auto rv = this->select((int)maxsock + 1, nullptr, &set, nullptr, &tv);
       if (rv < 0 && !OS_ERROR_IS_EINTR()) {
         EMIT_WARNING("run_upload: select() failed: " << get_last_error());
         return false;
@@ -641,7 +645,7 @@ bool Client::run_upload() noexcept {
       }
     }
     for (auto &fd : upload_socks.sockets) {
-      (void)this->shutdown(fd, SHUT_RDWR);
+      (void)this->shutdown(fd, OS_SHUT_RDWR);
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -690,7 +694,12 @@ bool Client::connect_tcp(const std::string &hostname, const std::string &port,
       EMIT_WARNING("socket() failed: " << get_last_error());
       continue;
     }
-    if (this->connect(*sock, aip->ai_addr, aip->ai_addrlen) == 0) {
+    // The following two lines ensure that casting `size_t` to
+    // SockLen is safe because SockLen is `int` and the value of
+    // the ai_addrlen field is always small enough.
+    static_assert(sizeof(SockLen) == sizeof (int), "Wrong SockLen size");
+    assert(aip->ai_addrlen <= INT_MAX);
+    if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
       EMIT_DEBUG("connect(): okay");
       break;
     }
@@ -790,7 +799,7 @@ bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
       EMIT_WARNING("msg_write: message too long");
       return false;
     }
-    uint16_t len = msg.size();
+    uint16_t len = (uint16_t)msg.size();
     len = htons(len);
     memcpy(&header[1], &len, sizeof(len));
     EMIT_DEBUG("msg_write_legacy: header[0] (type): " << (int)header[0]);
@@ -860,7 +869,7 @@ bool Client::msg_expect_test_prepare(std::string *pport,
   uint8_t nflows = 1;
   if (options.size() >= 6) {
     const char *error = nullptr;
-    nflows = this->strtonum(options[5].c_str(), 1, 16, &error);
+    nflows = (uint8_t)this->strtonum(options[5].c_str(), 1, 16, &error);
     if (error != nullptr) {
       EMIT_WARNING("msg_expect_test_prepare: cannot parse num-flows");
       return false;
