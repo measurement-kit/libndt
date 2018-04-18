@@ -77,7 +77,7 @@ class NdtSettings {
   uint8_t test_suite = 0;
   uint64_t verbosity = verbosity_quiet;
   std::map<std::string, std::string> metadata{
-      {"client.version", "v3.7.0"},
+      {"client.version", ndt_version_compat},
       {"client.application", "measurement-kit/libndt"},
   };
   NdtProtocol proto = NdtProtocol::proto_legacy;
