@@ -65,8 +65,6 @@ class Client::Impl {
  public:
   Socket sock = -1;
   std::vector<uint64_t> granted_suite;
-  std::vector<Socket> dload_socks;
-  std::vector<Socket> upload_socks;
 };
 
 static void random_printable_fill(char *buffer, size_t length) noexcept {
@@ -145,6 +143,24 @@ static bool emit_result(Client *client, std::string scope,
                       trim(std::move(keyval[1])));
   }
   return true;
+}
+
+class SocketVector {
+  public:
+    SocketVector(Client *c) noexcept;
+    ~SocketVector() noexcept;
+    Client *owner = nullptr;
+    std::vector<Socket> sockets;
+};
+
+SocketVector::SocketVector(Client *c) noexcept : owner{c} {}
+
+SocketVector::~SocketVector() noexcept {
+  if (owner != nullptr) {
+    for (auto &fd : sockets) {
+      owner->closesocket(fd);
+    }
+  }
 }
 
 // Top-level API
@@ -381,6 +397,7 @@ bool Client::wait_close() noexcept {
 // Mid-level API
 
 bool Client::run_download() noexcept {
+  SocketVector dload_socks{this};
   std::string port;
   uint8_t nflows = 1;
   if (!msg_expect_test_prepare(&port, &nflows)) {
@@ -392,9 +409,9 @@ bool Client::run_download() noexcept {
     if (!connect_tcp(settings.hostname, port, &sock)) {
       break;
     }
-    impl->dload_socks.push_back(sock);
+    dload_socks.sockets.push_back(sock);
   }
-  if (impl->dload_socks.size() != nflows) {
+  if (dload_socks.sockets.size() != nflows) {
     EMIT_WARNING("run_download: not all connect succeeded");
     return false;
   }
@@ -414,7 +431,7 @@ bool Client::run_download() noexcept {
       Socket maxsock = -1;
       fd_set set;
       FD_ZERO(&set);
-      for (auto &fd : impl->dload_socks) {
+      for (auto &fd : dload_socks.sockets) {
         FD_SET(fd, &set);
         maxsock = (std::max)(maxsock, fd);
       }
@@ -426,7 +443,7 @@ bool Client::run_download() noexcept {
         return false;
       }
       if (rv > 0) {
-        for (auto &fd : impl->dload_socks) {
+        for (auto &fd : dload_socks.sockets) {
           if (FD_ISSET(fd, &set)) {
             Ssize n = this->recv(fd, buf, sizeof(buf));
             if (n < 0) {
@@ -459,7 +476,7 @@ bool Client::run_download() noexcept {
         done = true;
       }
     }
-    for (auto &fd : impl->dload_socks) {
+    for (auto &fd : dload_socks.sockets) {
       (void)this->shutdown(fd, SHUT_RDWR);
     }
     auto now = std::chrono::steady_clock::now();
@@ -535,6 +552,7 @@ bool Client::run_meta() noexcept {
 }
 
 bool Client::run_upload() noexcept {
+  SocketVector upload_socks{this};
   char buf[8192];
   {
     auto begin = std::chrono::steady_clock::now();
@@ -560,7 +578,7 @@ bool Client::run_upload() noexcept {
     if (!connect_tcp(settings.hostname, port, &sock)) {
       return false;
     }
-    impl->upload_socks.push_back(sock);
+    upload_socks.sockets.push_back(sock);
   }
 
   if (!msg_expect_empty(msg_test_start)) {
@@ -577,7 +595,7 @@ bool Client::run_upload() noexcept {
       Socket maxsock = -1;
       fd_set set;
       FD_ZERO(&set);
-      for (auto &fd : impl->upload_socks) {
+      for (auto &fd : upload_socks.sockets) {
         FD_SET(fd, &set);
         maxsock = (std::max)(maxsock, fd);
       }
@@ -589,7 +607,7 @@ bool Client::run_upload() noexcept {
         return false;
       }
       if (rv > 0) {
-        for (auto &fd : impl->upload_socks) {
+        for (auto &fd : upload_socks.sockets) {
           if (FD_ISSET(fd, &set)) {
             Ssize n = this->send(fd, buf, sizeof(buf));
             if (n < 0) {
@@ -619,7 +637,7 @@ bool Client::run_upload() noexcept {
         done = true;
       }
     }
-    for (auto &fd : impl->upload_socks) {
+    for (auto &fd : upload_socks.sockets) {
       (void)this->shutdown(fd, SHUT_RDWR);
     }
     auto now = std::chrono::steady_clock::now();
@@ -1042,12 +1060,6 @@ Client::Client() noexcept { impl.reset(new Client::Impl); }
 Client::~Client() noexcept {
   if (impl->sock != -1) {
     this->closesocket(impl->sock);
-  }
-  for (auto &sock : impl->dload_socks) {
-    this->closesocket(sock);
-  }
-  for (auto &sock : impl->upload_socks) {
-    this->closesocket(sock);
   }
 }
 
