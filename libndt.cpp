@@ -67,6 +67,9 @@ class Client::Impl {
 };
 
 static void random_printable_fill(char *buffer, size_t length) noexcept {
+  // TODO(bassosimone): when we'll integrate OpenSSL we will be able to use
+  // its RNG which will for sure make this function faster than now. Meanwhile
+  // we can perhaps try to make better use of entry in the loop below.
   static const std::string ascii =
       " !\"#$%&\'()*+,-./"          // before numbers
       "0123456789"                  // numbers
@@ -85,6 +88,31 @@ static void random_printable_fill(char *buffer, size_t length) noexcept {
 
 static double compute_speed(uint64_t data, double elapsed) noexcept {
   return (elapsed > 0.0) ? ((data * 8.0) / 1000.0 / elapsed) : 0.0;
+}
+
+static std::string represent(std::string message) noexcept {
+  bool printable = true;
+  for (auto &c : message) {
+    if (c < ' ' || c > '~') {
+      printable = false;
+      break;
+    }
+  }
+  if (printable) {
+    return message;
+  }
+  std::stringstream ss;
+  ss << "binary([ ";
+  for (auto &c : message) {
+    if (c <= ' ' || c > '~') {
+      ss << " <0x" << std::fixed << std::setw(2) << std::setfill('0')
+         << std::hex << (unsigned)c << "> ";
+    } else {
+      ss << (char)c;
+    }
+  }
+  ss << "])";
+  return ss.str();
 }
 
 // Top-level API
@@ -679,7 +707,7 @@ bool Client::msg_write_login() noexcept {
 }
 
 bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
-  EMIT_DEBUG("msg_write: message to send: " << msg);
+  EMIT_DEBUG("msg_write: message to send: " << represent(msg));
   std::string s;
   switch (settings.proto) {
     case NdtProtocol::proto_legacy: {
@@ -708,7 +736,7 @@ bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
 
 bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
   {
-    EMIT_DEBUG("msg_write_legacy: raw message: " << msg);
+    EMIT_DEBUG("msg_write_legacy: raw message: " << represent(msg));
     EMIT_DEBUG("msg_write_legacy: message length: " << msg.size());
     char header[3];
     header[0] = code;
@@ -853,7 +881,7 @@ bool Client::msg_read(uint8_t *code, std::string *msg) noexcept {
       EMIT_WARNING("msg_read: protocol not supported");
       return false;
   }
-  EMIT_DEBUG("msg_read: message: " << *msg);
+  EMIT_DEBUG("msg_read: message: " << represent(*msg));
   return true;
 }
 
@@ -888,7 +916,7 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
     off += (Size)n;
   }
   *msg = std::string{buf, len};
-  EMIT_DEBUG("msg_read_legacy: raw message: " << *msg);
+  EMIT_DEBUG("msg_read_legacy: raw message: " << represent(*msg));
   return true;
 }
 
