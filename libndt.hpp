@@ -1,3 +1,6 @@
+// Part of Measurement Kit <https://measurement-kit.github.io/>.
+// Measurement Kit is free software under the BSD license. See AUTHORS
+// and LICENSE for more information on the copying conditions.
 #ifndef MEASUREMENT_KIT_LIBNDT_LIBNDT_HPP
 #define MEASUREMENT_KIT_LIBNDT_LIBNDT_HPP
 
