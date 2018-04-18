@@ -179,12 +179,7 @@ bool Ndt::recv_kickoff() noexcept {
 bool Ndt::wait_in_queue() noexcept {
   assert(sock != -1);
   std::string message;
-  uint8_t code = 0;
-  if (!msg_read_json(&code, &message)) {
-    return false;
-  }
-  if (code != msg_srv_queue) {
-    EMIT_WARNING("wait_in_queue: unexpected message type");
+  if (!msg_expect(msg_srv_queue, &message)) {
     return false;
   }
   // There is consensus among NDT developers that modern NDT should not
@@ -199,12 +194,7 @@ bool Ndt::wait_in_queue() noexcept {
 bool Ndt::recv_version() noexcept {
   assert(sock != -1);
   std::string message;
-  uint8_t code = 0;
-  if (!msg_read_json(&code, &message)) {
-    return false;
-  }
-  if (code != msg_login) {
-    EMIT_WARNING("recv_version: unexpected message type");
+  if (!msg_expect(msg_login, &message)) {
     return false;
   }
   // TODO(bassosimone): validate version number?
@@ -215,12 +205,7 @@ bool Ndt::recv_version() noexcept {
 bool Ndt::recv_tests_ids() noexcept {
   assert(sock != -1);
   std::string message;
-  uint8_t code = 0;
-  if (!msg_read_json(&code, &message)) {
-    return false;
-  }
-  if (code != msg_login) {
-    EMIT_WARNING("recv_tests_ids: unexpected message type");
+  if (!msg_expect(msg_login, &message)) {
     return false;
   }
   std::istringstream ss{message};
@@ -335,13 +320,8 @@ bool Ndt::wait_close() noexcept {
 bool Ndt::run_download() noexcept {
   std::vector<std::string> options;
   {
-    uint8_t code = 0;
     std::string message;
-    if (!msg_read_json(&code, &message)) {
-      return false;
-    }
-    if (code != msg_test_prepare) {
-      EMIT_WARNING("run_download: unexpected message type");
+    if (!msg_expect(msg_test_prepare, &message)) {
       return false;
     }
     std::istringstream ss{message};
@@ -417,16 +397,8 @@ bool Ndt::run_download() noexcept {
     return false;
   }
 
-  {
-    uint8_t code = 0;
-    std::string message;
-    if (!msg_read_json(&code, &message)) {
-      return false;
-    }
-    if (code != msg_test_start) {
-      EMIT_WARNING("run_download: unexpected message type");
-      return false;
-    }
+  if (!msg_expect_empty(msg_test_start)) {
+    return false;
   }
 
   double client_side_speed = 0.0;
@@ -540,28 +512,11 @@ bool Ndt::run_download() noexcept {
 }
 
 bool Ndt::run_meta() noexcept {
-  {
-    uint8_t code = 0;
-    std::string message;
-    if (!msg_read(&code, &message)) {
-      return false;
-    }
-    if (code != msg_test_prepare) {
-      EMIT_WARNING("run_meta: unexpected message type");
-      return false;
-    }
+  if (!msg_expect_empty(msg_test_prepare)) {
+    return false;
   }
-
-  {
-    uint8_t code = 0;
-    std::string message;
-    if (!msg_read(&code, &message)) {
-      return false;
-    }
-    if (code != msg_test_start) {
-      EMIT_WARNING("run_meta: unexpected message type");
-      return false;
-    }
+  if (!msg_expect_empty(msg_test_start)) {
+    return false;
   }
 
   for (auto &kv : metadata) {
@@ -575,16 +530,8 @@ bool Ndt::run_meta() noexcept {
     return false;
   }
 
-  {
-    uint8_t code = 0;
-    std::string message;
-    if (!msg_read(&code, &message)) {
-      return false;
-    }
-    if (code != msg_test_finalize) {
-      EMIT_WARNING("run_meta: unexpected message type");
-      return false;
-    }
+  if (!msg_expect_empty(msg_test_finalize)) {
+    return false;
   }
 
   return true;
@@ -646,6 +593,30 @@ bool Ndt::msg_write(uint8_t code, const std::string &msg) noexcept {
     off += (Size)n;
   }
   EMIT_DEBUG("msg_write: sent message body");
+  return true;
+}
+
+bool Ndt::msg_expect_empty(uint8_t expected_code) noexcept {
+  std::string s;
+  if (!msg_expect(expected_code, &s)) {
+    return false;
+  }
+  if (s != "") {
+    EMIT_WARNING("msg_expect_empty: non-empty body");
+    return false;
+  }
+  return true;
+}
+
+bool Ndt::msg_expect(uint8_t expected_code, std::string *s) noexcept {
+  uint8_t code = 0;
+  if (!msg_read_json(&code, s)) {
+    return false;
+  }
+  if (code != expected_code) {
+    EMIT_WARNING("msg_expect: unexpected message type");
+    return false;
+  }
   return true;
 }
 
