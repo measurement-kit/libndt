@@ -67,9 +67,6 @@ class Client::Impl {
 };
 
 static void random_printable_fill(char *buffer, size_t length) noexcept {
-  // TODO(bassosimone): when we'll integrate OpenSSL we will be able to use
-  // its RNG which will for sure make this function faster than now. Meanwhile
-  // we can perhaps try to make better use of entry in the loop below.
   static const std::string ascii =
       " !\"#$%&\'()*+,-./"          // before numbers
       "0123456789"                  // numbers
@@ -530,7 +527,13 @@ bool Client::run_meta() noexcept {
 
 bool Client::run_upload() noexcept {
   char buf[8192];
-  random_printable_fill(buf, sizeof(buf));
+  {
+    auto begin = std::chrono::steady_clock::now();
+    random_printable_fill(buf, sizeof(buf));
+    auto now = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed = now - begin;
+    EMIT_DEBUG("run_upload(): time to fill random buffer: " << elapsed.count());
+  }
 
   std::string port;
   uint8_t nflows = 1;
