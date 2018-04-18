@@ -58,10 +58,12 @@ namespace libndt {
 #define OS_ERROR_IS_EPIPE() (false)
 #define OS_ERROR_IS_EINTR() (false)
 #define OS_SHUT_RDWR SD_BOTH
+#define AS_OS_SOCKET(s) ((SOCKET)s)
 #else
 #define OS_ERROR_IS_EPIPE() (errno == EPIPE)
 #define OS_ERROR_IS_EINTR() (errno == EINTR)
 #define OS_SHUT_RDWR SHUT_RDWR
+#define AS_OS_SOCKET(s) ((int)s)
 #endif
 
 class Client::Impl {
@@ -375,7 +377,7 @@ bool Client::recv_results_and_logout() noexcept {
 bool Client::wait_close() noexcept {
   fd_set readset;
   FD_ZERO(&readset);
-  FD_SET(impl->sock, &readset);
+  FD_SET(AS_OS_SOCKET(impl->sock), &readset);
   timeval tv{};
   tv.tv_sec = 1;
   // Note: cast to `int` safe because on Unix sockets are `int`s and on
@@ -437,7 +439,7 @@ bool Client::run_download() noexcept {
       fd_set set;
       FD_ZERO(&set);
       for (auto &fd : dload_socks.sockets) {
-        FD_SET(fd, &set);
+        FD_SET(AS_OS_SOCKET(fd), &set);
         maxsock = (std::max)(maxsock, fd);
       }
       timeval tv{};
@@ -602,7 +604,7 @@ bool Client::run_upload() noexcept {
       fd_set set;
       FD_ZERO(&set);
       for (auto &fd : upload_socks.sockets) {
-        FD_SET(fd, &set);
+        FD_SET(AS_OS_SOCKET(fd), &set);
         maxsock = (std::max)(maxsock, fd);
       }
       timeval tv{};
@@ -980,14 +982,12 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
 // Dependencies
 
 #ifdef _WIN32
-#define AS_OS_SOCKET(s) ((SOCKET)s)
 #define AS_OS_SOCKLEN(n) ((int)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((int)n)
 #define OS_SSIZE_MAX INT_MAX
 #define OS_EINVAL WSAEINVAL
 #else
-#define AS_OS_SOCKET(s) ((int)s)
 #define AS_OS_SOCKLEN(n) ((socklen_t)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
