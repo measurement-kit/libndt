@@ -78,9 +78,9 @@ enum class NdtProtocol {
 class NdtSettings {
  public:
   std::string hostname;
-  std::string port;
+  std::string port = "3001";
   uint8_t test_suite = 0;
-  uint64_t verbosity = verbosity_quiet;
+  uint64_t verbosity = verbosity_info;
   std::map<std::string, std::string> metadata{
       {"client.version", ndt_version_compat},
       {"client.application", "measurement-kit/libndt"},
