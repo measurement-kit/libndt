@@ -525,6 +525,18 @@ bool Ndt::msg_write_login() noexcept {
   static_assert(sizeof(settings.test_suite) == 1, "test_suite too large");
   uint8_t code = 0;
   settings.test_suite |= nettest_status | nettest_meta;
+  if ((settings.test_suite & nettest_middlebox)) {
+    EMIT_WARNING("msg_write_login(): nettest_middlebox: not implemented");
+    settings.test_suite &= ~nettest_middlebox;
+  }
+  if ((settings.test_suite & nettest_simple_firewall)) {
+    EMIT_WARNING("msg_write_login(): nettest_simple_firewall: not implemented");
+    settings.test_suite &= ~nettest_simple_firewall;
+  }
+  if ((settings.test_suite & nettest_upload_ext)) {
+    EMIT_WARNING("msg_write_login(): nettest_upload_ext: not implemented");
+    settings.test_suite &= ~nettest_upload_ext;
+  }
   std::string serio;
   switch (settings.proto) {
     case NdtProtocol::proto_legacy: {
