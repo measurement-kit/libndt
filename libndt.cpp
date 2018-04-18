@@ -17,8 +17,7 @@
 #include <random>
 #include <sstream>
 
-#include <nlohmann/json.hpp>
-
+#include "json.hpp"
 #include "strtonum.h"
 
 namespace measurement_kit {
