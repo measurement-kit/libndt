@@ -21,7 +21,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 3;
+constexpr uint64_t api_minor = 4;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
@@ -115,9 +115,9 @@ public:
 
   bool msg_write_login() noexcept;
 
-  bool msg_write(uint8_t code, const std::string &msg) noexcept;
+  bool msg_write(uint8_t code, std::string &&msg) noexcept;
 
-  bool msg_write_legacy(uint8_t code, const std::string &msg) noexcept;
+  bool msg_write_legacy(uint8_t code, std::string &&msg) noexcept;
 
   bool msg_expect_empty(uint8_t code) noexcept;
 

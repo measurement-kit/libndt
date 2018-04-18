@@ -539,18 +539,18 @@ bool Ndt::msg_write_login() noexcept {
       return false;
   }
   assert(code != 0);
-  if (!msg_write_legacy(code, serio)) {
+  if (!msg_write_legacy(code, std::move(serio))) {
     return false;
   }
   return true;
 }
 
-bool Ndt::msg_write(uint8_t code, const std::string &msg) noexcept {
+bool Ndt::msg_write(uint8_t code, std::string &&msg) noexcept {
   EMIT_DEBUG("msg_write: message to send: " << msg);
   std::string s;
   switch (proto) {
     case NdtProtocol::proto_legacy: {
-      s = msg; // TODO(bassosimone): we can avoid this string copy
+      std::swap(s, msg);
       break;
     }
     case NdtProtocol::proto_json: {
@@ -573,7 +573,7 @@ bool Ndt::msg_write(uint8_t code, const std::string &msg) noexcept {
   return true;
 }
 
-bool Ndt::msg_write_legacy(uint8_t code, const std::string &msg) noexcept {
+bool Ndt::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
   {
     EMIT_DEBUG("msg_write_legacy: raw message: " << msg);
     EMIT_DEBUG("msg_write_legacy: message length: " << msg.size());
