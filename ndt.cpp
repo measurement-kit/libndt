@@ -22,35 +22,35 @@ namespace libndt {
 
 // Private utils
 
-#define EMIT_WARNING(statements)          \
-  do {                                    \
-    if (verbosity >= verbosity_warning) { \
-      std::stringstream ss;               \
-      ss << statements;                   \
-      on_warning(ss.str());               \
-    }                                     \
+#define EMIT_WARNING(statements)                   \
+  do {                                             \
+    if (settings.verbosity >= verbosity_warning) { \
+      std::stringstream ss;                        \
+      ss << statements;                            \
+      on_warning(ss.str());                        \
+    }                                              \
   } while (0)
 
-#define EMIT_INFO(statements)          \
-  do {                                 \
-    if (verbosity >= verbosity_info) { \
-      std::stringstream ss;            \
-      ss << statements;                \
-      on_info(ss.str());               \
-    }                                  \
+#define EMIT_INFO(statements)                   \
+  do {                                          \
+    if (settings.verbosity >= verbosity_info) { \
+      std::stringstream ss;                     \
+      ss << statements;                         \
+      on_info(ss.str());                        \
+    }                                           \
   } while (0)
 
-#define EMIT_DEBUG(statements)          \
-  do {                                  \
-    if (verbosity >= verbosity_debug) { \
-      std::stringstream ss;             \
-      ss << statements;                 \
-      on_debug(ss.str());               \
-    }                                   \
+#define EMIT_DEBUG(statements)                   \
+  do {                                           \
+    if (settings.verbosity >= verbosity_debug) { \
+      std::stringstream ss;                      \
+      ss << statements;                          \
+      on_debug(ss.str());                        \
+    }                                            \
   } while (0)
 
 class Ndt::Impl {
-public:
+ public:
   Socket sock = -1;
   std::vector<uint64_t> granted_suite;
   std::vector<Socket> dload_socks;
@@ -115,7 +115,7 @@ void Ndt::on_debug(const std::string &msg) noexcept {
 
 bool Ndt::connect() noexcept {
   assert(impl->sock == -1);
-  return connect_tcp(hostname, port, &impl->sock);
+  return connect_tcp(settings.hostname, settings.port, &impl->sock);
 }
 
 bool Ndt::send_login() noexcept {
@@ -328,7 +328,7 @@ bool Ndt::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
-    if (!connect_tcp(hostname, port, &sock)) {
+    if (!connect_tcp(settings.hostname, port, &sock)) {
       break;
     }
     impl->dload_socks.push_back(sock);
@@ -463,7 +463,7 @@ bool Ndt::run_meta() noexcept {
     return false;
   }
 
-  for (auto &kv : metadata) {
+  for (auto &kv : settings.metadata) {
     std::stringstream ss;
     ss << kv.first << ":" << kv.second;
     if (!msg_write(msg_test_msg, ss.str())) {
@@ -522,12 +522,14 @@ bool Ndt::connect_tcp(const std::string &hostname, const std::string &port,
 }
 
 bool Ndt::msg_write_login() noexcept {
+  static_assert(sizeof(settings.test_suite) == 1, "test_suite too large");
   uint8_t code = 0;
-  test_suite |= nettest_status | nettest_meta;
+  settings.test_suite |= nettest_status | nettest_meta;
   std::string serio;
-  switch (proto) {
+  switch (settings.proto) {
     case NdtProtocol::proto_legacy: {
-      serio = std::string{(char *)&test_suite, sizeof(test_suite)};
+      serio = std::string{(char *)&settings.test_suite,
+                          sizeof(settings.test_suite)};
       code = msg_login;
       break;
     }
@@ -535,7 +537,7 @@ bool Ndt::msg_write_login() noexcept {
       code = msg_extended_login;
       nlohmann::json msg{
           {"msg", ndt_version_compat},
-          {"tests", std::to_string((int)test_suite)},
+          {"tests", std::to_string((int)settings.test_suite)},
       };
       try {
         serio = msg.dump();
@@ -558,7 +560,7 @@ bool Ndt::msg_write_login() noexcept {
 bool Ndt::msg_write(uint8_t code, std::string &&msg) noexcept {
   EMIT_DEBUG("msg_write: message to send: " << msg);
   std::string s;
-  switch (proto) {
+  switch (settings.proto) {
     case NdtProtocol::proto_legacy: {
       std::swap(s, msg);
       break;
@@ -651,7 +653,7 @@ bool Ndt::msg_read(uint8_t *code, std::string *msg) noexcept {
   if (!msg_read_legacy(code, &s)) {
     return false;
   }
-  switch (proto) {
+  switch (settings.proto) {
     case NdtProtocol::proto_legacy: {
       std::swap(s, *msg);
       break;
@@ -804,9 +806,7 @@ long long Ndt::strtonum(const char *s, long long minval, long long maxval,
 
 // Constructor and destructor
 
-Ndt::Ndt() noexcept {
-  impl.reset(new Ndt::Impl);
-}
+Ndt::Ndt() noexcept { impl.reset(new Ndt::Impl); }
 
 Ndt::~Ndt() noexcept {
   if (impl->sock != -1) {

@@ -22,7 +22,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 4;
+constexpr uint64_t api_minor = 5;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
@@ -70,10 +70,8 @@ enum class NdtProtocol {
   proto_websockets = 2
 };
 
-class Ndt {
+class NdtSettings {
  public:
-  // Settings
-
   std::string hostname;
   std::string port;
   uint8_t test_suite = 0;
@@ -83,12 +81,20 @@ class Ndt {
       {"client.application", "measurement-kit/libndt"},
   };
   NdtProtocol proto = NdtProtocol::proto_legacy;
+};
 
+class Ndt {
+ public:
   // Top-level API
 
+  NdtSettings settings;
+
   bool run() noexcept;
+
   virtual void on_warning(const std::string &s) noexcept;
+
   virtual void on_info(const std::string &s) noexcept;
+
   virtual void on_debug(const std::string &s) noexcept;
 
   // High-level API
