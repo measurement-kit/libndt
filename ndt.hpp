@@ -22,7 +22,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 8;
+constexpr uint64_t api_minor = 9;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
@@ -104,6 +104,10 @@ class Ndt {
                               uint64_t measured_bytes,
                               double measurement_interval, double elapsed,
                               double max_runtime) noexcept;
+
+  virtual void on_web100(std::string name, std::string value) noexcept;
+
+  virtual void on_summary(std::string name, std::string value) noexcept;
 
   // High-level API
 

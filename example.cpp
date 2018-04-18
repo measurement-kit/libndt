@@ -14,7 +14,7 @@ int main() {
   ndt.settings.port = "3001";
   ndt.settings.test_suite = libndt::nettest_download|libndt::nettest_upload;
   //ndt.settings.test_suite = libndt::nettest_download_ext;
-  ndt.settings.verbosity = libndt::verbosity_debug;
+  ndt.settings.verbosity = libndt::verbosity_info;
   auto rv = ndt.run();
   std::clog << std::boolalpha << rv << std::endl;
 }

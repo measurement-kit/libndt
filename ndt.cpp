@@ -109,7 +109,7 @@ bool Ndt::run() noexcept {
   if (!run_tests()) {
     return false;
   }
-  EMIT_INFO("finished running tests");
+  EMIT_INFO("finished running tests; now reading summary data:");
   if (!recv_results_and_logout()) {
     return false;
   }
@@ -126,7 +126,7 @@ void Ndt::on_warning(const std::string &msg) noexcept {
 }
 
 void Ndt::on_info(const std::string &msg) noexcept {
-  std::clog << "    " << msg << std::endl;
+  std::clog << msg << std::endl;
 }
 
 void Ndt::on_debug(const std::string &msg) noexcept {
@@ -137,13 +137,21 @@ void Ndt::on_performance(uint8_t tid, uint8_t nflows, uint64_t measured_bytes,
                          double measured_interval, double elapsed_time,
                          double max_runtime) noexcept {
   auto speed = compute_speed(measured_bytes, measured_interval);
-  EMIT_INFO("[" << std::fixed << std::setprecision(0) << std::setw(2)
-                << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
-                << " elapsed: " << std::fixed << std::setprecision(3)
-                << std::setw(6) << elapsed_time << " s;"
-                << " test_id: " << (int)tid << " num_flows: " << (int)nflows
-                << " speed: " << std::setprecision(0) << std::setw(8)
-                << std::right << speed << " kbit/s");
+  EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
+                  << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
+                  << " elapsed: " << std::fixed << std::setprecision(3)
+                  << std::setw(6) << elapsed_time << " s;"
+                  << " test_id: " << (int)tid << " num_flows: " << (int)nflows
+                  << " speed: " << std::setprecision(0) << std::setw(8)
+                  << std::right << speed << " kbit/s");
+}
+
+void Ndt::on_web100(std::string name, std::string value) noexcept {
+  EMIT_INFO("  - " << name << ": " << value);
+}
+
+void Ndt::on_summary(std::string name, std::string value) noexcept {
+  EMIT_INFO("  - " << name << ": " << value);
 }
 
 // High-level API
@@ -198,7 +206,7 @@ bool Ndt::recv_version() noexcept {
     return false;
   }
   // TODO(bassosimone): validate version number?
-  EMIT_INFO("server version: " << message);
+  EMIT_DEBUG("server version: " << message);
   return true;
 }
 
@@ -281,8 +289,7 @@ bool Ndt::recv_results_and_logout() noexcept {
         EMIT_WARNING("recv_results_and_logout: invalid number of tokens");
         return false;
       }
-      EMIT_DEBUG("recv_results_and_logout: key: " << keyval[0]);
-      EMIT_DEBUG("recv_results_and_logout: value: " << keyval[1]);
+      on_summary(std::move(keyval[0]), std::move(keyval[1]));
     }
   }
   EMIT_WARNING("recv_results_and_logout: too many msg_results messages");
@@ -382,7 +389,7 @@ bool Ndt::run_download() noexcept {
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       if (measurement_interval.count() > 0.25) {
-        on_performance(nettest_upload, nflows, recent_data,
+        on_performance(nettest_download, nflows, recent_data,
                        measurement_interval.count(), elapsed.count(),
                        settings.max_runtime);
         recent_data = 0;
@@ -418,6 +425,7 @@ bool Ndt::run_download() noexcept {
     return false;
   }
 
+  EMIT_INFO("reading summary web100 variables");
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
     uint8_t code = 0;
@@ -444,8 +452,7 @@ bool Ndt::run_download() noexcept {
         EMIT_WARNING("run_download: invalid number of tokens");
         return false;
       }
-      EMIT_DEBUG("run_download: key: " << keyval[0]);
-      EMIT_DEBUG("run_download: value: " << keyval[1]);
+      on_web100(std::move(keyval[0]), std::move(keyval[1]));
     }
   }
 
