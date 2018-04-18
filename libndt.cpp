@@ -461,6 +461,7 @@ bool Client::run_download() noexcept {
   }
 
   {
+    // TODO(bassosimone): emit this information.
     uint8_t code = 0;
     std::string message;
     if (!msg_read_legacy(&code, &message)) {  // legacy on purpose!
@@ -541,7 +542,11 @@ bool Client::run_upload() noexcept {
   if (!msg_expect_test_prepare(&port, &nflows)) {
     return false;
   }
-  assert(nflows == 1);  // C2S_EXT not yet implemented
+  // TODO(bassosimone): implement C2S_EXT
+  if (nflows != 1) {
+    EMIT_WARNING("run_upload(): unexpected number of flows");
+    return false;
+  }
 
   {
     Socket sock = -1;
@@ -620,6 +625,7 @@ bool Client::run_upload() noexcept {
     if (!msg_expect(msg_test_msg, &message)) {
       return false;
     }
+    // TODO(bassosimone): emit this information
     EMIT_DEBUG("run_upload: server computed speed: " << message);
   }
 
@@ -701,6 +707,7 @@ bool Client::msg_write_login() noexcept {
       try {
         serio = msg.dump();
       } catch (nlohmann::json::exception &) {
+        EMIT_WARNING("msg_write_login: cannot serialize JSON");
         return false;
       }
       break;
@@ -849,6 +856,7 @@ bool Client::msg_expect_empty(uint8_t expected_code) noexcept {
 }
 
 bool Client::msg_expect(uint8_t expected_code, std::string *s) noexcept {
+  assert(s != nullptr);
   uint8_t code = 0;
   if (!msg_read(&code, s)) {
     return false;
@@ -998,14 +1006,14 @@ Ssize Client::send(Socket fd, const void *base, Size count) noexcept {
 }
 
 int Client::shutdown(Socket fd, int how) noexcept {
-  return ::shutdown(fd, how);
+  return ::shutdown(AS_OS_SOCKET(fd), how);
 }
 
 int Client::closesocket(Socket fd) noexcept {
 #ifdef _WIN32
-  return ::closesocket(fd);
+  return ::closesocket(AS_OS_SOCKET(fd));
 #else
-  return ::close(fd);
+  return ::close(AS_OS_SOCKET(fd));
 #endif
 }
 
