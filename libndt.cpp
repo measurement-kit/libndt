@@ -216,6 +216,10 @@ void Client::on_result(std::string scope, std::string name,
   EMIT_INFO("  - [" << scope << "] " << name << ": " << value);
 }
 
+void Client::on_server_busy(std::string msg) noexcept {
+  EMIT_WARNING("server is busy: " << msg);
+}
+
 // High-level API
 
 bool Client::connect() noexcept {
@@ -255,7 +259,7 @@ bool Client::wait_in_queue() noexcept {
   // There is consensus among NDT developers that modern NDT should not
   // wait in queue rather it should fail immediately.
   if (message != "0") {
-    EMIT_WARNING("wait_in_queue: server busy");
+    on_server_busy(std::move(message));
     return false;
   }
   return true;

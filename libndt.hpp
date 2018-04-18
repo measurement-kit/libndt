@@ -22,7 +22,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 11;
+constexpr uint64_t api_minor = 12;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
@@ -107,6 +107,8 @@ class Client {
 
   virtual void on_result(std::string scope, std::string name,
                          std::string value) noexcept;
+
+  virtual void on_server_busy(std::string msg) noexcept;
 
   // High-level API
 
