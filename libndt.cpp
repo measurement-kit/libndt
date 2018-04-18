@@ -1,6 +1,7 @@
 // Part of Measurement Kit <https://measurement-kit.github.io/>.
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
+
 #include "libndt.hpp"
 
 #ifdef _WIN32
@@ -746,6 +747,7 @@ bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
         EMIT_WARNING("msg_write: cannot serialize JSON");
         return false;
       }
+      break;
     }
     default:
       EMIT_WARNING("msg_write: protocol not supported");
