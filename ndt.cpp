@@ -11,6 +11,7 @@
 #include <chrono>
 #include <iomanip>
 #include <iostream>
+#include <random>
 #include <sstream>
 
 #include <nlohmann/json.hpp>
@@ -56,6 +57,23 @@ class Ndt::Impl {
   std::vector<Socket> dload_socks;
   std::vector<Socket> upload_socks;
 };
+
+static void random_printable_fill(char *buffer, size_t length) noexcept {
+  static const std::string ascii =
+      " !\"#$%&\'()*+,-./"          // before numbers
+      "0123456789"                  // numbers
+      ":;<=>?@"                     // after numbers
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"  // uppercase
+      "[\\]^_`"                     // between upper and lower
+      "abcdefghijklmnopqrstuvwxyz"  // lowercase
+      "{|}~"                        // final
+      ;
+  std::random_device rd;
+  std::mt19937 g(rd());
+  for (size_t i = 0; i < length; ++i) {
+    buffer[i] = ascii[g() % ascii.size()];
+  }
+}
 
 // Top-level API
 
@@ -192,7 +210,6 @@ bool Ndt::run_tests() noexcept {
   for (auto &tid : impl->granted_suite) {
     switch (tid) {
       case nettest_upload:
-      case nettest_upload_ext:
         EMIT_INFO("running upload test");
         if (!run_upload()) {
           return false;
@@ -482,7 +499,134 @@ bool Ndt::run_meta() noexcept {
   return true;
 }
 
-bool Ndt::run_upload() noexcept { return false; }
+bool Ndt::run_upload() noexcept {
+  char buf[8192];
+  random_printable_fill(buf, sizeof (buf));
+
+  // TODO(bassosimone): factor this common code between c2s and s2c
+  std::vector<std::string> options;
+  {
+    std::string message;
+    if (!msg_expect(msg_test_prepare, &message)) {
+      return false;
+    }
+    std::istringstream ss{message};
+    std::string cur;
+    while ((std::getline(ss, cur, ' '))) {
+      options.push_back(cur);
+    }
+  }
+  if (options.size() < 1) {
+    EMIT_WARNING("run_upload: too little options");
+    return false;
+  }
+
+  // Here we are being liberal; in theory we should only accept the
+  // extra parameters when the test is S2C_EXT.
+
+  std::string port;
+  {
+    const char *error = nullptr;
+    (void)this->strtonum(options[0].data(), 1, UINT16_MAX, &error);
+    if (error != nullptr) {
+      EMIT_WARNING("run_upload: cannot parse port");
+      return false;
+    }
+    port = options[0];
+  }
+
+  // We do not parse fields that we don't use.
+
+  constexpr auto nflows = 1;
+  {
+    Socket sock = -1;
+    if (!connect_tcp(settings.hostname, port, &sock)) {
+      return false;
+    }
+    impl->upload_socks.push_back(sock);
+  }
+
+  if (!msg_expect_empty(msg_test_start)) {
+    return false;
+  }
+
+  double client_side_speed = 0.0;
+  {
+    uint64_t recent_data = 0;
+    uint64_t total_data = 0;
+    auto begin = std::chrono::steady_clock::now();
+    auto prev = begin;
+    for (auto done = false; !done;) {
+      Socket maxsock = -1;
+      fd_set set;
+      FD_ZERO(&set);
+      for (auto &fd : impl->upload_socks) {
+        FD_SET(fd, &set);
+        maxsock = (std::max)(maxsock, fd);
+      }
+      timeval tv{};
+      tv.tv_usec = 250000;
+      if (this->select(maxsock + 1, nullptr, &set, nullptr, &tv) < 0) {
+        EMIT_WARNING("run_upload: select() failed: " << get_last_error());
+        return false;
+      }
+      // Implementation note: in case of timeout just fall through
+      for (auto &fd : impl->upload_socks) {
+        if (FD_ISSET(fd, &set)) {
+          Ssize n = this->send(fd, buf, sizeof (buf));
+          if (n < 0) {
+            EMIT_WARNING("run_upload: send() failed: " << get_last_error());
+            done = true;
+            break;
+          }
+          recent_data += (uint64_t)n;
+          total_data += (uint64_t)n;
+        }
+      }
+      auto now = std::chrono::steady_clock::now();
+      std::chrono::duration<double> elapsed = now - prev;
+      if (elapsed.count() > 0.25) {
+        auto speed = (recent_data * 8.0) / 1000.0 / elapsed.count();
+        recent_data = 0;
+        prev = now;
+        EMIT_INFO("num_flows: " << (int)nflows << " elapsed: " << std::fixed
+                                << std::setprecision(3) << elapsed.count()
+                                << " s; speed: " << std::setprecision(0)
+                                << std::setw(8) << std::right << speed
+                                << " kbit/s");
+      }
+      elapsed = now - begin;
+      // TODO(bassosimone): add this protection also to download phase
+      // and make the parameter configurable.
+      if (elapsed.count() > 12.0) {
+        EMIT_WARNING("run_upload(): running for too much time");
+        done = true;
+      }
+    }
+    for (auto &fd : impl->upload_socks) {
+      (void)shutdown(fd, SHUT_RDWR);
+    }
+    auto now = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed = now - begin;
+    if (elapsed.count() > 0.0) {
+      client_side_speed = (total_data * 8.0) / 1000.0 / elapsed.count();
+    }
+  }
+
+  {
+    std::string message;
+    if (!msg_expect(msg_test_msg, &message)) {
+      return false;
+    }
+    EMIT_DEBUG("run_upload: server computed speed: " << message);
+  }
+
+  if (!msg_expect_empty(msg_test_finalize)) {
+    return false;
+  }
+
+  return true;
+}
 
 // Low-level API
 
