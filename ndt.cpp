@@ -75,6 +75,10 @@ static void random_printable_fill(char *buffer, size_t length) noexcept {
   }
 }
 
+static double compute_speed(uint64_t data, double elapsed) noexcept {
+  return (elapsed > 0.0) ? ((data * 8.0) / 1000.0 / elapsed) : 0.0;
+}
+
 // Top-level API
 
 bool Ndt::run() noexcept {
@@ -127,6 +131,19 @@ void Ndt::on_info(const std::string &msg) noexcept {
 
 void Ndt::on_debug(const std::string &msg) noexcept {
   std::clog << "[D] " << msg << std::endl;
+}
+
+void Ndt::on_performance(uint8_t tid, uint8_t nflows, uint64_t measured_bytes,
+                         double measured_interval, double elapsed_time,
+                         double max_runtime) noexcept {
+  auto speed = compute_speed(measured_bytes, measured_interval);
+  EMIT_INFO("[" << std::fixed << std::setprecision(0) << std::setw(2)
+                << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
+                << " elapsed: " << std::fixed << std::setprecision(3)
+                << std::setw(6) << elapsed_time << " s;"
+                << " test_id: " << (int)tid << " num_flows: " << (int)nflows
+                << " speed: " << std::setprecision(0) << std::setw(8)
+                << std::right << speed << " kbit/s");
 }
 
 // High-level API
@@ -362,16 +379,18 @@ bool Ndt::run_download() noexcept {
         }
       }
       auto now = std::chrono::steady_clock::now();
-      std::chrono::duration<double> elapsed = now - prev;
-      if (elapsed.count() > 0.25) {
-        auto speed = (recent_data * 8.0) / 1000.0 / elapsed.count();
+      std::chrono::duration<double> measurement_interval = now - prev;
+      std::chrono::duration<double> elapsed = now - begin;
+      if (measurement_interval.count() > 0.25) {
+        on_performance(nettest_upload, nflows, recent_data,
+                       measurement_interval.count(), elapsed.count(),
+                       settings.max_runtime);
         recent_data = 0;
         prev = now;
-        EMIT_INFO("num_flows: " << (int)nflows << " elapsed: " << std::fixed
-                                << std::setprecision(3) << elapsed.count()
-                                << " s; speed: " << std::setprecision(0)
-                                << std::setw(8) << std::right << speed
-                                << " kbit/s");
+      }
+      if (elapsed.count() > settings.max_runtime) {
+        EMIT_WARNING("run_download(): running for too much time");
+        done = true;
       }
     }
     for (auto &fd : impl->dload_socks) {
@@ -379,9 +398,7 @@ bool Ndt::run_download() noexcept {
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    if (elapsed.count() > 0.0) {
-      client_side_speed = (total_data * 8.0) / 1000.0 / elapsed.count();
-    }
+    client_side_speed = compute_speed(total_data, elapsed.count());
   }
 
   {
@@ -464,14 +481,14 @@ bool Ndt::run_meta() noexcept {
 
 bool Ndt::run_upload() noexcept {
   char buf[8192];
-  random_printable_fill(buf, sizeof (buf));
+  random_printable_fill(buf, sizeof(buf));
 
   std::string port;
   uint8_t nflows = 1;
   if (!msg_expect_test_prepare(&port, &nflows)) {
     return false;
   }
-  assert(nflows == 1); // C2S_EXT not yet implemented
+  assert(nflows == 1);  // C2S_EXT not yet implemented
 
   {
     Socket sock = -1;
@@ -508,7 +525,7 @@ bool Ndt::run_upload() noexcept {
       // Implementation note: in case of timeout just fall through
       for (auto &fd : impl->upload_socks) {
         if (FD_ISSET(fd, &set)) {
-          Ssize n = this->send(fd, buf, sizeof (buf));
+          Ssize n = this->send(fd, buf, sizeof(buf));
           if (n < 0) {
             EMIT_WARNING("run_upload: send() failed: " << get_last_error());
             done = true;
@@ -519,21 +536,16 @@ bool Ndt::run_upload() noexcept {
         }
       }
       auto now = std::chrono::steady_clock::now();
-      std::chrono::duration<double> elapsed = now - prev;
-      if (elapsed.count() > 0.25) {
-        auto speed = (recent_data * 8.0) / 1000.0 / elapsed.count();
+      std::chrono::duration<double> measurement_interval = now - prev;
+      std::chrono::duration<double> elapsed = now - begin;
+      if (measurement_interval.count() > 0.25) {
+        on_performance(nettest_upload, nflows, recent_data,
+                       measurement_interval.count(), elapsed.count(),
+                       settings.max_runtime);
         recent_data = 0;
         prev = now;
-        EMIT_INFO("num_flows: " << (int)nflows << " elapsed: " << std::fixed
-                                << std::setprecision(3) << elapsed.count()
-                                << " s; speed: " << std::setprecision(0)
-                                << std::setw(8) << std::right << speed
-                                << " kbit/s");
       }
-      elapsed = now - begin;
-      // TODO(bassosimone): add this protection also to download phase
-      // and make the parameter configurable.
-      if (elapsed.count() > 12.0) {
+      if (elapsed.count() > settings.max_runtime) {
         EMIT_WARNING("run_upload(): running for too much time");
         done = true;
       }
@@ -543,9 +555,7 @@ bool Ndt::run_upload() noexcept {
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    if (elapsed.count() > 0.0) {
-      client_side_speed = (total_data * 8.0) / 1000.0 / elapsed.count();
-    }
+    client_side_speed = compute_speed(total_data, elapsed.count());
   }
 
   {

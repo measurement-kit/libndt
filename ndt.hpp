@@ -22,7 +22,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 7;
+constexpr uint64_t api_minor = 8;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
@@ -64,6 +64,8 @@ using Ssize = int64_t;
 using Socket = int64_t;
 using SockLen = int;
 
+constexpr double default_max_runtime = 14.0 /* seconds */;
+
 enum class NdtProtocol {
   proto_legacy = 0,
   proto_json = 1,
@@ -81,6 +83,7 @@ class NdtSettings {
       {"client.application", "measurement-kit/libndt"},
   };
   NdtProtocol proto = NdtProtocol::proto_legacy;
+  double max_runtime = default_max_runtime;
 };
 
 class Ndt {
@@ -96,6 +99,11 @@ class Ndt {
   virtual void on_info(const std::string &s) noexcept;
 
   virtual void on_debug(const std::string &s) noexcept;
+
+  virtual void on_performance(uint8_t tid, uint8_t nflows,
+                              uint64_t measured_bytes,
+                              double measurement_interval, double elapsed,
+                              double max_runtime) noexcept;
 
   // High-level API
 
