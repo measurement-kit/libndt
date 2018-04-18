@@ -50,6 +50,14 @@ namespace libndt {
     }                                            \
   } while (0)
 
+#ifdef _WIN32
+#define OS_ERROR_IS_EPIPE() (false)
+#define OS_ERROR_IS_EINTR() (false)
+#else
+#define OS_ERROR_IS_EPIPE() (errno == EPIPE)
+#define OS_ERROR_IS_EINTR() (errno == EINTR)
+#endif
+
 class Ndt::Impl {
  public:
   Socket sock = -1;
@@ -303,11 +311,11 @@ bool Ndt::wait_close() noexcept {
   timeval tv{};
   tv.tv_sec = 1;
   auto rv = this->select(impl->sock + 1, &readset, nullptr, nullptr, &tv);
-  if (rv < 0) {
+  if (rv < 0 && !OS_ERROR_IS_EINTR()) {
     EMIT_WARNING("wait_close(): select() failed: " << get_last_error());
     return false;
   }
-  if (rv == 0) {
+  if (rv <= 0) {
     EMIT_DEBUG("wait_close(): timeout waiting for server to close connection");
     (void)this->shutdown(impl->sock, SHUT_RDWR);
     return true;  // be tolerant
@@ -363,11 +371,12 @@ bool Ndt::run_download() noexcept {
       }
       timeval tv{};
       tv.tv_usec = 250000;
-      if (this->select(maxsock + 1, &set, nullptr, nullptr, &tv) < 0) {
+      auto rv = this->select(maxsock + 1, &set, nullptr, nullptr, &tv);
+      if (rv < 0 && !OS_ERROR_IS_EINTR()) {
         EMIT_WARNING("run_download: select() failed: " << get_last_error());
         return false;
       }
-      // Implementation note: in case of timeout just fall through
+      // Implementation note: in case of timeout or EINTR just fall through
       for (auto &fd : impl->dload_socks) {
         if (FD_ISSET(fd, &set)) {
           Ssize n = this->recv(fd, buf, sizeof(buf));
@@ -525,16 +534,19 @@ bool Ndt::run_upload() noexcept {
       }
       timeval tv{};
       tv.tv_usec = 250000;
-      if (this->select(maxsock + 1, nullptr, &set, nullptr, &tv) < 0) {
+      auto rv = this->select(maxsock + 1, nullptr, &set, nullptr, &tv);
+      if (rv < 0 && !OS_ERROR_IS_EINTR()) {
         EMIT_WARNING("run_upload: select() failed: " << get_last_error());
         return false;
       }
-      // Implementation note: in case of timeout just fall through
+      // Implementation note: in case of timeout or EINTR just fall through
       for (auto &fd : impl->upload_socks) {
         if (FD_ISSET(fd, &set)) {
           Ssize n = this->send(fd, buf, sizeof(buf));
           if (n < 0) {
-            EMIT_WARNING("run_upload: send() failed: " << get_last_error());
+            if (!OS_ERROR_IS_EPIPE()) {
+              EMIT_WARNING("run_upload: send() failed: " << get_last_error());
+            }
             done = true;
             break;
           }
@@ -885,17 +897,17 @@ bool Ndt::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
 #ifdef _WIN32
 #define AS_OS_SOCKET(s) ((SOCKET)s)
 #define AS_OS_SOCKLEN(n) ((int)n)
-#define OS_SSIZE_MAX INT_MAX
-#define OS_EINVAL WSAEINVAL
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((int)n)
+#define OS_SSIZE_MAX INT_MAX
+#define OS_EINVAL WSAEINVAL
 #else
 #define AS_OS_SOCKET(s) ((int)s)
 #define AS_OS_SOCKLEN(n) ((socklen_t)n)
-#define OS_SSIZE_MAX SSIZE_MAX
-#define OS_EINVAL EINVAL
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
+#define OS_SSIZE_MAX SSIZE_MAX
+#define OS_EINVAL EINVAL
 #endif
 
 int Ndt::get_last_error() noexcept {
