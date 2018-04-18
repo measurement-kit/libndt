@@ -1,3 +1,5 @@
+#ifndef MEASUREMENT_KIT_LIBNDT_STRTONUM_C_H
+#define MEASUREMENT_KIT_LIBNDT_STRTONUM_C_H
 /*	$OpenBSD: strtonum.c,v 1.8 2015/09/13 08:31:48 guenther Exp $	*/
 
 /*
@@ -21,13 +23,11 @@
 #include <limits.h>
 #include <stdlib.h>
 
-#include "strtonum.h"
-
 #define	INVALID		1
 #define	TOOSMALL	2
 #define	TOOLARGE	3
 
-long long
+static long long
 strtonum(const char *numstr, long long minval, long long maxval,
     const char **errstrp)
 {
@@ -66,3 +66,4 @@ strtonum(const char *numstr, long long minval, long long maxval,
 	return (ll);
 }
 /*DEF_WEAK(strtonum);*/
+#endif

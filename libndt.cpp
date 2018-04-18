@@ -19,7 +19,10 @@
 #include <sstream>
 
 #include "json.hpp"
-#include "strtonum.h"
+
+#ifndef HAVE_STRTONUM
+#include "strtonum.c.h" // Include inline replacement
+#endif
 
 namespace measurement_kit {
 namespace libndt {

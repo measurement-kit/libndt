@@ -1,19 +1,17 @@
 cmake_minimum_required(VERSION 3.1.0)
-project(libndt LANGUAGES C CXX)
+project(libndt LANGUAGES CXX)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED ON)
 
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
 include(CheckLibraryExists)
 
 check_function_exists(strtonum HAVE_STRTONUM)
-if(NOT (${HAVE_STRTONUM}))
-  list(APPEND LIBNDT_SOURCES strtonum.c)
+if(${HAVE_STRTONUM})
+  add_definitions(-DHAVE_STRTONUM)
 endif()
 
 if(${UNIX})
@@ -32,7 +30,7 @@ add_library(
   json.hpp
   libndt.cpp
   libndt.hpp
-  strtonum.h
+  strtonum.c.h
   ${LIBNDT_SOURCES}
 )
 target_include_directories(
