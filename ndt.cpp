@@ -394,7 +394,7 @@ bool Ndt::run_download() noexcept {
       }
     }
     for (auto &fd : impl->dload_socks) {
-      (void)shutdown(fd, SHUT_RDWR);
+      (void)this->shutdown(fd, SHUT_RDWR);
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -551,7 +551,7 @@ bool Ndt::run_upload() noexcept {
       }
     }
     for (auto &fd : impl->upload_socks) {
-      (void)shutdown(fd, SHUT_RDWR);
+      (void)this->shutdown(fd, SHUT_RDWR);
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -639,7 +639,7 @@ bool Ndt::msg_write_login() noexcept {
       code = msg_extended_login;
       nlohmann::json msg{
           {"msg", ndt_version_compat},
-          {"tests", std::to_string((int)settings.test_suite)},
+          {"tests", std::to_string((unsigned)settings.test_suite)},
       };
       try {
         serio = msg.dump();
