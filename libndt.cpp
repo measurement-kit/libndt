@@ -115,6 +115,38 @@ static std::string represent(std::string message) noexcept {
   return ss.str();
 }
 
+static std::string trim(std::string s) noexcept {
+  auto pos = s.find_first_not_of(" \t");
+  if (pos != std::string::npos) {
+    s = s.substr(pos);
+  }
+  pos = s.find_last_not_of(" \t");
+  if (pos != std::string::npos) {
+    s = s.substr(0, pos + 1);
+  }
+  return s;
+}
+
+static bool emit_result(Client *client, std::string scope,
+                        std::string message) noexcept {
+  std::stringstream ss{message};
+  std::string line;
+  while ((std::getline(ss, line, '\n'))) {
+    std::vector<std::string> keyval;
+    std::string token;
+    std::stringstream ss{line};
+    while ((std::getline(ss, token, ':'))) {
+      keyval.push_back(token);
+    }
+    if (keyval.size() != 2) {
+      return false;
+    }
+    client->on_result(scope, trim(std::move(keyval[0])),
+                      trim(std::move(keyval[1])));
+  }
+  return true;
+}
+
 // Top-level API
 
 bool Client::run() noexcept {
@@ -182,12 +214,9 @@ void Client::on_performance(uint8_t tid, uint8_t nflows,
                   << std::right << speed << " kbit/s");
 }
 
-void Client::on_web100(std::string name, std::string value) noexcept {
-  EMIT_INFO("  - " << name << ": " << value);
-}
-
-void Client::on_summary(std::string name, std::string value) noexcept {
-  EMIT_INFO("  - " << name << ": " << value);
+void Client::on_result(std::string scope, std::string name,
+                       std::string value) noexcept {
+  EMIT_INFO("  - [" << scope << "] " << name << ": " << value);
 }
 
 // High-level API
@@ -312,20 +341,8 @@ bool Client::recv_results_and_logout() noexcept {
     if (code == msg_logout) {
       return true;
     }
-    std::stringstream ss{message};
-    std::string line;
-    while ((std::getline(ss, line, '\n'))) {
-      std::vector<std::string> keyval;
-      std::string token;
-      std::stringstream ss{line};
-      while ((std::getline(ss, token, ':'))) {
-        keyval.push_back(token);
-      }
-      if (keyval.size() != 2) {
-        EMIT_WARNING("recv_results_and_logout: invalid number of tokens");
-        return false;
-      }
-      on_summary(std::move(keyval[0]), std::move(keyval[1]));
+    if (!emit_result(this, "summary", std::move(message))) {
+      return false;
     }
   }
   EMIT_WARNING("recv_results_and_logout: too many msg_results messages");
@@ -476,20 +493,8 @@ bool Client::run_download() noexcept {
     if (code == msg_test_finalize) {
       return true;
     }
-    std::stringstream ss{message};
-    std::string line;
-    while ((std::getline(ss, line, '\n'))) {
-      std::vector<std::string> keyval;
-      std::string token;
-      std::stringstream ss{line};
-      while ((std::getline(ss, token, ':'))) {
-        keyval.push_back(token);
-      }
-      if (keyval.size() != 2) {
-        EMIT_WARNING("run_download: invalid number of tokens");
-        return false;
-      }
-      on_web100(std::move(keyval[0]), std::move(keyval[1]));
+    if (!emit_result(this, "web100", std::move(message))) {
+      return false;
     }
   }
 
