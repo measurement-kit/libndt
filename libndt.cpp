@@ -303,7 +303,7 @@ bool Client::run_tests() noexcept {
         }
         break;
       case nettest_meta:
-        EMIT_INFO("running meta test");
+        EMIT_DEBUG("running meta test"); // don't annoy the user with this
         if (!run_meta()) {
           return false;
         }
@@ -358,7 +358,7 @@ bool Client::wait_close() noexcept {
     return false;
   }
   if (rv <= 0) {
-    EMIT_DEBUG("wait_close(): timeout waiting for server to close connection");
+    EMIT_DEBUG("wait_close(): timeout or EINTR waiting for EOF on connection");
     (void)this->shutdown(impl->sock, SHUT_RDWR);
     return true;  // be tolerant
   }
@@ -418,22 +418,23 @@ bool Client::run_download() noexcept {
         EMIT_WARNING("run_download: select() failed: " << get_last_error());
         return false;
       }
-      // Implementation note: in case of timeout or EINTR just fall through
-      for (auto &fd : impl->dload_socks) {
-        if (FD_ISSET(fd, &set)) {
-          Ssize n = this->recv(fd, buf, sizeof(buf));
-          if (n < 0) {
-            EMIT_WARNING("run_download: recv() failed: " << get_last_error());
-            done = true;
-            break;
+      if (rv > 0) {
+        for (auto &fd : impl->dload_socks) {
+          if (FD_ISSET(fd, &set)) {
+            Ssize n = this->recv(fd, buf, sizeof(buf));
+            if (n < 0) {
+              EMIT_WARNING("run_download: recv() failed: " << get_last_error());
+              done = true;
+              break;
+            }
+            if (n == 0) {
+              EMIT_DEBUG("run_download: recv(): EOF");
+              done = true;
+              break;
+            }
+            recent_data += (uint64_t)n;
+            total_data += (uint64_t)n;
           }
-          if (n == 0) {
-            EMIT_DEBUG("run_download: recv(): EOF");
-            done = true;
-            break;
-          }
-          recent_data += (uint64_t)n;
-          total_data += (uint64_t)n;
         }
       }
       auto now = std::chrono::steady_clock::now();
@@ -575,19 +576,20 @@ bool Client::run_upload() noexcept {
         EMIT_WARNING("run_upload: select() failed: " << get_last_error());
         return false;
       }
-      // Implementation note: in case of timeout or EINTR just fall through
-      for (auto &fd : impl->upload_socks) {
-        if (FD_ISSET(fd, &set)) {
-          Ssize n = this->send(fd, buf, sizeof(buf));
-          if (n < 0) {
-            if (!OS_ERROR_IS_EPIPE()) {
-              EMIT_WARNING("run_upload: send() failed: " << get_last_error());
+      if (rv > 0) {
+        for (auto &fd : impl->upload_socks) {
+          if (FD_ISSET(fd, &set)) {
+            Ssize n = this->send(fd, buf, sizeof(buf));
+            if (n < 0) {
+              if (!OS_ERROR_IS_EPIPE()) {
+                EMIT_WARNING("run_upload: send() failed: " << get_last_error());
+              }
+              done = true;
+              break;
             }
-            done = true;
-            break;
+            recent_data += (uint64_t)n;
+            total_data += (uint64_t)n;
           }
-          recent_data += (uint64_t)n;
-          total_data += (uint64_t)n;
         }
       }
       auto now = std::chrono::steady_clock::now();
