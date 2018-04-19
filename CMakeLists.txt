@@ -31,7 +31,6 @@ add_library(
   libndt.cpp
   libndt.hpp
   strtonum.c.h
-  ${LIBNDT_SOURCES}
 )
 target_include_directories(
   ndt
