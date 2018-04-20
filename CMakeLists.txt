@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
 include(CheckLibraryExists)
-include(GNUInstallDirs)
 
 check_function_exists(strtonum HAVE_STRTONUM)
 if(${HAVE_STRTONUM})
@@ -42,13 +41,13 @@ install(
   FILES
   libndt.hpp
   DESTINATION
-  ${CMAKE_INSTALL_INCLUDEDIR}/measurement_kit/libndt
+  include/measurement_kit/libndt
 )
 install(
   TARGETS
   ndt
   DESTINATION
-  ${CMAKE_INSTALL_LIBDIR}
+  lib
 )
 if(WIN32)
   target_link_libraries(ndt ws2_32)
