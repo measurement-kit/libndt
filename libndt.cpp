@@ -5,6 +5,7 @@
 #include "libndt.hpp"
 
 #ifndef _WIN32
+#include <arpa/inet.h>
 #include <errno.h>
 #include <limits.h>
 #include <unistd.h>
