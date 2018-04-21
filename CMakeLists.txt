@@ -71,3 +71,9 @@ if(LIBNDT_BUILD_EXAMPLES)
 endif()
 
 enable_testing()
+if(${UNIX})
+  add_test(
+    NAME simple_test_on_unix
+    COMMAND ${CMAKE_SOURCE_DIR}/test/unix.sh "${CMAKE_BINARY_DIR}"
+  )
+endif()
