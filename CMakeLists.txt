@@ -14,7 +14,7 @@ if(${HAVE_STRTONUM})
   add_definitions(-DHAVE_STRTONUM)
 endif()
 
-if(${UNIX})
+if("${UNIX}" OR "${MINGW}")
   set(LIBNDT_FLAGS "-Wall -Wextra -Werror -pedantic")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${LIBNDT_FLAGS} -Wmissing-prototypes")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LIBNDT_FLAGS}")
@@ -22,6 +22,10 @@ if(${UNIX})
     # for GCC, -Wmissing-prototypes only works for C/ObjC.
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wmissing-prototypes")
   endif()
+endif()
+
+if(${WIN32})
+  add_definitions(-D_WIN32_WINNT=0x0600) # for NI_NUMERICSERV
 endif()
 
 add_library(
@@ -49,8 +53,11 @@ install(
   DESTINATION
   lib
 )
-if(WIN32)
+if("${WIN32}" OR "${MINGW}")
   target_link_libraries(ndt ws2_32)
+  if ("${MINGW}")
+    target_link_libraries(ndt -static-libgcc -static-libstdc++)
+  endif()
 endif()
 
 set(LIBNDT_BUILD_EXAMPLES ON CACHE BOOL "Whether to build examples")
