@@ -6,6 +6,7 @@ matrix:
     - os: linux
       env: BUILD_TYPE="vanilla"
            CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release"
+           CTEST_FLAGS="-V"
            VERBOSE=1
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
@@ -16,6 +17,7 @@ matrix:
     - os: linux
       env: BUILD_TYPE="vanilla"
            CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release"
+           CTEST_FLAGS="-V"
            CXXFLAGS="-stdlib=libc++"
            MK_CC=clang
            MK_CXX=clang++
@@ -30,6 +32,7 @@ matrix:
       env: BUILD_TYPE="coverage"
            CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
            COVERALLS_OPTIONS="--include include --include src --include example"
+           CTEST_FLAGS="-V"
            CXXFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
            LDFLAGS="-lgcov"
            VERBOSE=1
