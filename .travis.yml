@@ -1,0 +1,40 @@
+language: c++
+
+matrix:
+  include:
+
+    - os: linux
+      env: BUILD_TYPE="vanilla"
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release"
+           VERBOSE=1
+      script:
+        - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
+      services:
+        - docker
+      sudo: required
+
+    - os: linux
+      env: BUILD_TYPE="vanilla"
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release"
+           CXXFLAGS="-stdlib=libc++"
+           MK_CC=clang
+           MK_CXX=clang++
+           VERBOSE=1
+      script:
+        - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
+      services:
+        - docker
+      sudo: required
+
+    - os: linux
+      env: BUILD_TYPE="coverage"
+           CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
+           COVERALLS_OPTIONS="--include include --include src --include example"
+           CXXFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
+           LDFLAGS="-lgcov"
+           VERBOSE=1
+      script:
+        - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
+      services:
+        - docker
+      sudo: required
