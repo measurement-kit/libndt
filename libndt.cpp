@@ -14,6 +14,7 @@
 #include <chrono>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <random>
 #include <sstream>
 
@@ -966,17 +967,21 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
     len = ntohs(len);
     EMIT_DEBUG("msg_read_legacy: message length: " << len);
   }
-  char buf[UINT16_MAX];
-  assert(len <= sizeof(buf));
+  // Allocating a unique pointer and then copying into a string seems better
+  // than resizing() `msg` (because that appends zero characters to the end
+  // of it). Returning something more buffer-like than a string might be better
+  // for efficiency but NDT messages are generally small, and the performance
+  // critical path is certainly not the one with control messages.
+  std::unique_ptr<char[]> buf{new char[len]};
   for (Size off = 0; off < len;) {
-    Ssize n = this->recv(impl->sock, buf + off, len - off);
+    Ssize n = this->recv(impl->sock, buf.get() + off, len - off);
     if (n <= 0) {
       EMIT_WARNING("msg_read_legacy: recv() failed: " << get_last_error());
       return false;
     }
     off += (Size)n;
   }
-  *msg = std::string{buf, len};
+  *msg = std::string{buf.get(), len};
   EMIT_DEBUG("msg_read_legacy: raw message: " << represent(*msg));
   return true;
 }
