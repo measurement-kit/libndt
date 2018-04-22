@@ -1,11 +1,15 @@
 image: Visual Studio 2017
 
-platform:
-  - x86
-  - x64
+environment:
+  matrix:
+    - platform: x86
+      GENERATOR: "Visual Studio 15 2017"
+    - platform: x64
+      GENERATOR: "Visual Studio 15 2017 Win64"
 
 build_script:
-  - md x
-  - cd x
-  - cmake.exe ..
-  - cmake.exe --build .
+  - cmd: md x
+  - cmd: cd x
+  - cmd: cmake "-G%GENERATOR%" -DCMAKE_BUILD_TYPE=Release -DLIBNDT_ENABLE_CI_TESTING_=ON ..
+  - cmd: cmake --build . -- /nologo
+  - cmd: ctest -V -C Release -a -j8

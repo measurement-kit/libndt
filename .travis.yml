@@ -5,9 +5,9 @@ matrix:
 
     - os: linux
       env: BUILD_TYPE="vanilla"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release"
-           CTEST_FLAGS="-V"
-           VERBOSE=1
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DLIBNDT_ENABLE_CI_TESTING_=ON"
+           CTEST_OPTIONS="-V"
+           MAKEFLAGS="--no-print-directory"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -16,12 +16,12 @@ matrix:
 
     - os: linux
       env: BUILD_TYPE="vanilla"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release"
-           CTEST_FLAGS="-V"
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DLIBNDT_ENABLE_CI_TESTING_=ON"
+           CTEST_OPTIONS="-V"
            CXXFLAGS="-stdlib=libc++"
+           MAKEFLAGS="--no-print-directory"
            MK_CC=clang
            MK_CXX=clang++
-           VERBOSE=1
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -31,11 +31,12 @@ matrix:
     - os: linux
       env: BUILD_TYPE="coverage"
            CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
-           COVERALLS_OPTIONS="--include ."
-           CTEST_FLAGS="-V"
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DLIBNDT_ENABLE_CI_TESTING_=ON"
+           COVERALLS_OPTIONS="--include client.cpp --include libndt.cpp --include libndt.hpp"
+           CTEST_OPTIONS="-V"
            CXXFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
            LDFLAGS="-lgcov"
-           VERBOSE=1
+           MAKEFLAGS="--no-print-directory"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
