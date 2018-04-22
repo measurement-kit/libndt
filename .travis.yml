@@ -31,7 +31,7 @@ matrix:
     - os: linux
       env: BUILD_TYPE="coverage"
            CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
-           COVERALLS_OPTIONS="--include include --include src --include example"
+           COVERALLS_OPTIONS="--include ."
            CTEST_FLAGS="-V"
            CXXFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
            LDFLAGS="-lgcov"
