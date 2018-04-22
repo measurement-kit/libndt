@@ -29,6 +29,20 @@ matrix:
       sudo: required
 
     - os: linux
+      env: BUILD_TYPE="lsan"
+           CFLAGS="-fsanitize=leak"
+           CXXFLAGS="-fsanitize=leak"
+           LDFLAGS="-fsanitize=leak"
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DLIBNDT_ENABLE_CI_TESTING_=ON"
+           CTEST_OPTIONS="-V"
+           MAKEFLAGS="--no-print-directory"
+      script:
+        - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
+      services:
+        - docker
+      sudo: required
+
+    - os: linux
       env: BUILD_TYPE="ubsan"
            CFLAGS="-fsanitize=undefined -fno-sanitize-recover"
            CXXFLAGS="-fsanitize=undefined -fno-sanitize-recover"
