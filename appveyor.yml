@@ -1,0 +1,11 @@
+image: Visual Studio 2017
+
+platform:
+  - x86
+  - x64
+
+build_script:
+  - md x
+  - cd x
+  - cmake.exe ..
+  - cmake.exe --build .
