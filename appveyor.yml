@@ -7,9 +7,13 @@ environment:
     - platform: x64
       GENERATOR: "Visual Studio 15 2017 Win64"
 
+
+install:
+  - cmd: set PATH=%PATH%;%PYTHON%/Scripts/
+  - cmd: pip.exe install conan
+
 build_script:
-  - cmd: md x
-  - cmd: cd x
-  - cmd: cmake "-G%GENERATOR%" -DCMAKE_BUILD_TYPE=Release -DLIBNDT_ENABLE_CI_TESTING_=ON ..
+  - cmd: conan install --build=missing -s compiler=%GENERATOR% -s build_type=Release .
+  - cmd: cmake "-G%GENERATOR%" -DCMAKE_BUILD_TYPE=Release -DLIBNDT_ENABLE_CI_TESTING_=ON .
   - cmd: cmake --build . -- /nologo
   - cmd: ctest -V -C Release -a -j8
