@@ -12,8 +12,8 @@
 
 #include <curl/curl.h>
 
-#include "argh.h"
-#include "json.hpp"
+#include <argh.h>
+#include <nlohmann/json.hpp>
 
 static void usage() {
   std::clog << "\n";

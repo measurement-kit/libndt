@@ -1,22 +1,44 @@
 cmake_minimum_required(VERSION 3.1.0)
 project(libndt LANGUAGES CXX)
 
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Conan
 
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup()
+include("${CMAKE_BINARY_DIR}/conanbuildinfo.cmake" OPTIONAL
+        RESULT_VARIABLE CONAN_BUILDINFO_CMAKE)
+if(NOT ("${CONAN_BUILDINFO_CMAKE}" STREQUAL "NOTFOUND"))
+  conan_basic_setup()
+  set(CMAKE_REQUIRED_INCLUDES ${CONAN_INCLUDE_DIRS})
+endif()
 
-include(CheckIncludeFiles)
+# Checks
+
+include(CheckIncludeFileCXX)
 include(CheckFunctionExists)
-include(CheckLibraryExists)
-include(FindCURL)
 
 check_function_exists(strtonum HAVE_STRTONUM)
 if(${HAVE_STRTONUM})
   add_definitions(-DHAVE_STRTONUM)
 endif()
+
+check_include_file_cxx("nlohmann/json.hpp" HAVE_NLOHMANN_JSON
+                       "${CMAKE_CXX11_STANDARD_COMPILE_OPTION}")
+if(NOT (${HAVE_NLOHMANN_JSON}))
+  message(FATAL_ERROR "nlohmann/json missing on your system")
+endif()
+
+check_include_file_cxx("argh.h" HAVE_ARGH_H
+                       "${CMAKE_CXX11_STANDARD_COMPILE_OPTION}")
+if(NOT (${HAVE_ARGH_H}))
+  message(FATAL_ERROR "adishavit/argh missing on your system")
+endif()
+
+find_package(CURL)
+
+# Compiler flags
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if("${UNIX}" OR "${MINGW}")
   set(LIBNDT_FLAGS "-Wall -Wextra -Werror")
@@ -32,10 +54,11 @@ if(${WIN32})
   add_definitions(-D_WIN32_WINNT=0x0600) # for NI_NUMERICSERV
 endif()
 
+# Library
+
 add_library(
   ndt
   STATIC
-  json.hpp
   libndt.cpp
   libndt.hpp
   strtonum.c.h
@@ -44,6 +67,7 @@ target_include_directories(
   ndt
   PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CONAN_INCLUDE_DIRS}
 )
 install(
   FILES
@@ -64,16 +88,14 @@ if("${WIN32}" OR "${MINGW}")
   endif()
 endif()
 
+# Testing
+
 set(BUILD_TESTING ON CACHE BOOL "Whether to build tests")
 enable_testing()
+
 if(${BUILD_TESTING}) # is a standard name in CMake-land
   if(${CURL_FOUND})
-    add_executable(
-      client
-      argh.h
-      client.cpp
-      json.hpp
-    )
+    add_executable(client client.cpp)
     target_include_directories(
       ndt
       PUBLIC
