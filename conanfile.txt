@@ -1,7 +1,0 @@
-[requires]
-libcurl/7.56.1@bincrafters/stable
-jsonformoderncpp/3.1.2@vthiery/stable
-argh/1.2.1@adishavit/stable
-
-[generators]
-cmake
