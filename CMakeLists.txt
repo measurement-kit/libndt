@@ -3,17 +3,19 @@ project(libndt LANGUAGES CXX)
 
 # Download header only dependencies
 
+message(STATUS "Downloading adishavit/argh")
 file(
   DOWNLOAD https://raw.githubusercontent.com/adishavit/argh/v1.2.1/argh.h
-  argh.h EXPECTED_HASH
+  "${CMAKE_CURRENT_BINARY_DIR}/argh.h" EXPECTED_HASH
   SHA256=ca14a63ea5be5b924019b4844218142936b6f4e3ef57dfe4c81ba35a7f07004e
-  TLS_VERIFY ON)
+  TLS_VERIFY ON SHOW_PROGRESS)
 
+message(STATUS "Downloading nlohmann/json")
 file(
   DOWNLOAD https://raw.githubusercontent.com/nlohmann/json/v3.1.2/single_include/nlohmann/json.hpp
-  json.hpp EXPECTED_HASH
+  "${CMAKE_CURRENT_BINARY_DIR}/json.hpp" EXPECTED_HASH
   SHA256=fbdfec4b4cf63b3b565d09f87e6c3c183bdd45c5be1864d3fcb338f6f02c1733
-  TLS_VERIFY ON)
+  TLS_VERIFY ON SHOW_PROGRESS)
 
 # Checks
 
@@ -55,9 +57,7 @@ add_library(
   strtonum.c.h
 )
 target_include_directories(
-  ndt
-  PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}
+  ndt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
 )
 install(
   FILES

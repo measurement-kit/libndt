@@ -18,7 +18,7 @@
 #include <random>
 #include <sstream>
 
-#include <nlohmann/json.hpp>
+#include "json.hpp"
 
 #ifndef HAVE_STRTONUM
 #include "strtonum.c.h" // Include inline replacement

@@ -12,8 +12,8 @@
 
 #include <curl/curl.h>
 
-#include <argh.h>
-#include <nlohmann/json.hpp>
+#include "argh.h"
+#include "json.hpp"
 
 static void usage() {
   std::clog << "\n";
@@ -26,7 +26,7 @@ static void usage() {
   std::clog << "  --upload              : run upload test\n";
   std::clog << "  --verbose             : be verbose\n";
   std::clog << "\n";
-  std::clog << "If <hostname> is omitted, we pick a close-enough server.\n";
+  std::clog << "If <hostname> is omitted, we pick a random server.\n";
   std::clog << std::endl;
 }
 
