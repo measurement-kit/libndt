@@ -5,6 +5,9 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+conan_basic_setup()
+
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
 include(CheckLibraryExists)
@@ -76,7 +79,7 @@ if(${BUILD_TESTING}) # is a standard name in CMake-land
       PUBLIC
       ${CURL_INCLUDE_DIRS}
     )
-    target_link_libraries(client ndt ${CURL_LIBRARIES})
+    target_link_libraries(client ndt ${CURL_LIBRARIES} ${CONAN_LIBS})
     add_test(
       NAME simple_download_test
       COMMAND client --verbose --download
