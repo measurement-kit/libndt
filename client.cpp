@@ -15,6 +15,10 @@
 #include "argh.h"
 #include "json.hpp"
 
+// Coverage: we basically only want to measure libndt.cpp. As such we are
+// going to exclude most of this file as non-relevant.
+//
+// LCOV_EXCL_START
 static void usage() {
   std::clog << "\n";
   std::clog << "Usage: client [options] [<hostname>]\n";
@@ -180,6 +184,9 @@ int main(int, char **argv) {
     }
     std::clog << "will use host: " << client.settings.hostname << std::endl;
   }
+  // Coverage: what follows is exactly what we want to measure.
+  //
+  // LCOV_EXCL_STOP
 
   bool rv = client.run();
   return (rv) ? EXIT_SUCCESS : EXIT_FAILURE;
