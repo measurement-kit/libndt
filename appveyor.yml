@@ -13,7 +13,7 @@ install:
   - cmd: pip.exe install conan
 
 build_script:
-  - cmd: conan install .
+  - cmd: conan install -s build_type=Release -s arch_build=%platform% .
   - cmd: cmake "-G%GENERATOR%" -DCMAKE_BUILD_TYPE=Release .
   - cmd: cmake --build . -- /nologo
   - cmd: ctest -V -C Release -a -j8
