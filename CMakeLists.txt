@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
 include(CheckLibraryExists)
+include(FindCURL)
 
 check_function_exists(strtonum HAVE_STRTONUM)
 if(${HAVE_STRTONUM})
@@ -60,21 +61,31 @@ if("${WIN32}" OR "${MINGW}")
   endif()
 endif()
 
-set(LIBNDT_BUILD_EXAMPLES ON CACHE BOOL "Whether to build examples")
-if(LIBNDT_BUILD_EXAMPLES)
-  add_executable(
-    client
-    client.cpp
-    argh.h
-  )
-  target_link_libraries(client ndt)
-endif()
-
+set(BUILD_TESTING ON CACHE BOOL "Whether to build tests")
 enable_testing()
-if("${LIBNDT_ENABLE_CI_TESTING_}" AND "${UNIX}")
-  # TODO(bassosimone): make this smoke test work on Windows.
-  add_test(
-    NAME simple_smoke_test
-    COMMAND bash ${CMAKE_SOURCE_DIR}/.ci/test/smoke.sh "${CMAKE_BINARY_DIR}"
-  )
+if(${BUILD_TESTING}) # is a standard name in CMake-land
+  if(${CURL_FOUND})
+    add_executable(
+      client
+      argh.h
+      client.cpp
+      json.hpp
+    )
+    target_include_directories(
+      ndt
+      PUBLIC
+      ${CURL_INCLUDE_DIRS}
+    )
+    target_link_libraries(client ndt ${CURL_LIBRARIES})
+    add_test(
+      NAME simple_download_test
+      COMMAND client --verbose --download
+    )
+    add_test(
+      NAME simple_upload_test
+      COMMAND client --verbose --json --upload
+    )
+  else()
+    message(WARNING "cURL not found: cannot build example client")
+  endif()
 endif()
