@@ -128,7 +128,8 @@ int main(int, char **argv) {
         exit(EXIT_FAILURE);
       }
       std::clog << "cURL initialized" << std::endl;
-      constexpr auto mlabns_url = "https://mlab-ns.appspot.com/ndt";
+      constexpr auto mlabns_url =
+          "https://mlab-ns.appspot.com/ndt?policy=random";
       if (curl_easy_setopt(curl, CURLOPT_URL, mlabns_url) != CURLE_OK) {
         std::clog << "fatal: curl_easy_setopt(CURLOPT_URL, ...) failed"
                   << std::endl;
