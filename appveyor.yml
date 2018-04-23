@@ -5,6 +5,11 @@ environment:
     - GENERATOR: "Visual Studio 15 2017"
     - GENERATOR: "Visual Studio 15 2017 Win64"
 
+install:
+  - cmd: set PATH=%PATH%;%PYTHON%/Scripts/
+  - cmd: pip install cget
+  - cmd: cget install curl/curl
+
 build_script:
   - cmd: cmake "-G%GENERATOR%" -DCMAKE_BUILD_TYPE=Release .
   - cmd: cmake --build . -- /nologo
