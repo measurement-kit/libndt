@@ -2,10 +2,9 @@ image: Visual Studio 2017
 
 environment:
   matrix:
-    - GENERATOR: "Visual Studio 15 2017"
-    - GENERATOR: "Visual Studio 15 2017 Win64"
+    - CMAKE_GENERATOR: "Visual Studio 15 2017 Win64"
 
 build_script:
-  - cmd: cmake "-G%GENERATOR%" -DCMAKE_BUILD_TYPE=Release .
-  - cmd: cmake --build . -- /nologo
+  - cmd: cmake "-G%CMAKE_GENERATOR%" .
+  - cmd: cmake --build . -- /nologo /property:Configuration=Release
   - cmd: ctest -V -C Release -a -j8
