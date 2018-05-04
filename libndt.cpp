@@ -765,6 +765,9 @@ bool Client::msg_write_login() noexcept {
   return true;
 }
 
+// TODO(bassosimone): when we will implement WebSockets here, it may
+// be useful to have an interface for reading/writing data and to use
+// a different implementation depending on the actual protocol.
 bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
   EMIT_DEBUG("msg_write: message to send: " << represent(msg));
   std::string s;
