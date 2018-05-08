@@ -5,7 +5,7 @@ matrix:
 
     - os: linux
       env: BUILD_TYPE="vanilla"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DLIBNDT_ENABLE_CI_TESTING_=ON"
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
            CTEST_OPTIONS="-V"
            MAKEFLAGS="--no-print-directory"
       script:
@@ -19,7 +19,7 @@ matrix:
            CFLAGS="-fsanitize=address"
            CXXFLAGS="-fsanitize=address"
            LDFLAGS="-fsanitize=address"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DLIBNDT_ENABLE_CI_TESTING_=ON"
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
            CTEST_OPTIONS="-V"
            MAKEFLAGS="--no-print-directory"
       script:
@@ -33,7 +33,7 @@ matrix:
            CFLAGS="-fsanitize=leak"
            CXXFLAGS="-fsanitize=leak"
            LDFLAGS="-fsanitize=leak"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DLIBNDT_ENABLE_CI_TESTING_=ON"
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
            CTEST_OPTIONS="-V"
            MAKEFLAGS="--no-print-directory"
       script:
@@ -47,7 +47,7 @@ matrix:
            CFLAGS="-fsanitize=undefined -fno-sanitize-recover"
            CXXFLAGS="-fsanitize=undefined -fno-sanitize-recover"
            LDFLAGS="-fsanitize=undefined"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DLIBNDT_ENABLE_CI_TESTING_=ON"
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
            CTEST_OPTIONS="-V"
            MAKEFLAGS="--no-print-directory"
       script:
@@ -58,7 +58,7 @@ matrix:
 
     - os: linux
       env: BUILD_TYPE="vanilla"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DLIBNDT_ENABLE_CI_TESTING_=ON"
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
            CTEST_OPTIONS="-V"
            CXXFLAGS="-stdlib=libc++"
            MAKEFLAGS="--no-print-directory"
@@ -73,7 +73,7 @@ matrix:
     - os: linux
       env: BUILD_TYPE="coverage"
            CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DLIBNDT_ENABLE_CI_TESTING_=ON"
+           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
            COVERALLS_OPTIONS="--include client.cpp --include libndt.cpp --include libndt.hpp"
            CTEST_OPTIONS="-V"
            CXXFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
