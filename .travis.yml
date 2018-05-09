@@ -57,7 +57,7 @@ matrix:
       sudo: required
 
     - os: linux
-      env: BUILD_TYPE="vanilla"
+      env: BUILD_TYPE="libc++-n-clang"
            CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
            CTEST_OPTIONS="-V"
            CXXFLAGS="-stdlib=libc++"
