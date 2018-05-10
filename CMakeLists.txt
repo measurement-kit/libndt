@@ -17,36 +17,40 @@ file(
   SHA256=fbdfec4b4cf63b3b565d09f87e6c3c183bdd45c5be1864d3fcb338f6f02c1733
   TLS_VERIFY ON SHOW_PROGRESS)
 
-if("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
-  if("${CMAKE_SIZEOF_VOID_P}" EQUAL 8)
-    set(LIBNDT_CURL_ARCH "amd64")
-    set(LIBNDT_CURL_BASEURL "https://github.com/measurement-kit/prebuilt/releases/download")
-    set(LIBNDT_CURL_CHANNEL "testing")
-    set(LIBNDT_CURL_HASH "fd22453ab3ded80cbc41a8f909ceaef163b2658a07b1527f6a7ca16dc8a0912d")
-    set(LIBNDT_CURL_OS "windows")
-    set(LIBNDT_CURL_VERSION "7.59.0")
-    message(STATUS "Downloading precompiled cURL")
-    file(
-      DOWNLOAD "${LIBNDT_CURL_BASEURL}/${LIBNDT_CURL_CHANNEL}/curl-${LIBNDT_CURL_VERSION}-${LIBNDT_CURL_OS}-${LIBNDT_CURL_ARCH}.tar.gz"
-      "${CMAKE_CURRENT_BINARY_DIR}/curl-dep.tar.gz"
-      EXPECTED_HASH SHA256=${LIBNDT_CURL_HASH}
-      TLS_VERIFY ON SHOW_PROGRESS
-    )
-    execute_process(
-      COMMAND ${CMAKE_COMMAND} -E tar xf "curl-dep.tar.gz"
-      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-      RESULT_VARIABLE TAR_FAILURE
-    )
-    if("${TAR_FAILURE}")
-      message(FATAL_ERROR "Cannot unpack cURL: ${TAR_FAILURE}")
-    endif()
-    list(APPEND CMAKE_INCLUDE_PATH "${CMAKE_BINARY_DIR}/MK_DIST/windows/amd64/include")
-    list(APPEND CMAKE_LIBRARY_PATH "${CMAKE_BINARY_DIR}/MK_DIST/windows/amd64/lib")
-    add_definitions(-DCURL_STATICLIB)
-    list(APPEND _EXTRA_LIBS Crypt32)
-  else()
-    message(FATAL_ERROR "No precompiled cURL for this system")
+if(${MSVC})
+  set(_CURL_BASEURL "https://github.com/measurement-kit/prebuilt/releases/download")
+  set(_CURL_CHANNEL "testing")
+  set(_CURL_HASH "75f291c6da7c1d66ac932a5002ccc60a59442f725f291491dfda3e3c1027475b")
+  set(_CURL_VERSION "7.59.0-1")
+  set(_CURL_URL "${_CURL_BASEURL}/${_CURL_CHANNEL}/windows-curl-${_CURL_VERSION}.tar.gz")
+  message(STATUS "Downloading precompiled cURL: ${_CURL_URL}")
+  file(
+    DOWNLOAD "${_CURL_URL}"
+    "${CMAKE_CURRENT_BINARY_DIR}/curl-prebuilt.tar.gz"
+    EXPECTED_HASH SHA256=${_CURL_HASH}
+    TLS_VERIFY ON SHOW_PROGRESS
+  )
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E tar xf "curl-prebuilt.tar.gz"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    RESULT_VARIABLE TAR_FAILURE
+  )
+  if("${TAR_FAILURE}")
+    message(FATAL_ERROR "Cannot unpack cURL: ${TAR_FAILURE}")
   endif()
+  if("${CMAKE_SIZEOF_VOID_P}" EQUAL 8)
+    set(_CURL_ARCH x64)
+  elseif("${CMAKE_SIZEOF_VOID_P}" EQUAL 4)
+    set(_CURL_ARCH x86)
+  else()
+    message(FATAL_ERROR "No prebuilt cURL for your system")
+  endif()
+  list(APPEND CMAKE_INCLUDE_PATH "${CMAKE_BINARY_DIR}/MK_DIST/windows/curl/${_CURL_VERSION}/${_CURL_ARCH}/include")
+  list(APPEND CMAKE_LIBRARY_PATH "${CMAKE_BINARY_DIR}/MK_DIST/windows/curl/${_CURL_VERSION}/${_CURL_ARCH}/lib")
+  message(STATUS "CMAKE_INCLUDE_PATH: ${CMAKE_INCLUDE_PATH}")
+  message(STATUS "CMAKE_LIBRARY_PATH: ${CMAKE_LIBRARY_PATH}")
+  add_definitions(-DCURL_STATICLIB)
+  list(APPEND _EXTRA_LIBS Crypt32)
 endif()
 
 # Checks
@@ -117,20 +121,20 @@ enable_testing()
 
 if(${BUILD_TESTING}) # is a standard name in CMake-land
   if(${CURL_FOUND})
-    add_executable(client client.cpp)
+    add_executable(example_client example_client.cpp)
     target_include_directories(
       ndt
       PUBLIC
       ${CURL_INCLUDE_DIRS}
     )
-    target_link_libraries(client ndt ${CURL_LIBRARIES})
+    target_link_libraries(example_client ndt ${CURL_LIBRARIES})
     add_test(
       NAME simple_download_test
-      COMMAND client --verbose --download
+      COMMAND example_client --verbose --download
     )
     add_test(
       NAME simple_upload_test
-      COMMAND client --verbose --json --upload
+      COMMAND example_client --verbose --json --upload
     )
   else()
     message(WARNING "cURL not found: cannot build example client")
