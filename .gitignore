@@ -4,6 +4,7 @@
 /CMakeFiles/
 /CTestTestfile.cmake
 /Makefile
+/Testing/
 /argh.h
 /build.ninja
 /catch.hpp

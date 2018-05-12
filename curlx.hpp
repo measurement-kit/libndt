@@ -24,7 +24,12 @@ class Curl {
 
   Curl() noexcept;
 
-  bool init() noexcept;
+  bool method_get(const std::string &url, long timeout,
+                  std::string *body, std::string *err) noexcept;
+
+  // Mid-level API
+
+  virtual bool init() noexcept;
 
   virtual CURLcode setopt_url(const std::string &url) noexcept;
 
