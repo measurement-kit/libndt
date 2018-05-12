@@ -354,6 +354,56 @@ TEST_CASE("Client::recv_tests_ids() fails with invalid tests ids") {
   REQUIRE(client.recv_tests_ids() == false);
 }
 
+// Client::run_tests tests
+// -----------------------
+
+class RunTestsMock : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect(uint8_t, std::string *val) noexcept override {
+    *val = tests_ids;
+    return true;
+  }
+
+  bool run_upload() noexcept override { return false; }
+  bool run_meta() noexcept override { return false; }
+  bool run_download() noexcept override { return false; }
+
+  std::string tests_ids;
+};
+
+TEST_CASE("Client::run_tests() deals with Client::run_upload() failure") {
+  RunTestsMock client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  client.tests_ids = std::to_string(libndt::nettest_upload);
+  REQUIRE(client.recv_tests_ids() == true);
+  REQUIRE(client.run_tests() == false);
+}
+
+TEST_CASE("Client::run_tests() deals with Client::run_meta() failure") {
+  RunTestsMock client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  client.tests_ids = std::to_string(libndt::nettest_meta);
+  REQUIRE(client.recv_tests_ids() == true);
+  REQUIRE(client.run_tests() == false);
+}
+
+TEST_CASE("Client::run_tests() deals with Client::run_download() failure") {
+  RunTestsMock client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  client.tests_ids = std::to_string(libndt::nettest_download);
+  REQUIRE(client.recv_tests_ids() == true);
+  REQUIRE(client.run_tests() == false);
+}
+
+TEST_CASE("Client::run_tests() deals with unexpected test-id") {
+  RunTestsMock client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  client.tests_ids = std::to_string(libndt::nettest_status);
+  REQUIRE(client.recv_tests_ids() == true);
+  REQUIRE(client.run_tests() == false);
+}
+
 // Client::connect_tcp() tests
 // ---------------------------
 

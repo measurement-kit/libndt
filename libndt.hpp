@@ -25,7 +25,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 16;
+constexpr uint64_t api_minor = 17;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
@@ -130,9 +130,9 @@ class Client {
 
   // Mid-level API
 
-  bool run_download() noexcept;
-  bool run_meta() noexcept;
-  bool run_upload() noexcept;
+  virtual bool run_download() noexcept;
+  virtual bool run_meta() noexcept;
+  virtual bool run_upload() noexcept;
 
   // Low-level API
 
