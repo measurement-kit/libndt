@@ -10,10 +10,7 @@
 #include <iostream>
 #include <sstream>
 
-#include <curl/curl.h>
-
 #include "argh.h"
-#include "json.hpp"
 
 static void usage() {
   std::clog << "\n";
@@ -28,20 +25,6 @@ static void usage() {
   std::clog << "\n";
   std::clog << "If <hostname> is omitted, we pick a random server.\n";
   std::clog << std::endl;
-}
-
-static size_t body_cb(char *ptr, size_t size, size_t nmemb, void *userdata) {
-  if (nmemb <= 0) {
-    return 0;  // This means "no body"
-  }
-  if (size > SIZE_MAX / nmemb) {
-    std::clog << "fatal: unexpected sizes in cURL callback" << std::endl;
-    return 0;
-  }
-  auto realsiz = size * nmemb;  // Overflow not possible (see above)
-  auto ss = static_cast<std::stringstream *>(userdata);
-  (*ss) << std::string{ptr, realsiz};
-  return nmemb;
 }
 
 int main(int, char **argv) {
@@ -115,72 +98,6 @@ int main(int, char **argv) {
     std::clog << "have initialized winsock v2.2." << std::endl;
   }
 #endif
-
-  // For this simple example, we use synchronous cURL to retrieve the
-  // closest server from M-Lab's naming service (mlab-ns). In a real app
-  // you probably want to use, at least, nonblocking cURL to do that.
-  if (client.settings.hostname.empty()) {
-    std::stringstream response_body;
-    {
-      CURL *curl = curl_easy_init();
-      if (curl == nullptr) {
-        std::clog << "fatal: curl_easy_init() failed" << std::endl;
-        exit(EXIT_FAILURE);
-      }
-      std::clog << "cURL initialized" << std::endl;
-      constexpr auto mlabns_url =
-          "https://mlab-ns.appspot.com/ndt?policy=random";
-      if (curl_easy_setopt(curl, CURLOPT_URL, mlabns_url) != CURLE_OK) {
-        std::clog << "fatal: curl_easy_setopt(CURLOPT_URL, ...) failed"
-                  << std::endl;
-        curl_easy_cleanup(curl);
-        exit(EXIT_FAILURE);
-      }
-      std::clog << "using mlab-ns URL: " << mlabns_url << std::endl;
-      if (curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, body_cb) != CURLE_OK) {
-        std::clog
-            << "fatal: curl_easy_setopt(CURLOPT_WRITEFUNCTION, ...) failed"
-            << std::endl;
-        curl_easy_cleanup(curl);
-        exit(EXIT_FAILURE);
-      }
-      std::clog << "configured write callback" << std::endl;
-      if (curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_body) !=
-          CURLE_OK) {
-        std::clog << "fatal: curl_easy_setopt(CURLOPT_WRITEDATA, ...) failed"
-                  << std::endl;
-        curl_easy_cleanup(curl);
-        exit(EXIT_FAILURE);
-      }
-      std::clog << "configured write callback context" << std::endl;
-      std::clog << "cURL-performing HTTP request..." << std::endl;
-      auto rv = curl_easy_perform(curl);
-      std::clog << "cURL-performing HTTP request... done" << std::endl;
-      if (rv != CURLE_OK) {
-        std::clog << "fatal: curl_easy_perform() failed: "
-                  << curl_easy_strerror(rv) << std::endl;
-        curl_easy_cleanup(curl);
-        exit(EXIT_FAILURE);
-      }
-      curl_easy_cleanup(curl);
-    }
-    std::clog << "got this response body: " << response_body.str() << std::endl;
-    nlohmann::json json;
-    try {
-      json = nlohmann::json::parse(response_body.str());
-    } catch (const nlohmann::json::exception &) {
-      std::clog << "fatal: nlohmann::json::parse() failed" << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    std::clog << "successfully parsed body as JSON" << std::endl;
-    try {
-      client.settings.hostname = json["fqdn"];
-    } catch (const nlohmann::json::exception &) {
-      std::clog << "fatal: cannot access JSON 'fqdn' field" << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    std::clog << "will use host: " << client.settings.hostname << std::endl;
-  }
 
   bool rv = client.run();
   return (rv) ? EXIT_SUCCESS : EXIT_FAILURE;

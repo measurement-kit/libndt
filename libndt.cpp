@@ -11,6 +11,8 @@
 #include <unistd.h>
 #endif
 
+#include <assert.h>
+
 #include <chrono>
 #include <iomanip>
 #include <iostream>
@@ -22,6 +24,33 @@
 
 #ifndef HAVE_STRTONUM
 #include "strtonum.c.h" // Include inline replacement
+#endif
+
+#ifdef HAVE_CURL
+#include "curlx.hpp"
+#endif
+
+// Utils with C linkage
+
+#ifdef HAVE_CURL
+extern "C" {
+
+static size_t curl_callback(char *ptr, size_t size, size_t nmemb,
+                            void *userdata) {
+  if (nmemb <= 0 || size <= 0) {
+    return 0;  // This means "no body"
+  }
+  if (size > SIZE_MAX / nmemb) {
+    assert(false);  // should not happen anyway
+    return 0;
+  }
+  auto realsiz = size * nmemb;  // Overflow not possible (see above)
+  auto ss = static_cast<std::stringstream *>(userdata);
+  (*ss) << std::string{ptr, realsiz};
+  return nmemb;
+}
+
+} // extern "C"
 #endif
 
 namespace measurement_kit {
@@ -173,6 +202,9 @@ SocketVector::~SocketVector() noexcept {
 // Top-level API
 
 bool Client::run() noexcept {
+  if (!query_mlabns()) {
+    return false;
+  }
   if (!connect()) {
     return false;
   }
@@ -247,6 +279,64 @@ void Client::on_server_busy(std::string msg) noexcept {
 }
 
 // High-level API
+
+bool Client::query_mlabns() noexcept {
+  if (!settings.hostname.empty()) {
+    EMIT_DEBUG("no need to query mlab-ns; we have hostname");
+    return true;
+  }
+#ifdef HAVE_CURL
+  std::stringstream body;
+  {
+    mk::libndt::Curl curl;
+    if (!curl.init()) {
+      EMIT_WARNING("cannot initialize cURL");
+      return false;
+    }
+    if (curl.setopt_url(settings.mlabns_url) != CURLE_OK) {
+      EMIT_WARNING("cannot set cURL's URL");
+      return false;
+    }
+    if (curl.setopt_writefunction(curl_callback) != CURLE_OK) {
+      EMIT_WARNING("cannot set cURL's write callback");
+      return false;
+    }
+    if (curl.setopt_writedata(&body) != CURLE_OK) {
+      EMIT_WARNING("cannot set cURL's write callback context");
+      return false;
+    }
+    if (curl.setopt_timeout(settings.curl_timeout) != CURLE_OK) {
+      EMIT_WARNING("cannot set cURL's timeout");
+      return false;
+    }
+    EMIT_INFO("performing mlab-ns query using cURL");
+    auto rv = curl.perform();
+    if (rv != CURLE_OK) {
+      EMIT_WARNING("curl_easy_perform() failed: " << curl_easy_strerror(rv));
+      return false;
+    }
+    EMIT_DEBUG("got this JSON: " << body.str());
+  }
+  nlohmann::json json;
+  try {
+    json = nlohmann::json::parse(body.str());
+  } catch (const nlohmann::json::exception &exc) {
+    EMIT_WARNING("cannot parse JSON: " << exc.what());
+    return false;
+  }
+  try {
+    settings.hostname = json.at("fqdn");
+  } catch (const nlohmann::json::exception &exc) {
+    EMIT_WARNING("cannot access FQDN field: " << exc.what());
+    return false;
+  }
+  EMIT_INFO("discovered host: " << settings.hostname);
+  return true;
+#else
+  EMIT_WARNING("cURL not compiled in; don't know how to get server");
+  return false;
+#endif
+}
 
 bool Client::connect() noexcept {
   assert(impl->sock == -1);
