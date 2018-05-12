@@ -5,9 +5,9 @@ matrix:
 
     - os: linux
       env: BUILD_TYPE="vanilla"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
+           CMAKE_BUILD_OPTIONS="-v"
+           CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Release"
            CTEST_OPTIONS="-V"
-           MAKEFLAGS="--no-print-directory"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -19,9 +19,9 @@ matrix:
            CFLAGS="-fsanitize=address"
            CXXFLAGS="-fsanitize=address"
            LDFLAGS="-fsanitize=address"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
+           CMAKE_BUILD_OPTIONS="-v"
+           CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
            CTEST_OPTIONS="-V"
-           MAKEFLAGS="--no-print-directory"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -33,9 +33,9 @@ matrix:
            CFLAGS="-fsanitize=leak"
            CXXFLAGS="-fsanitize=leak"
            LDFLAGS="-fsanitize=leak"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
+           CMAKE_BUILD_OPTIONS="-v"
+           CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
            CTEST_OPTIONS="-V"
-           MAKEFLAGS="--no-print-directory"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -47,9 +47,9 @@ matrix:
            CFLAGS="-fsanitize=undefined -fno-sanitize-recover"
            CXXFLAGS="-fsanitize=undefined -fno-sanitize-recover"
            LDFLAGS="-fsanitize=undefined"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
+           CMAKE_BUILD_OPTIONS="-v"
+           CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
            CTEST_OPTIONS="-V"
-           MAKEFLAGS="--no-print-directory"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -58,10 +58,10 @@ matrix:
 
     - os: linux
       env: BUILD_TYPE="libc++-n-clang"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Release -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
+           CMAKE_BUILD_OPTIONS="-v"
+           CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Release"
            CTEST_OPTIONS="-V"
            CXXFLAGS="-stdlib=libc++"
-           MAKEFLAGS="--no-print-directory"
            MK_CC=clang
            MK_CXX=clang++
       script:
@@ -73,12 +73,12 @@ matrix:
     - os: linux
       env: BUILD_TYPE="coverage"
            CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
-           CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
+           CMAKE_BUILD_OPTIONS="-v"
+           CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
            COVERALLS_OPTIONS="--include curlx.hpp --include curlx.cpp --include example_client.cpp --include libndt.cpp --include libndt.hpp --include strtonum.h --include strtonum.c"
            CTEST_OPTIONS="-V"
            CXXFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
            LDFLAGS="-lgcov"
-           MAKEFLAGS="--no-print-directory"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
