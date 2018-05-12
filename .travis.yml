@@ -74,7 +74,7 @@ matrix:
       env: BUILD_TYPE="coverage"
            CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
            CMAKE_OPTIONS="-D CMAKE_BUILD_TYPE=Debug -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON"
-           COVERALLS_OPTIONS="--include example_client.cpp --include libndt.cpp --include libndt.hpp"
+           COVERALLS_OPTIONS="--include curlx.hpp --include curlx.cpp --include example_client.cpp --include libndt.cpp --include libndt.hpp --include strtonum.h --include strtonum.c"
            CTEST_OPTIONS="-V"
            CXXFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
            LDFLAGS="-lgcov"
