@@ -25,7 +25,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 12;
+constexpr uint64_t api_minor = 13;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
@@ -77,6 +77,8 @@ enum class NdtProtocol {
 
 class NdtSettings {
  public:
+  std::string mlabns_url = "https://mlab-ns.appspot.com/ndt";
+  long curl_timeout = 3 /* seconds */;
   std::string hostname;
   std::string port = "3001";
   uint8_t test_suite = 0;
@@ -115,6 +117,7 @@ class Client {
 
   // High-level API
 
+  bool query_mlabns() noexcept;
   bool connect() noexcept;
   bool send_login() noexcept;
   bool recv_kickoff() noexcept;

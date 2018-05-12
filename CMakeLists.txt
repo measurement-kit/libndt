@@ -17,7 +17,8 @@ file(
   SHA256=fbdfec4b4cf63b3b565d09f87e6c3c183bdd45c5be1864d3fcb338f6f02c1733
   TLS_VERIFY ON SHOW_PROGRESS)
 
-if(${MSVC})
+set(LIBNDT_ENABLE_CURL "TRUE" CACHE BOOL "Whether to enable cURL")
+if("${MSVC}" AND "${LIBNDT_ENABLE_CURL}")
   set(_CURL_BASEURL "https://github.com/measurement-kit/prebuilt/releases/download")
   set(_CURL_CHANNEL "testing")
   set(_CURL_HASH "75f291c6da7c1d66ac932a5002ccc60a59442f725f291491dfda3e3c1027475b")
@@ -61,7 +62,12 @@ if(${HAVE_STRTONUM})
   add_definitions(-DHAVE_STRTONUM)
 endif()
 
-find_package(CURL)
+if(${LIBNDT_ENABLE_CURL})
+  find_package(CURL)
+  if(${CURL_FOUND})
+    add_definitions(-DHAVE_CURL)
+  endif()
+endif()
 
 # Compiler flags
 
@@ -88,13 +94,17 @@ endif()
 add_library(
   ndt
   STATIC
+  curlx.cpp
+  curlx.hpp
   libndt.cpp
   libndt.hpp
   strtonum.c.h
 )
 target_include_directories(
   ndt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
+  ${CURL_INCLUDE_DIRS}
 )
+target_link_libraries(ndt ${CURL_LIBRARIES})
 install(
   FILES
   libndt.hpp
@@ -115,19 +125,19 @@ if("${WIN32}" OR "${MINGW}")
 endif()
 
 # Testing
+# -------
+#
+# We have two different settings for testing so that we can control
+# whether to build and run tests also when we're a subrepository.
 
-set(BUILD_TESTING ON CACHE BOOL "Whether to build tests")
-enable_testing()
+set(LIBNDT_ENABLE_TESTS "TRUE" CACHE BOOL "Whether to enable tests")
+set(BUILD_TESTING "ON" CACHE BOOL "Whether to build tests")
 
-if(${BUILD_TESTING}) # is a standard name in CMake-land
-  if(${CURL_FOUND})
-    add_executable(example_client example_client.cpp)
-    target_include_directories(
-      ndt
-      PUBLIC
-      ${CURL_INCLUDE_DIRS}
-    )
-    target_link_libraries(example_client ndt ${CURL_LIBRARIES})
+if(${BUILD_TESTING} AND ${LIBNDT_ENABLE_TESTS})
+  enable_testing()
+  add_executable(example_client example_client.cpp)
+  target_link_libraries(example_client ndt)
+  if(${CURL_FOUND}) # Some tests require cURL for mlab-ns
     add_test(
       NAME simple_download_test
       COMMAND example_client --verbose --download
@@ -136,7 +146,5 @@ if(${BUILD_TESTING}) # is a standard name in CMake-land
       NAME simple_upload_test
       COMMAND example_client --verbose --json --upload
     )
-  else()
-    message(WARNING "cURL not found: cannot build example client")
   endif()
 endif()
