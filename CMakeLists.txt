@@ -17,6 +17,13 @@ file(
   SHA256=fbdfec4b4cf63b3b565d09f87e6c3c183bdd45c5be1864d3fcb338f6f02c1733
   TLS_VERIFY ON SHOW_PROGRESS)
 
+message(STATUS "Downloading catchorg/Catch2")
+file(
+  DOWNLOAD https://github.com/catchorg/Catch2/releases/download/v2.2.2/catch.hpp
+  "${CMAKE_CURRENT_BINARY_DIR}/catch.hpp" EXPECTED_HASH
+  SHA256=e0e0d85b65ffaab0006160e2238d9761212e93182716fcc85a87863042932919
+  TLS_VERIFY ON SHOW_PROGRESS)
+
 set(LIBNDT_ENABLE_CURL "TRUE" CACHE BOOL "Whether to enable cURL")
 if("${MSVC}" AND "${LIBNDT_ENABLE_CURL}")
   set(_CURL_BASEURL "https://github.com/measurement-kit/prebuilt/releases/download")
@@ -140,6 +147,18 @@ if(${BUILD_TESTING} AND ${LIBNDT_ENABLE_TESTS})
   enable_testing()
   add_executable(example_client example_client.cpp)
   target_link_libraries(example_client ndt)
+  add_executable(
+    tests
+    curlx_test.cpp
+    libndt_test.cpp
+    strtonum_test.cpp
+    tests_main.cpp
+  )
+  target_link_libraries(tests ndt)
+  add_test(
+    NAME unit_tests
+    COMMAND tests
+  )
   if(${CURL_FOUND}) # Some tests require cURL for mlab-ns
     add_test(
       NAME simple_download_test
