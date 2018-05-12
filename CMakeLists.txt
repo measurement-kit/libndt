@@ -62,6 +62,9 @@ if(${HAVE_STRTONUM})
 endif()
 
 find_package(CURL)
+if(${CURL_FOUND})
+  add_definitions(-DHAVE_CURL)
+endif()
 
 # Compiler flags
 
@@ -94,7 +97,9 @@ add_library(
 )
 target_include_directories(
   ndt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
+  ${CURL_INCLUDE_DIRS}
 )
+target_link_libraries(ndt ${CURL_LIBRARIES})
 install(
   FILES
   libndt.hpp
@@ -120,23 +125,14 @@ set(BUILD_TESTING ON CACHE BOOL "Whether to build tests")
 enable_testing()
 
 if(${BUILD_TESTING}) # is a standard name in CMake-land
-  if(${CURL_FOUND})
-    add_executable(example_client example_client.cpp)
-    target_include_directories(
-      ndt
-      PUBLIC
-      ${CURL_INCLUDE_DIRS}
-    )
-    target_link_libraries(example_client ndt ${CURL_LIBRARIES})
-    add_test(
-      NAME simple_download_test
-      COMMAND example_client --verbose --download
-    )
-    add_test(
-      NAME simple_upload_test
-      COMMAND example_client --verbose --json --upload
-    )
-  else()
-    message(WARNING "cURL not found: cannot build example client")
-  endif()
+  add_executable(example_client example_client.cpp)
+  target_link_libraries(example_client ndt)
+  add_test(
+    NAME simple_download_test
+    COMMAND example_client --verbose --download
+  )
+  add_test(
+    NAME simple_upload_test
+    COMMAND example_client --verbose --json --upload
+  )
 endif()
