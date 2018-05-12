@@ -179,6 +179,69 @@ TEST_CASE("Client::run() deals with Client::wait_close() failure") {
   REQUIRE(client.run() == false);
 }
 
+// Client::query_mlabns() tests
+// ----------------------------
+
+class FailQueryMlabnsCurl : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool query_mlabns_curl(const std::string &, long, std::string *) noexcept {
+    return false;
+  }
+};
+
+TEST_CASE(
+    "Client::query_mlabns() deals with Client::query_mlabns_curl() failure") {
+  FailQueryMlabnsCurl client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.query_mlabns() == false);
+}
+
+class EmptyMlabnsJson : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool query_mlabns_curl(const std::string &, long, std::string *body) noexcept {
+    *body = "";
+    return true;
+  }
+};
+
+TEST_CASE("Client::query_mlabns() deals with empty JSON") {
+  EmptyMlabnsJson client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.query_mlabns() == false);
+}
+
+class InvalidMlabnsJson : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool query_mlabns_curl(const std::string &, long, std::string *body) noexcept {
+    *body = "{{{{";
+    return true;
+  }
+};
+
+TEST_CASE("Client::query_mlabns() deals with invalid JSON") {
+  InvalidMlabnsJson client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.query_mlabns() == false);
+}
+
+class IncompleteMlabnsJson : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool query_mlabns_curl(const std::string &, long, std::string *body) noexcept {
+    *body = "{}";
+    return true;
+  }
+};
+
+TEST_CASE("Client::query_mlabns() deals with incomplete JSON") {
+  IncompleteMlabnsJson client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.query_mlabns() == false);
+}
+
 // Client::recv_kickoff() tests
 // ----------------------------
 

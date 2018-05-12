@@ -25,7 +25,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 15;
+constexpr uint64_t api_minor = 16;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
@@ -157,8 +157,8 @@ class Client {
 
   // Dependencies (cURL)
 
-  bool query_mlabns_curl(const std::string &url, long timeout,
-                         std::string *body) noexcept;
+  virtual bool query_mlabns_curl(const std::string &url, long timeout,
+                                 std::string *body) noexcept;
 
   // Dependencies (libc)
 
