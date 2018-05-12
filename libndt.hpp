@@ -25,8 +25,8 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 13;
-constexpr uint64_t api_patch = 1;
+constexpr uint64_t api_minor = 14;
+constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
 constexpr uint8_t nettest_upload = 1 << 1;
@@ -117,16 +117,16 @@ class Client {
 
   // High-level API
 
-  bool query_mlabns() noexcept;
-  bool connect() noexcept;
-  bool send_login() noexcept;
-  bool recv_kickoff() noexcept;
-  bool wait_in_queue() noexcept;
-  bool recv_version() noexcept;
-  bool recv_tests_ids() noexcept;
-  bool run_tests() noexcept;
-  bool recv_results_and_logout() noexcept;
-  bool wait_close() noexcept;
+  virtual bool query_mlabns() noexcept;
+  virtual bool connect() noexcept;
+  virtual bool send_login() noexcept;
+  virtual bool recv_kickoff() noexcept;
+  virtual bool wait_in_queue() noexcept;
+  virtual bool recv_version() noexcept;
+  virtual bool recv_tests_ids() noexcept;
+  virtual bool run_tests() noexcept;
+  virtual bool recv_results_and_logout() noexcept;
+  virtual bool wait_close() noexcept;
 
   // Mid-level API
 
@@ -149,7 +149,7 @@ class Client {
 
   bool msg_expect_empty(uint8_t code) noexcept;
 
-  bool msg_expect(uint8_t code, std::string *msg) noexcept;
+  virtual bool msg_expect(uint8_t code, std::string *msg) noexcept;
 
   bool msg_read(uint8_t *code, std::string *msg) noexcept;
 

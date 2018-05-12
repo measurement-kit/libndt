@@ -1,9 +1,15 @@
+/.ninja_deps
+/.ninja_log
 /CMakeCache.txt
 /CMakeFiles/
 /CTestTestfile.cmake
 /Makefile
 /argh.h
+/build.ninja
+/catch.hpp
 /cmake_install.cmake
 /example_client
 /json.hpp
 /libndt.a
+/rules.ninja
+/tests

@@ -75,7 +75,7 @@ matrix:
            CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
            CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
-           COVERALLS_OPTIONS="--include curlx.hpp --include curlx.cpp --include example_client.cpp --include libndt.cpp --include libndt.hpp --include strtonum.h --include strtonum.c"
+           COVERALLS_OPTIONS="--include curlx.hpp --include curlx.cpp --include libndt.cpp --include libndt.hpp --include strtonum.h --include strtonum.c"
            CTEST_OPTIONS="-V"
            CXXFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
            LDFLAGS="-lgcov"

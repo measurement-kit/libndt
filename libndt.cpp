@@ -284,7 +284,7 @@ bool Client::query_mlabns() noexcept {
 #ifdef HAVE_CURL
   std::stringstream body;
   {
-    mk::libndt::Curl curl;
+    Curl curl;
     if (!curl.init()) {
       EMIT_WARNING("cannot initialize cURL");
       return false;
@@ -335,17 +335,14 @@ bool Client::query_mlabns() noexcept {
 }
 
 bool Client::connect() noexcept {
-  assert(impl->sock == -1);
   return connect_tcp(settings.hostname, settings.port, &impl->sock);
 }
 
 bool Client::send_login() noexcept {
-  assert(impl->sock != -1);
   return msg_write_login();
 }
 
 bool Client::recv_kickoff() noexcept {
-  assert(impl->sock != -1);
   char buf[msg_kickoff_size];
   for (Size off = 0; off < msg_kickoff_size;) {
     Ssize n = this->recv(impl->sock, buf + off, sizeof(buf) - off);
@@ -363,7 +360,6 @@ bool Client::recv_kickoff() noexcept {
 }
 
 bool Client::wait_in_queue() noexcept {
-  assert(impl->sock != -1);
   std::string message;
   if (!msg_expect(msg_srv_queue, &message)) {
     return false;
@@ -378,7 +374,6 @@ bool Client::wait_in_queue() noexcept {
 }
 
 bool Client::recv_version() noexcept {
-  assert(impl->sock != -1);
   std::string message;
   if (!msg_expect(msg_login, &message)) {
     return false;
@@ -389,7 +384,6 @@ bool Client::recv_version() noexcept {
 }
 
 bool Client::recv_tests_ids() noexcept {
-  assert(impl->sock != -1);
   std::string message;
   if (!msg_expect(msg_login, &message)) {
     return false;
@@ -400,7 +394,7 @@ bool Client::recv_tests_ids() noexcept {
     const char *errstr = nullptr;
     uint8_t tid = (uint8_t)this->strtonum(cur.data(), 1, 256, &errstr);
     if (errstr != nullptr) {
-      EMIT_WARNING("recv_tests_ids: cannot stringify token: "
+      EMIT_WARNING("recv_tests_ids: found invalid test-id: "
                    << cur.data() << " (error: " << errstr << ")");
       return false;
     }
@@ -440,7 +434,6 @@ bool Client::run_tests() noexcept {
 }
 
 bool Client::recv_results_and_logout() noexcept {
-  assert(impl->sock != -1);
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
     uint8_t code = 0;
@@ -764,6 +757,10 @@ bool Client::run_upload() noexcept {
 bool Client::connect_tcp(const std::string &hostname, const std::string &port,
                          Socket *sock) noexcept {
   assert(sock != nullptr);
+  if (*sock != -1) {
+    EMIT_WARNING("socket already connected");
+    return false;
+  }
   addrinfo hints{};
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;

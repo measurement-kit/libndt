@@ -7,7 +7,7 @@
 
 #include <assert.h>
 
-namespace mk {
+namespace measurement_kit {
 namespace libndt {
 
 void CurlDeleter::operator()(CURL *handle) noexcept {
@@ -58,5 +58,5 @@ Curl::~Curl() noexcept {}
 CURL *Curl::easy_init() noexcept { return ::curl_easy_init(); }
 
 }  // namespace libndt
-}  // namespace mk
+}  // namespace measurement_kit
 #endif  // HAVE_CURL
