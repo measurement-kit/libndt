@@ -155,7 +155,12 @@ class Client {
 
   bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
 
-  // Dependencies
+  // Dependencies (cURL)
+
+  bool query_mlabns_curl(const std::string &url, long timeout,
+                         std::string *body) noexcept;
+
+  // Dependencies (libc)
 
   virtual int get_last_error() noexcept;
   virtual void set_last_error(int err) noexcept;

@@ -24,31 +24,6 @@
 #include "json.hpp"
 #include "strtonum.h"
 
-// Utils with C linkage
-
-#ifdef HAVE_CURL
-extern "C" {
-
-static size_t curl_callback(char *ptr, size_t size, size_t nmemb,
-                            void *userdata) {
-  if (nmemb <= 0 || size <= 0) {
-    return 0;  // This means "no body"
-  }
-  if (size > SIZE_MAX / nmemb) {
-    assert(false);  // fail loudly in debug mode
-    return 0;
-  }
-  auto realsiz = size * nmemb;  // Overflow not possible (see above)
-  auto ss = static_cast<std::stringstream *>(userdata);
-  (*ss) << std::string{ptr, realsiz};
-  // From fwrite(3): "[the return value] equals the number of bytes
-  // written _only_ when `size` equals `1`".
-  return nmemb;
-}
-
-} // extern "C"
-#endif
-
 namespace measurement_kit {
 namespace libndt {
 
@@ -178,11 +153,11 @@ static bool emit_result(Client *client, std::string scope,
 }
 
 class SocketVector {
-  public:
-    SocketVector(Client *c) noexcept;
-    ~SocketVector() noexcept;
-    Client *owner = nullptr;
-    std::vector<Socket> sockets;
+ public:
+  SocketVector(Client *c) noexcept;
+  ~SocketVector() noexcept;
+  Client *owner = nullptr;
+  std::vector<Socket> sockets;
 };
 
 SocketVector::SocketVector(Client *c) noexcept : owner{c} {}
@@ -281,41 +256,13 @@ bool Client::query_mlabns() noexcept {
     EMIT_DEBUG("no need to query mlab-ns; we have hostname");
     return true;
   }
-#ifdef HAVE_CURL
-  std::stringstream body;
-  {
-    Curl curl;
-    if (!curl.init()) {
-      EMIT_WARNING("cannot initialize cURL");
-      return false;
-    }
-    if (curl.setopt_url(settings.mlabns_url) != CURLE_OK) {
-      EMIT_WARNING("cannot set cURL's URL");
-      return false;
-    }
-    if (curl.setopt_writefunction(curl_callback) != CURLE_OK) {
-      EMIT_WARNING("cannot set cURL's write callback");
-      return false;
-    }
-    if (curl.setopt_writedata(&body) != CURLE_OK) {
-      EMIT_WARNING("cannot set cURL's write callback context");
-      return false;
-    }
-    if (curl.setopt_timeout(settings.curl_timeout) != CURLE_OK) {
-      EMIT_WARNING("cannot set cURL's timeout");
-      return false;
-    }
-    EMIT_INFO("performing mlab-ns query using cURL");
-    auto rv = curl.perform();
-    if (rv != CURLE_OK) {
-      EMIT_WARNING("curl_easy_perform() failed: " << curl_easy_strerror(rv));
-      return false;
-    }
-    EMIT_DEBUG("got this JSON: " << body.str());
+  std::string body;
+  if (!query_mlabns_curl(settings.mlabns_url, settings.curl_timeout, &body)) {
+    return false;
   }
   nlohmann::json json;
   try {
-    json = nlohmann::json::parse(body.str());
+    json = nlohmann::json::parse(body);
   } catch (const nlohmann::json::exception &exc) {
     EMIT_WARNING("cannot parse JSON: " << exc.what());
     return false;
@@ -328,19 +275,13 @@ bool Client::query_mlabns() noexcept {
   }
   EMIT_INFO("discovered host: " << settings.hostname);
   return true;
-#else
-  EMIT_WARNING("cURL not compiled in; don't know how to get server");
-  return false;
-#endif
 }
 
 bool Client::connect() noexcept {
   return connect_tcp(settings.hostname, settings.port, &impl->sock);
 }
 
-bool Client::send_login() noexcept {
-  return msg_write_login();
-}
+bool Client::send_login() noexcept { return msg_write_login(); }
 
 bool Client::recv_kickoff() noexcept {
   char buf[msg_kickoff_size];
@@ -413,7 +354,7 @@ bool Client::run_tests() noexcept {
         }
         break;
       case nettest_meta:
-        EMIT_DEBUG("running meta test"); // don't annoy the user with this
+        EMIT_DEBUG("running meta test");  // don't annoy the user with this
         if (!run_meta()) {
           return false;
         }
@@ -785,7 +726,7 @@ bool Client::connect_tcp(const std::string &hostname, const std::string &port,
     // The following two lines ensure that casting `size_t` to
     // SockLen is safe because SockLen is `int` and the value of
     // the ai_addrlen field is always small enough.
-    static_assert(sizeof(SockLen) == sizeof (int), "Wrong SockLen size");
+    static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
     assert(aip->ai_addrlen <= INT_MAX);
     if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
       EMIT_DEBUG("connect(): okay");
@@ -1072,7 +1013,24 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   return true;
 }
 
-// Dependencies
+// Dependencies (curl)
+
+bool Client::query_mlabns_curl(const std::string &url, long timeout,
+                               std::string *body) noexcept {
+#ifdef HAVE_CURL
+  std::string err = "";
+  if (!Curl{}.method_get(url, timeout, body, &err)) {
+    EMIT_WARNING("cannot query mlabns: " << err);
+    return false;
+  }
+  return true;
+#else
+  EMIT_WARNING("cURL not compiled in; don't know how to get server");
+  return false;
+#endif
+}
+
+// Dependencies (libc)
 
 #ifdef _WIN32
 #define AS_OS_SOCKLEN(n) ((int)n)
