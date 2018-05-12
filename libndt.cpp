@@ -41,12 +41,14 @@ static size_t curl_callback(char *ptr, size_t size, size_t nmemb,
     return 0;  // This means "no body"
   }
   if (size > SIZE_MAX / nmemb) {
-    assert(false);  // should not happen anyway
+    assert(false);  // fail loudly in debug mode
     return 0;
   }
   auto realsiz = size * nmemb;  // Overflow not possible (see above)
   auto ss = static_cast<std::stringstream *>(userdata);
   (*ss) << std::string{ptr, realsiz};
+  // From fwrite(3): "[the return value] equals the number of bytes
+  // written _only_ when `size` equals `1`".
   return nmemb;
 }
 
