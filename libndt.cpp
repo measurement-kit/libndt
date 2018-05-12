@@ -20,15 +20,9 @@
 #include <random>
 #include <sstream>
 
-#include "json.hpp"
-
-#ifndef HAVE_STRTONUM
-#include "strtonum.c.h" // Include inline replacement
-#endif
-
-#ifdef HAVE_CURL
 #include "curlx.hpp"
-#endif
+#include "json.hpp"
+#include "strtonum.h"
 
 // Utils with C linkage
 

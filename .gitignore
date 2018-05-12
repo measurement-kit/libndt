@@ -1,2 +1,9 @@
+/CMakeCache.txt
+/CMakeFiles/
+/CTestTestfile.cmake
+/Makefile
 /argh.h
+/cmake_install.cmake
+/example_client
 /json.hpp
+/libndt.a

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1.0)
-project(libndt LANGUAGES CXX)
+project(libndt LANGUAGES C CXX)
 
 # Download header only dependencies
 
@@ -74,6 +74,8 @@ endif()
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 if("${UNIX}" OR "${MINGW}")
   set(LIBNDT_FLAGS "-Wall -Wextra -Werror")
@@ -98,7 +100,8 @@ add_library(
   curlx.hpp
   libndt.cpp
   libndt.hpp
-  strtonum.c.h
+  strtonum.c
+  strtonum.h
 )
 target_include_directories(
   ndt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
