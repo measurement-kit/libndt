@@ -151,7 +151,7 @@ class Client {
 
   virtual bool msg_expect(uint8_t code, std::string *msg) noexcept;
 
-  bool msg_read(uint8_t *code, std::string *msg) noexcept;
+  virtual bool msg_read(uint8_t *code, std::string *msg) noexcept;
 
   bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
 

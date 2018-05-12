@@ -354,8 +354,8 @@ TEST_CASE("Client::recv_tests_ids() fails with invalid tests ids") {
   REQUIRE(client.recv_tests_ids() == false);
 }
 
-// Client::run_tests tests
-// -----------------------
+// Client::run_tests() tests
+// -------------------------
 
 class RunTestsMock : public libndt::Client {
  public:
@@ -402,6 +402,70 @@ TEST_CASE("Client::run_tests() deals with unexpected test-id") {
   client.tests_ids = std::to_string(libndt::nettest_status);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
+}
+
+// Client::recv_results_and_logout() tests
+// ---------------------------------------
+
+class FailMsgRead : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_read(uint8_t *, std::string *) noexcept override { return false; }
+};
+
+TEST_CASE(
+    "Client::recv_results_and_logout() deals with Client::msg_read() failure") {
+  FailMsgRead client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.recv_results_and_logout() == false);
+}
+
+class NeitherResultsNorLogout : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_read(uint8_t *code, std::string *msg) noexcept override {
+    *code = libndt::msg_comm_failure;
+    *msg = "";
+    return true;
+  }
+};
+
+TEST_CASE("Client::recv_results_and_logout() deals with unexpected message") {
+  NeitherResultsNorLogout client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.recv_results_and_logout() == false);
+}
+
+class InvalidResults : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_read(uint8_t *code, std::string *msg) noexcept override {
+    *code = libndt::msg_results;
+    *msg = "antani-antani";
+    return true;
+  }
+};
+
+TEST_CASE("Client::recv_results_and_logout() deals with invalid results") {
+  InvalidResults client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.recv_results_and_logout() == false);
+}
+
+class TooManyResults : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_read(uint8_t *code, std::string *msg) noexcept override {
+    *code = libndt::msg_results;
+    *msg = "antani=antani";
+    return true;
+  }
+};
+
+TEST_CASE("Client::recv_results_and_logout() deals too many results") {
+  TooManyResults client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.recv_results_and_logout() == false);
 }
 
 // Client::connect_tcp() tests
