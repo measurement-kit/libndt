@@ -13,11 +13,11 @@ extern "C" {
 
 static size_t curl_callback(char *ptr, size_t size, size_t nmemb,
                             void *userdata) {
-  if (nmemb <= 0 || size <= 0) {
+  if (nmemb <= 0) {
     return 0;  // This means "no body"
   }
   if (size > SIZE_MAX / nmemb) {
-    assert(false);  // fail loudly in debug mode
+    assert(false);  // Also catches case where size is zero
     return 0;
   }
   auto realsiz = size * nmemb;  // Overflow not possible (see above)
