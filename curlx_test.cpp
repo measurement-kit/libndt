@@ -7,9 +7,11 @@
 
 #include "catch.hpp"
 
-class MockedCurl : public mk::libndt::Curl {
+using namespace measurement_kit;
+
+class MockedCurl : public libndt::Curl {
  public:
-  using mk::libndt::Curl::Curl;
+  using libndt::Curl::Curl;
 
   CURL *easy_init() noexcept override {
     return nullptr;
