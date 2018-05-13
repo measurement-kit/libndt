@@ -925,3 +925,44 @@ TEST_CASE("Client::msg_read() deals with unknown protocol") {
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
 }
+
+// Client::msg_read_legacy() tests
+// -------------------------------
+
+TEST_CASE(
+    "Client::msg_read_legacy() deals with Client::recv() failure when reading "
+    "header") {
+  FailRecv client;
+  client.set_last_error(0);
+  client.settings.verbosity = libndt::verbosity_quiet;
+  uint8_t code = 0;
+  std::string s;
+  REQUIRE(client.msg_read_legacy(&code, &s) == false);
+}
+
+class FailLargeRecv : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize recv(libndt::Socket, void *p,
+                     libndt::Size siz) noexcept override {
+    if (siz == 3) {
+      char *usablep = (char *)p;
+      usablep[0] = libndt::msg_login;
+      uint16_t len = htons(155);
+      memcpy(&usablep[1], &len, 2);
+      return 3;
+    }
+    return -1;
+  }
+};
+
+TEST_CASE(
+    "Client::msg_read_legacy() deals with Client::recv() failure when reading "
+    "message") {
+  FailLargeRecv client;
+  client.set_last_error(0);
+  client.settings.verbosity = libndt::verbosity_quiet;
+  uint8_t code = 0;
+  std::string s;
+  REQUIRE(client.msg_read_legacy(&code, &s) == false);
+}
