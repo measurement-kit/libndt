@@ -26,8 +26,8 @@ class Curl {
 
   Curl() noexcept;
 
-  bool method_get(const std::string &url, long timeout,
-                  std::string *body, std::string *err) noexcept;
+  bool method_get(const std::string &url, long timeout, std::string *body,
+                  std::string *err) noexcept;
 
   // Mid-level API
 

@@ -11,9 +11,8 @@
 extern "C" {
 #endif
 
-long long
-strtonum(const char *numstr, long long minval, long long maxval,
-    const char **errstrp);
+long long strtonum(const char *numstr, long long minval, long long maxval,
+                   const char **errstrp);
 
 #ifdef __cplusplus
 }

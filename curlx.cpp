@@ -29,7 +29,7 @@ static size_t curl_callback(char *ptr, size_t size, size_t nmemb,
   return nmemb;
 }
 
-} // extern "C"
+}  // extern "C"
 
 namespace measurement_kit {
 namespace libndt {
@@ -42,8 +42,8 @@ void CurlDeleter::operator()(CURL *handle) noexcept {
 
 Curl::Curl() noexcept {}
 
-bool Curl::method_get(const std::string &url, long timeout,
-                      std::string *body, std::string *err) noexcept {
+bool Curl::method_get(const std::string &url, long timeout, std::string *body,
+                      std::string *err) noexcept {
   if (body == nullptr || err == nullptr) {
     return false;
   }

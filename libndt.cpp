@@ -10,8 +10,8 @@
 #include <sys/socket.h>
 
 #include <errno.h>
-#include <netdb.h>
 #include <limits.h>
+#include <netdb.h>
 #include <unistd.h>
 #endif
 

@@ -102,9 +102,7 @@ TEST_CASE("Curl::method_get() deals with Curl::setopt_timeout() failure") {
 class FailPerform : public libndt::Curl {
  public:
   using libndt::Curl::Curl;
-  virtual CURLcode perform() noexcept override {
-    return CURLE_AGAIN;
-  }
+  virtual CURLcode perform() noexcept override { return CURLE_AGAIN; }
 };
 
 TEST_CASE("Curl::method_get() deals with Curl::perform() failure") {

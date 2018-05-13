@@ -765,8 +765,7 @@ class RecvNonTestMsgDuringDownload : public libndt::Client {
   }
 };
 
-TEST_CASE(
-    "Client::run_download() deals with non-msg_test_msg receipt") {
+TEST_CASE("Client::run_download() deals with non-msg_test_msg receipt") {
   RecvNonTestMsgDuringDownload client;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
@@ -794,13 +793,10 @@ class FailMsgWriteDuringDownload : public libndt::Client {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(uint8_t, std::string &&) noexcept override {
-    return false;
-  }
+  bool msg_write(uint8_t, std::string &&) noexcept override { return false; }
 };
 
-TEST_CASE(
-    "Client::run_download() deals with Client::msg_write() failure") {
+TEST_CASE("Client::run_download() deals with Client::msg_write() failure") {
   FailMsgWriteDuringDownload client;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
@@ -828,16 +824,11 @@ class FailMsgReadDuringDownload : public libndt::Client {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(uint8_t, std::string &&) noexcept override {
-    return true;
-  }
-  bool msg_read(uint8_t *, std::string *) noexcept override {
-    return false;
-  }
+  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
+  bool msg_read(uint8_t *, std::string *) noexcept override { return false; }
 };
 
-TEST_CASE(
-    "Client::run_download() deals with Client::msg_read() failure") {
+TEST_CASE("Client::run_download() deals with Client::msg_read() failure") {
   FailMsgReadDuringDownload client;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
@@ -865,17 +856,14 @@ class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(uint8_t, std::string &&) noexcept override {
-    return true;
-  }
+  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
   bool msg_read(uint8_t *code, std::string *) noexcept override {
     *code = libndt::msg_login;
     return true;
   }
 };
 
-TEST_CASE(
-    "Client::run_download() deals with non-logout-or-test msg") {
+TEST_CASE("Client::run_download() deals with non-logout-or-test msg") {
   RecvNonTestOrLogoutMsgDuringDownload client;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
@@ -903,18 +891,15 @@ class FailEmitResultDuringDownload : public libndt::Client {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(uint8_t, std::string &&) noexcept override {
-    return true;
-  }
+  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
   bool msg_read(uint8_t *code, std::string *s) noexcept override {
     *code = libndt::msg_test_msg;
-    *s = "antani-antani"; // Causes emit_result() to fail
+    *s = "antani-antani";  // Causes emit_result() to fail
     return true;
   }
 };
 
-TEST_CASE(
-    "Client::run_download() deals with emit_result() failure") {
+TEST_CASE("Client::run_download() deals with emit_result() failure") {
   FailEmitResultDuringDownload client;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
@@ -942,18 +927,15 @@ class TooManyTestMsgsDuringDownload : public libndt::Client {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(uint8_t, std::string &&) noexcept override {
-    return true;
-  }
+  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
   bool msg_read(uint8_t *code, std::string *s) noexcept override {
     *code = libndt::msg_test_msg;
-    *s = "antani:antani"; // Accepted by emit_result()
+    *s = "antani:antani";  // Accepted by emit_result()
     return true;
   }
 };
 
-TEST_CASE(
-    "Client::run_download() deals with too many results messages") {
+TEST_CASE("Client::run_download() deals with too many results messages") {
   TooManyTestMsgsDuringDownload client;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
@@ -994,9 +976,7 @@ class FailMsgWriteDuringMeta : public libndt::Client {
  public:
   using libndt::Client::Client;
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  bool msg_write(uint8_t, std::string &&) noexcept override {
-    return false;
-  }
+  bool msg_write(uint8_t, std::string &&) noexcept override { return false; }
 };
 
 TEST_CASE("Client::run_meta() deals with Client::msg_write() failure") {
@@ -1009,9 +989,7 @@ class FailFinalMsgWriteDuringMeta : public libndt::Client {
  public:
   using libndt::Client::Client;
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  bool msg_write(uint8_t, std::string &&s) noexcept override {
-    return s != "";
-  }
+  bool msg_write(uint8_t, std::string &&s) noexcept override { return s != ""; }
 };
 
 TEST_CASE("Client::run_meta() deals with final Client::msg_write() failure") {
@@ -1077,7 +1055,7 @@ TEST_CASE(
 }
 
 TEST_CASE("Client::run_upload() deals with Client::select() failure") {
-  FailSelectDuringDownload client; // Works also for upload phase
+  FailSelectDuringDownload client;  // Works also for upload phase
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_upload() == false);
 }
@@ -1099,7 +1077,7 @@ class FailSendDuringUpload : public libndt::Client {
   }
   libndt::Ssize send(libndt::Socket, const void *,
                      libndt::Size) noexcept override {
-    set_last_error(0); // Anything not EPIPE would cause a failure
+    set_last_error(0);  // Anything not EPIPE would cause a failure
     return -1;
   }
 };
@@ -1501,7 +1479,9 @@ TEST_CASE("Client::msg_expect() deals with unexpected message") {
 class FailMsgReadLegacy : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_read_legacy(uint8_t *, std::string *) noexcept override { return false; }
+  bool msg_read_legacy(uint8_t *, std::string *) noexcept override {
+    return false;
+  }
 };
 
 TEST_CASE("Client::msg_read() deals with Client::msg_read_legacy() failure") {
@@ -1633,7 +1613,7 @@ TEST_CASE("Client::get_last_error() works as expected") {
   libndt::Client client;
   client.set_last_error(OS_EINVAL);
   REQUIRE(client.get_last_error() == OS_EINVAL);
-  client.set_last_error(0); // clear
+  client.set_last_error(0);  // clear
 }
 
 // Client::recv() tests

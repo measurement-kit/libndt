@@ -12,7 +12,7 @@
 #endif
 
 #include <stddef.h>
-#include <stdint.h> // IWYU pragma: export
+#include <stdint.h>  // IWYU pragma: export
 
 #include <map>
 #include <memory>
