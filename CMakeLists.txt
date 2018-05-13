@@ -116,6 +116,11 @@ target_include_directories(
 )
 
 add_library(ndt $<TARGET_OBJECTS:ndt_objects>)
+target_include_directories(
+  # Duplicate includes of `ndt_objects` because when building binaries we do
+  # not use `ndt_objects`, so includes are not transitively picked up.
+  ndt PUBLIC $<TARGET_PROPERTY:ndt_objects,PUBLIC_INCLUDE_DIRECTORIES>
+)
 target_link_libraries(ndt ${CURL_LIBRARIES})
 install(
   FILES
