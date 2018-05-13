@@ -5,6 +5,7 @@
 #include "libndt.hpp"
 
 #include <assert.h>
+#include <limits.h>
 
 #include "catch.hpp"
 #include "json.hpp"
@@ -965,4 +966,41 @@ TEST_CASE(
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
+}
+
+// Client::query_mlabns_curl() tests
+// ---------------------------------
+
+#ifdef HAVE_CURL
+TEST_CASE("Client::query_mlabns_curl() deals with Curl{} failure") {
+  libndt::Client client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  // Note: passing `nullptr` should cause Curl{} to fail and hence we can
+  // also easily check for cases where Curl{} fails.
+  REQUIRE(client.query_mlabns_curl("", 3, nullptr) == false);
+}
+#endif
+
+// Client::recv() tests
+// --------------------
+
+#ifdef _WIN32
+#define OS_SSIZE_MAX INT_MAX
+#else
+#define OS_SSIZE_MAX SSIZE_MAX
+#endif
+
+TEST_CASE("Client::recv() deals with too-large buffer") {
+  libndt::Client client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.recv(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
+}
+
+// Client::send() tests
+// --------------------
+
+TEST_CASE("Client::send() deals with too-large buffer") {
+  libndt::Client client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.send(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
 }
