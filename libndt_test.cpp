@@ -1001,6 +1001,149 @@ TEST_CASE(
   REQUIRE(client.run_meta() == false);
 }
 
+// Client::run_upload() tests
+// --------------------------
+
+TEST_CASE(
+    "Client::run_upload() deals with Client::msg_expect_test_prepare() "
+    "failure") {
+  FailMsgExpectTestPrepare client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_upload() == false);
+}
+
+class TestPrepareMoreThanOneFlow : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *,
+                               uint8_t *nflows) noexcept override {
+    *nflows = 11;
+    return true;
+  }
+};
+
+TEST_CASE("Client::run_upload() deals with more than one flow") {
+  TestPrepareMoreThanOneFlow client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_upload() == false);
+}
+
+TEST_CASE("Client::run_upload() deals with Client::connect_tcp() failure") {
+  FailConnectTcp client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_upload() == false);
+}
+
+TEST_CASE(
+    "Client::run_upload() deals with Client::msg_expect_empty() failure") {
+  FailMsgExpectEmpty client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_upload() == false);
+}
+
+TEST_CASE("Client::run_upload() deals with Client::select() failure") {
+  FailSelectDuringDownload client; // Works also for upload phase
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_upload() == false);
+}
+
+class FailSendDuringUpload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size) noexcept override {
+    set_last_error(0); // Anything not EPIPE would cause a failure
+    return -1;
+  }
+};
+
+TEST_CASE("Client::run_upload() deals with Client::send() failure") {
+  FailSendDuringUpload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_upload() == false);
+}
+
+TEST_CASE("Client::run_upload() honours max_runtime") {
+  FailSendDuringUpload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  client.settings.max_runtime = 0;
+  REQUIRE(client.run_download() == false);
+}
+
+class FailMsgExpectDuringUpload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size) noexcept override {
+    set_last_error(0);  // Anything not EPIPE would cause a failure
+    return -1;
+  }
+  bool msg_expect(uint8_t, std::string *) noexcept override { return false; }
+};
+
+TEST_CASE("Client::run_upload() deals with Client::msg_expect() failure") {
+  FailMsgExpectDuringUpload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t code) noexcept override {
+    return code != libndt::msg_test_finalize;
+  }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size) noexcept override {
+    set_last_error(0);  // Anything not EPIPE would cause a failure
+    return -1;
+  }
+  bool msg_expect(uint8_t, std::string *) noexcept override { return false; }
+};
+
+TEST_CASE(
+    "Client::run_upload() deals with final Client::msg_expect_empty() "
+    "failure") {
+  FailFinalMsgExpectEmptyDuringUpload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
 // Client::connect_tcp() tests
 // ---------------------------
 
