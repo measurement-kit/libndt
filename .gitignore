@@ -1,5 +1,6 @@
 /.ninja_deps
 /.ninja_log
+/.vs
 /CMakeCache.txt
 /CMakeFiles/
 /CTestTestfile.cmake
