@@ -281,7 +281,9 @@ bool Client::connect() noexcept {
   return connect_tcp(settings.hostname, settings.port, &impl->sock);
 }
 
-bool Client::send_login() noexcept { return msg_write_login(); }
+bool Client::send_login() noexcept {
+  return msg_write_login(ndt_version_compat);
+}
 
 bool Client::recv_kickoff() noexcept {
   char buf[msg_kickoff_size];
@@ -747,7 +749,7 @@ bool Client::connect_tcp(const std::string &hostname, const std::string &port,
   return *sock != -1;
 }
 
-bool Client::msg_write_login() noexcept {
+bool Client::msg_write_login(const std::string &version) noexcept {
   static_assert(sizeof(settings.test_suite) == 1, "test_suite too large");
   uint8_t code = 0;
   settings.test_suite |= nettest_status | nettest_meta;
@@ -774,14 +776,12 @@ bool Client::msg_write_login() noexcept {
     case NdtProtocol::proto_json: {
       code = msg_extended_login;
       nlohmann::json msg{
-          {"msg", ndt_version_compat},
+          {"msg", version},
           {"tests", std::to_string((unsigned)settings.test_suite)},
       };
       try {
         serio = msg.dump();
       } catch (nlohmann::json::exception &) {
-        // This should not happen since both `msg` and `tests` are
-        // so that they should always be serializable.
         EMIT_WARNING("msg_write_login: cannot serialize JSON");
         return false;
       }

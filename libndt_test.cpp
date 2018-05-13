@@ -602,7 +602,7 @@ TEST_CASE("Client::msg_write_login() deals with invalid protocol") {
   // That is, more precisely, a valid but unimplemented proto
   client.settings.proto = libndt::NdtProtocol::proto_websockets;
   client.settings.verbosity = libndt::verbosity_quiet;
-  REQUIRE(client.msg_write_login() == false);
+  REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == false);
 }
 
 class FailMsgWriteLegacy : public libndt::Client {
@@ -617,7 +617,7 @@ TEST_CASE(
     "Client::msg_write_login() deals with Client::msg_write_legacy() failure") {
   FailMsgWriteLegacy client;
   client.settings.verbosity = libndt::verbosity_quiet;
-  REQUIRE(client.msg_write_login() == false);
+  REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == false);
 }
 
 class ValidatingMsgWriteLegacy : public libndt::Client {
@@ -636,11 +636,42 @@ class ValidatingMsgWriteLegacy : public libndt::Client {
   }
 };
 
-TEST_CASE(
-    "Client::msg_write_login() does not propagate unknown tests ids") {
+TEST_CASE("Client::msg_write_login() does not propagate unknown tests ids") {
   ValidatingMsgWriteLegacy client;
   client.settings.verbosity = libndt::verbosity_quiet;
   client.settings.proto = libndt::NdtProtocol::proto_json;
   client.settings.test_suite = 0xff;
-  REQUIRE(client.msg_write_login() == true);
+  REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == true);
+}
+
+static std::vector<uint8_t> non_serializable() noexcept {
+  // This should be a `gzip -9`-ed `build.ninja` file. It's not something
+  // we can serialize as JSON. So helps to fail this kind of tests.
+  static std::vector<uint8_t> input_vector = {
+      31,  139, 8,   0,   8,   13,  239, 90,  2,   3,   101, 144, 205, 10,  194,
+      48,  16,  132, 239, 121, 138, 57,  136, 151, 146, 74,  69,  68,  10,  250,
+      10,  30,  61,  74,  154, 172, 18,  141, 73,  73,  19,  232, 193, 135, 215,
+      212, 150, 254, 120, 9,   153, 229, 219, 153, 221, 245, 209, 16,  100, 219,
+      50,  64,  186, 215, 75,  88,  133, 35,  238, 89,  6,   126, 17,  198, 124,
+      95,  106, 131, 23,  224, 53,  41,  97,  131, 150, 224, 77,  80,  71,  153,
+      101, 69,  1,   126, 222, 130, 75,  172, 180, 5,   119, 88,  185, 24,  152,
+      79,  118, 70,  219, 231, 191, 223, 143, 72,  244, 143, 18,  126, 198, 8,
+      15,  233, 23,  136, 143, 118, 198, 228, 155, 148, 181, 61,  173, 11,  188,
+      17,  136, 18,  153, 27,  119, 103, 172, 138, 218, 40,  84,  162, 161, 253,
+      238, 74,  86,  58,  69,  185, 43,  211, 98,  139, 162, 172, 235, 30,  142,
+      225, 118, 184, 42,  154, 162, 211, 210, 8,   26,  93,  61,  26,  103, 7,
+      104, 144, 255, 128, 40,  211, 22,  139, 33,  230, 57,  163, 89,  223, 27,
+      168, 9,   131, 115, 247, 31,  109, 147, 44,  187, 99,  142, 9,   61,  63,
+      109, 254, 238, 95,  166, 75,  117, 138, 125, 0,   96,  224, 123, 120, 208,
+      1,   0,   0};
+  return input_vector;
+}
+
+TEST_CASE("Client::msg_write_login() deals with unserializable JSON") {
+  libndt::Client client;
+  client.settings.proto = libndt::NdtProtocol::proto_json;
+  auto v = non_serializable();
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.msg_write_login(  //
+              std::string{(char *)v.data(), v.size()}) == false);
 }
