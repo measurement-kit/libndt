@@ -5,6 +5,8 @@
 #define MEASUREMENT_KIT_LIBNDT_CURLX_HPP
 #ifdef HAVE_CURL
 
+#include <stddef.h>
+
 #include <memory>
 #include <string>
 

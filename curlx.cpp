@@ -6,6 +6,7 @@
 #include "curlx.hpp"
 
 #include <assert.h>
+#include <stdint.h>
 
 #include <sstream>
 

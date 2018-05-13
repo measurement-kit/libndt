@@ -5,20 +5,28 @@
 #include "libndt.hpp"
 
 #ifndef _WIN32
-#include <arpa/inet.h>
+#include <arpa/inet.h>   // IWYU pragma: keep
+#include <sys/select.h>  // IWYU pragma: keep
+#include <sys/socket.h>
+
 #include <errno.h>
+#include <netdb.h>
 #include <limits.h>
 #include <unistd.h>
 #endif
 
 #include <assert.h>
+#include <string.h>
 
+#include <algorithm>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <random>
 #include <sstream>
+#include <utility>
+#include <vector>
 
 #include "curlx.hpp"
 #include "json.hpp"

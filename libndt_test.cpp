@@ -4,8 +4,18 @@
 
 #include "libndt.hpp"
 
-#include <assert.h>
+#ifndef _WIN32
+#include <arpa/inet.h>  // IWYU pragma: keep
+#include <netdb.h>
+#endif
+
+#include <errno.h>
 #include <limits.h>
+#include <stdint.h>
+#include <string.h>
+
+#include <algorithm>
+#include <vector>
 
 #include "catch.hpp"
 #include "json.hpp"

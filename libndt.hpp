@@ -5,21 +5,22 @@
 #define MEASUREMENT_KIT_LIBNDT_LIBNDT_HPP
 
 #ifndef _WIN32
-#include <netdb.h>
 #include <sys/select.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 #else
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #endif
 
-#include <stdint.h>
+#include <stddef.h>
+#include <stdint.h> // IWYU pragma: export
 
 #include <map>
 #include <memory>
 #include <string>
-#include <vector>
+
+struct addrinfo;
+struct sockaddr;
+struct timeval;
 
 namespace measurement_kit {
 namespace libndt {
