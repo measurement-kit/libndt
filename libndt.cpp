@@ -1069,7 +1069,7 @@ bool Client::resolve(const std::string &hostname,
     // the ai_addrlen field is always small enough.
     static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
     assert(sizeof(address) <= INT_MAX && sizeof(port) <= INT_MAX);
-    if (this->getnameinfo(aip->ai_addr, aip->ai_addrlen, address,
+    if (this->getnameinfo(aip->ai_addr, (SockLen)aip->ai_addrlen, address,
                           (SockLen)sizeof(address), port, (SockLen)sizeof(port),
                           NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
       EMIT_WARNING("unexpected getnameinfo() failure");
