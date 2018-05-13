@@ -924,6 +924,83 @@ TEST_CASE(
   REQUIRE(client.run_download() == false);
 }
 
+// Client::run_meta() tests
+// ------------------------
+
+class FailFirstMsgExpectEmpty : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_empty(uint8_t) noexcept override { return false; }
+};
+
+TEST_CASE(
+    "Client::run_meta() deals with first Client::msg_expect_empty() failure") {
+  FailFirstMsgExpectEmpty client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_meta() == false);
+}
+
+class FailSecondMsgExpectEmpty : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_empty(uint8_t code) noexcept override {
+    return code == libndt::msg_test_prepare;
+  }
+};
+
+TEST_CASE(
+    "Client::run_meta() deals with second Client::msg_expect_empty() failure") {
+  FailSecondMsgExpectEmpty client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_meta() == false);
+}
+
+class FailMsgWriteDuringMeta : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_write(uint8_t, std::string &&) noexcept override {
+    return false;
+  }
+};
+
+TEST_CASE("Client::run_meta() deals with Client::msg_write() failure") {
+  FailMsgWriteDuringMeta client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_meta() == false);
+}
+
+class FailFinalMsgWriteDuringMeta : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_write(uint8_t, std::string &&s) noexcept override {
+    return s != "";
+  }
+};
+
+TEST_CASE("Client::run_meta() deals with final Client::msg_write() failure") {
+  FailFinalMsgWriteDuringMeta client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_meta() == false);
+}
+
+class FailFinalMsgExpectEmptyDuringMeta : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_empty(uint8_t code) noexcept override {
+    return code != libndt::msg_test_finalize;
+  }
+  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
+};
+
+TEST_CASE(
+    "Client::run_meta() deals with final Client::msg_expect_empty() failure") {
+  FailFinalMsgExpectEmptyDuringMeta client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_meta() == false);
+}
+
 // Client::connect_tcp() tests
 // ---------------------------
 
