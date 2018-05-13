@@ -699,3 +699,55 @@ TEST_CASE("Client::msg_write() deals with Client::msg_write_legacy() failure") {
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.msg_write(libndt::msg_test_start, "foo") == false);
 }
+
+// Client::msg_write_legacy() tests
+// --------------------------------
+
+TEST_CASE("Client::msg_write_legacy() deals with too-big messages") {
+  libndt::Client client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  std::string m;
+  m.resize(UINT16_MAX + 1);
+  REQUIRE(client.msg_write_legacy(  //
+              libndt::msg_test_start, std::move(m)) == false);
+}
+
+class FailSend : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size) noexcept override {
+    return -1;
+  }
+};
+
+TEST_CASE(
+    "Client::msg_write_legacy() deals with Client::send() failure when sending "
+    "header") {
+  FailSend client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  std::string m{"foo"};
+  client.set_last_error(0);
+  REQUIRE(client.msg_write_legacy(  //
+              libndt::msg_test_start, std::move(m)) == false);
+}
+
+class FailLargeSend : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size siz) noexcept override {
+    return siz <= 3 ? 3 : -1;
+  }
+};
+
+TEST_CASE(
+    "Client::msg_write_legacy() deals with Client::send() failure when sending "
+    "message") {
+  FailLargeSend client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  std::string m{"foobar"};
+  client.set_last_error(0);
+  REQUIRE(client.msg_write_legacy(  //
+              libndt::msg_test_start, std::move(m)) == false);
+}
