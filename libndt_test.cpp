@@ -854,3 +854,74 @@ TEST_CASE("Client::msg_expect() deals with unexpected message") {
   std::string s;
   REQUIRE(client.msg_expect(libndt::msg_logout, &s) == false);
 }
+
+// Client::msg_read() tests
+// ------------------------
+
+class FailMsgReadLegacy : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_read_legacy(uint8_t *, std::string *) noexcept override { return false; }
+};
+
+TEST_CASE("Client::msg_read() deals with Client::msg_read_legacy() failure") {
+  FailMsgReadLegacy client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  uint8_t code = 0;
+  std::string s;
+  REQUIRE(client.msg_read(&code, &s) == false);
+}
+
+class ReadInvalidJson : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_read_legacy(uint8_t *, std::string *s) noexcept override {
+    *s = "{{{";
+    return true;
+  }
+};
+
+TEST_CASE("Client::msg_read() deals with invalid JSON") {
+  ReadInvalidJson client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  client.settings.proto = libndt::NdtProtocol::proto_json;
+  uint8_t code = 0;
+  std::string s;
+  REQUIRE(client.msg_read(&code, &s) == false);
+}
+
+class ReadIncompleteJson : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_read_legacy(uint8_t *, std::string *s) noexcept override {
+    *s = "{}";
+    return true;
+  }
+};
+
+TEST_CASE("Client::msg_read() deals with incomplete JSON") {
+  ReadIncompleteJson client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  client.settings.proto = libndt::NdtProtocol::proto_json;
+  uint8_t code = 0;
+  std::string s;
+  REQUIRE(client.msg_read(&code, &s) == false);
+}
+
+class OkayMsgReadLegacy : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_read_legacy(uint8_t *, std::string *) noexcept override {
+    return true;
+  }
+};
+
+TEST_CASE("Client::msg_read() deals with unknown protocol") {
+  OkayMsgReadLegacy client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  // That is, more precisely, a valid but unimplemented proto
+  client.settings.proto = libndt::NdtProtocol::proto_websockets;
+  uint8_t code = 0;
+  std::string s;
+  REQUIRE(client.msg_read(&code, &s) == false);
+}

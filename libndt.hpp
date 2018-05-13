@@ -25,7 +25,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 18;
+constexpr uint64_t api_minor = 19;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
@@ -153,7 +153,7 @@ class Client {
 
   virtual bool msg_read(uint8_t *code, std::string *msg) noexcept;
 
-  bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
+  virtual bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
 
   // Dependencies (cURL)
 

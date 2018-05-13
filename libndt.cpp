@@ -967,7 +967,7 @@ bool Client::msg_read(uint8_t *code, std::string *msg) noexcept {
         return false;
       }
       try {
-        *msg = json["msg"];
+        *msg = json.at("msg");
       } catch (const nlohmann::json::exception &) {
         EMIT_WARNING("msg_read: cannot find 'msg' field");
         return false;
