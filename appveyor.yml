@@ -7,5 +7,5 @@ environment:
 
 build_script:
   - cmd: cmake "-G%CMAKE_GENERATOR%" .
-  - cmd: cmake --build . -- /nologo /property:Configuration=Release
+  - cmd: cmake --build . -- /nologo /property:Configuration=Release /property:TreatWarningsAsErrors=true
   - cmd: ctest --output-on-failure -C Release -a
