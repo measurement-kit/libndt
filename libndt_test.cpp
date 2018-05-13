@@ -541,6 +541,13 @@ TEST_CASE("Client::wait_close() deals Client::recv() failure") {
 // Client::connect_tcp() tests
 // ---------------------------
 
+TEST_CASE("Client::connect_tcp() requires initial socket to be -1") {
+  libndt::Client client;
+  libndt::Socket sock = 21;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
+}
+
 class FailGetaddrinfo : public libndt::Client {
  public:
   using libndt::Client::Client;
