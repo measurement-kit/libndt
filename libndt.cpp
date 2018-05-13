@@ -1042,6 +1042,7 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
   }
   return true;
 #else
+  (void)url, (void)timeout, (void)body;
   EMIT_WARNING("cURL not compiled in; don't know how to get server");
   return false;
 #endif

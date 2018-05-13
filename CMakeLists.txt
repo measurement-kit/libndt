@@ -101,8 +101,8 @@ endif()
 # Library
 
 add_library(
-  ndt
-  STATIC
+  ndt_objects
+  OBJECT
   curlx.cpp
   curlx.hpp
   libndt.cpp
@@ -111,6 +111,16 @@ add_library(
   strtonum.h
 )
 target_include_directories(
+  ndt_objects PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
+  ${CURL_INCLUDE_DIRS}
+)
+
+add_library(ndt $<TARGET_OBJECTS:ndt_objects>)
+target_include_directories(
+  # Duplicate includes of `ndt_objects` because when building binaries we do
+  # not use `ndt_objects`, so includes are not transitively picked up.
+  # TODO(bassosimone): we can perhaps do this using a generator expression
+  # but so far I have failed to do this properly.
   ndt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
   ${CURL_INCLUDE_DIRS}
 )
