@@ -812,3 +812,28 @@ TEST_CASE("Client::msg_expect_test_prepare() deals with invalid num-flows") {
   uint8_t nflows = 0;
   REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
 }
+
+// Client::msg_expect_empty() tests
+// --------------------------------
+
+TEST_CASE(
+    "Client::msg_expect_empty() deals with Client::msg_expect() failure") {
+  FailMsgExpect client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.msg_expect_empty(libndt::msg_test_start) == false);
+}
+
+class NonEmptyMessage : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect(uint8_t, std::string *s) noexcept override {
+    *s = "asd asd asd";
+    return true;
+  }
+};
+
+TEST_CASE("Client::msg_expect_empty() deals with nonempty message") {
+  NonEmptyMessage client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.msg_expect_empty(libndt::msg_test_start) == false);
+}
