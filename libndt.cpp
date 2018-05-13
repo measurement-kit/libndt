@@ -1064,8 +1064,13 @@ bool Client::resolve(const std::string &hostname,
   auto result = true;
   for (auto aip = rp; (aip); aip = aip->ai_next) {
     char address[NI_MAXHOST], port[NI_MAXSERV];
+    // The following two lines ensure that casting `size_t` to
+    // SockLen is safe because SockLen is `int` and the value of
+    // the ai_addrlen field is always small enough.
+    static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
+    assert(sizeof(address) <= INT_MAX && sizeof(port) <= INT_MAX);
     if (this->getnameinfo(aip->ai_addr, aip->ai_addrlen, address,
-                          sizeof(address), port, sizeof(port),
+                          (SockLen)sizeof(address), port, (SockLen)sizeof(port),
                           NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
       EMIT_WARNING("unexpected getnameinfo() failure");
       result = false;
