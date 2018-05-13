@@ -457,7 +457,7 @@ class TooManyResults : public libndt::Client {
   using libndt::Client::Client;
   bool msg_read(uint8_t *code, std::string *msg) noexcept override {
     *code = libndt::msg_results;
-    *msg = "antani=antani";
+    *msg = "antani:antani";
     return true;
   }
 };
