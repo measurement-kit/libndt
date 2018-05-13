@@ -92,6 +92,9 @@ if("${UNIX}" OR "${MINGW}")
     # for GCC, -Wmissing-prototypes only works for C/ObjC.
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wmissing-prototypes")
   endif()
+elseif("${MSVC}")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /WX")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
 endif()
 
 if(${WIN32})
