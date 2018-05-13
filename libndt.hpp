@@ -27,7 +27,7 @@ namespace libndt {
 
 constexpr uint64_t api_major = 0;
 constexpr uint64_t api_minor = 20;
-constexpr uint64_t api_patch = 0;
+constexpr uint64_t api_patch = 1;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
 constexpr uint8_t nettest_upload = 1 << 1;
