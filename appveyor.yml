@@ -8,4 +8,4 @@ environment:
 build_script:
   - cmd: cmake "-G%CMAKE_GENERATOR%" .
   - cmd: cmake --build . -- /nologo /property:Configuration=Release
-  - cmd: ctest -V -C Release -a -j8
+  - cmd: ctest --output-on-failure -C Release -a
