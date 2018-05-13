@@ -464,7 +464,7 @@ class TooManyResults : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::recv_results_and_logout() deals too many results") {
+TEST_CASE("Client::recv_results_and_logout() deals with too many results") {
   TooManyResults client;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv_results_and_logout() == false);
@@ -534,10 +534,394 @@ class FailRecvAfterGoodSelect : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::wait_close() deals Client::recv() failure") {
+TEST_CASE("Client::wait_close() deals with Client::recv() failure") {
   FailRecvAfterGoodSelect client;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.wait_close() == false);
+}
+
+// Client::run_download() tests
+// ----------------------------
+
+class FailMsgExpectTestPrepare : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return false;
+  }
+};
+
+TEST_CASE(
+    "Client::run_download() deals with Client::msg_expect_test_prepare() "
+    "failure") {
+  FailMsgExpectTestPrepare client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class FailConnectTcp : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *) noexcept override {
+    return false;
+  }
+};
+
+TEST_CASE("Client::run_download() deals with Client::connect_tcp() failure") {
+  FailConnectTcp client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class FailMsgExpectEmpty : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return false; }
+};
+
+TEST_CASE(
+    "Client::run_download() deals with Client::msg_expect_empty() failure") {
+  FailMsgExpectEmpty client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class FailSelectDuringDownload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    set_last_error(0);  // The code checks whether it's EINTR
+    return -1;
+  }
+};
+
+TEST_CASE("Client::run_download() deals with Client::select() failure") {
+  FailSelectDuringDownload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class FailRecvDuringDownload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    set_last_error(0);
+    return -1;
+  }
+};
+
+TEST_CASE("Client::run_download() deals with Client::recv() failure") {
+  FailRecvDuringDownload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class RecvEofDuringDownload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return 0;
+  }
+};
+
+TEST_CASE("Client::run_download() honours max_runtime") {
+  RecvEofDuringDownload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  client.settings.max_runtime = 0;
+  REQUIRE(client.run_download() == false);
+}
+
+class FailMsgReadLegacyDuringDownload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return 0;
+  }
+  bool msg_read_legacy(uint8_t *, std::string *) noexcept override {
+    return false;
+  }
+};
+
+TEST_CASE(
+    "Client::run_download() deals with Client::msg_read_legacy_failure()") {
+  FailMsgReadLegacyDuringDownload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class RecvNonTestMsgDuringDownload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return 0;
+  }
+  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+    *code = libndt::msg_logout;
+    return true;
+  }
+};
+
+TEST_CASE(
+    "Client::run_download() deals with non-msg_test_msg receipt") {
+  RecvNonTestMsgDuringDownload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class FailMsgWriteDuringDownload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return 0;
+  }
+  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+    *code = libndt::msg_test_msg;
+    return true;
+  }
+  bool msg_write(uint8_t, std::string &&) noexcept override {
+    return false;
+  }
+};
+
+TEST_CASE(
+    "Client::run_download() deals with Client::msg_write() failure") {
+  FailMsgWriteDuringDownload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class FailMsgReadDuringDownload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return 0;
+  }
+  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+    *code = libndt::msg_test_msg;
+    return true;
+  }
+  bool msg_write(uint8_t, std::string &&) noexcept override {
+    return true;
+  }
+  bool msg_read(uint8_t *, std::string *) noexcept override {
+    return false;
+  }
+};
+
+TEST_CASE(
+    "Client::run_download() deals with Client::msg_read() failure") {
+  FailMsgReadDuringDownload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return 0;
+  }
+  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+    *code = libndt::msg_test_msg;
+    return true;
+  }
+  bool msg_write(uint8_t, std::string &&) noexcept override {
+    return true;
+  }
+  bool msg_read(uint8_t *code, std::string *) noexcept override {
+    *code = libndt::msg_login;
+    return true;
+  }
+};
+
+TEST_CASE(
+    "Client::run_download() deals with non-logout-or-test msg") {
+  RecvNonTestOrLogoutMsgDuringDownload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class FailEmitResultDuringDownload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return 0;
+  }
+  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+    *code = libndt::msg_test_msg;
+    return true;
+  }
+  bool msg_write(uint8_t, std::string &&) noexcept override {
+    return true;
+  }
+  bool msg_read(uint8_t *code, std::string *s) noexcept override {
+    *code = libndt::msg_test_msg;
+    *s = "antani-antani"; // Causes emit_result() to fail
+    return true;
+  }
+};
+
+TEST_CASE(
+    "Client::run_download() deals with emit_result() failure") {
+  FailEmitResultDuringDownload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
+}
+
+class TooManyTestMsgsDuringDownload : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return 0;
+  }
+  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+    *code = libndt::msg_test_msg;
+    return true;
+  }
+  bool msg_write(uint8_t, std::string &&) noexcept override {
+    return true;
+  }
+  bool msg_read(uint8_t *code, std::string *s) noexcept override {
+    *code = libndt::msg_test_msg;
+    *s = "antani:antani"; // Accepted by emit_result()
+    return true;
+  }
+};
+
+TEST_CASE(
+    "Client::run_download() deals with too many results messages") {
+  TooManyTestMsgsDuringDownload client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.run_download() == false);
 }
 
 // Client::connect_tcp() tests

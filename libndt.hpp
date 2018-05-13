@@ -25,7 +25,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 19;
+constexpr uint64_t api_minor = 20;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
@@ -136,18 +136,19 @@ class Client {
 
   // Low-level API
 
-  bool connect_tcp(const std::string &hostname, const std::string &port,
-                   Socket *sock) noexcept;
+  virtual bool connect_tcp(const std::string &hostname, const std::string &port,
+                           Socket *sock) noexcept;
 
   bool msg_write_login(const std::string &version) noexcept;
 
-  bool msg_write(uint8_t code, std::string &&msg) noexcept;
+  virtual bool msg_write(uint8_t code, std::string &&msg) noexcept;
 
   virtual bool msg_write_legacy(uint8_t code, std::string &&msg) noexcept;
 
-  bool msg_expect_test_prepare(std::string *pport, uint8_t *pnflows) noexcept;
+  virtual bool msg_expect_test_prepare(  //
+      std::string *pport, uint8_t *pnflows) noexcept;
 
-  bool msg_expect_empty(uint8_t code) noexcept;
+  virtual bool msg_expect_empty(uint8_t code) noexcept;
 
   virtual bool msg_expect(uint8_t code, std::string *msg) noexcept;
 
