@@ -751,3 +751,64 @@ TEST_CASE(
   REQUIRE(client.msg_write_legacy(  //
               libndt::msg_test_start, std::move(m)) == false);
 }
+
+// Client::msg_expect_test_prepare() tests
+// ---------------------------------------
+
+TEST_CASE(
+    "Client::msg_expect_test_prepare() deals with Client::msg_expect() "
+    "failure") {
+  FailMsgExpect client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  std::string port;
+  uint8_t nflows = 0;
+  REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
+}
+
+class TooShortVector : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect(uint8_t, std::string *) noexcept override { return true; }
+};
+
+TEST_CASE("Client::msg_expect_test_prepare() deals with too-short vector") {
+  TooShortVector client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  std::string port;
+  uint8_t nflows = 0;
+  REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
+}
+
+class InvalidPortVector : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect(uint8_t, std::string *s) noexcept override {
+    *s = "65536";
+    return true;
+  }
+};
+
+TEST_CASE("Client::msg_expect_test_prepare() deals with invalid port") {
+  InvalidPortVector client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  std::string port;
+  uint8_t nflows = 0;
+  REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
+}
+
+class InvalidNumFlowsVector : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect(uint8_t, std::string *s) noexcept override {
+    *s = "65530 xx xx xx xx 32";
+    return true;
+  }
+};
+
+TEST_CASE("Client::msg_expect_test_prepare() deals with invalid num-flows") {
+  InvalidNumFlowsVector client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  std::string port;
+  uint8_t nflows = 0;
+  REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
+}
