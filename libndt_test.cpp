@@ -468,6 +468,76 @@ TEST_CASE("Client::recv_results_and_logout() deals too many results") {
   REQUIRE(client.recv_results_and_logout() == false);
 }
 
+// Client::wait_close() tests
+// --------------------------
+
+class SelectHardFailure : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+#ifdef _WIN32
+    set_last_error(WSAEBADF);
+#else
+    set_last_error(EBADF);
+#endif
+    return -1;
+  }
+};
+
+TEST_CASE("Client::wait_close() deals with Client::select() hard failure") {
+  SelectHardFailure client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.wait_close() == false);
+}
+
+#ifndef _WIN32
+class SelectEintr : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    set_last_error(EINTR);
+    return -1;
+  }
+};
+
+TEST_CASE("Client::wait_close() deals with Client::select() EINTR") {
+  SelectEintr client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.wait_close() == true /* Being tolerant */);
+}
+#endif
+
+class SelectTimeout : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 0;
+  }
+};
+
+TEST_CASE("Client::wait_close() deals with Client::select() timeout") {
+  SelectTimeout client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.wait_close() == true /* Being tolerant */);
+}
+
+class FailRecvAfterGoodSelect : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return -1;
+  }
+};
+
+TEST_CASE("Client::wait_close() deals Client::recv() failure") {
+  FailRecvAfterGoodSelect client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.wait_close() == false);
+}
+
 // Client::connect_tcp() tests
 // ---------------------------
 

@@ -399,7 +399,12 @@ bool Client::recv_results_and_logout() noexcept {
 bool Client::wait_close() noexcept {
   fd_set readset;
   FD_ZERO(&readset);
-  FD_SET(AS_OS_SOCKET(impl->sock), &readset);
+  // In wait_close() regress test we call wait_close() with sock
+  // equal to -1, which causes a segfault. For testability do not
+  // reject the value but rather just ignore the socket.
+  if (impl->sock >= 0) {
+    FD_SET(AS_OS_SOCKET(impl->sock), &readset);
+  }
   timeval tv{};
   tv.tv_sec = 1;
   // Note: cast to `int` safe because on Unix sockets are `int`s and on
@@ -461,6 +466,7 @@ bool Client::run_download() noexcept {
       fd_set set;
       FD_ZERO(&set);
       for (auto &fd : dload_socks.sockets) {
+        assert(fd >= 0);
         FD_SET(AS_OS_SOCKET(fd), &set);
         maxsock = (std::max)(maxsock, fd);
       }
@@ -626,6 +632,7 @@ bool Client::run_upload() noexcept {
       fd_set set;
       FD_ZERO(&set);
       for (auto &fd : upload_socks.sockets) {
+        assert(fd >= 0);
         FD_SET(AS_OS_SOCKET(fd), &set);
         maxsock = (std::max)(maxsock, fd);
       }
