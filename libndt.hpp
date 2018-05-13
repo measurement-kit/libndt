@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 struct addrinfo;
 struct sockaddr;
@@ -26,8 +27,8 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 20;
-constexpr uint64_t api_patch = 2;
+constexpr uint64_t api_minor = 21;
+constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1 << 0;
 constexpr uint8_t nettest_upload = 1 << 1;
@@ -157,6 +158,11 @@ class Client {
 
   virtual bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
 
+  // Utilities for low-level
+
+  virtual bool resolve(const std::string &hostname,
+                       std::vector<std::string> *addrs) noexcept;
+
   // Dependencies (cURL)
 
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
@@ -169,6 +175,9 @@ class Client {
 
   virtual int getaddrinfo(const char *domain, const char *port,
                           const addrinfo *hints, addrinfo **res) noexcept;
+  virtual int getnameinfo(const sockaddr *sa, SockLen salen, char *host,
+                          SockLen hostlen, char *serv, SockLen servlen,
+                          int flags) noexcept;
   virtual void freeaddrinfo(addrinfo *aip) noexcept;
 
   virtual Socket socket(int domain, int type, int protocol) noexcept;

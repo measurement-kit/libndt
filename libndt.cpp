@@ -719,41 +719,49 @@ bool Client::connect_tcp(const std::string &hostname, const std::string &port,
     EMIT_WARNING("socket already connected");
     return false;
   }
-  addrinfo hints{};
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
-  addrinfo *rp = nullptr;
-  int rv = this->getaddrinfo(hostname.data(), port.data(), &hints, &rp);
-  if (rv != 0) {
-    hints.ai_flags &= ~AI_NUMERICHOST;
-    rv = this->getaddrinfo(hostname.data(), port.data(), &hints, &rp);
+  // Implementation note: we could perform getaddrinfo() in one pass but having
+  // a virtual API that resolves a hostname to a vector of IP addresses makes
+  // life easier when you want to override hostname resolution, because you have
+  // to reimplement a simpler method, compared to reimplementing getaddrinfo().
+  std::vector<std::string> addresses;
+  if (!resolve(hostname, &addresses)) {
+    return false;
+  }
+  for (auto &addr : addresses) {
+    addrinfo hints{};
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
+    addrinfo *rp = nullptr;
+    int rv = this->getaddrinfo(addr.data(), port.data(), &hints, &rp);
     if (rv != 0) {
-      EMIT_WARNING("getaddrinfo() failed: " << gai_strerror(rv));
+      EMIT_WARNING("unexpected getaddrinfo() failure");
       return false;
     }
-    // FALLTHROUGH
-  }
-  EMIT_DEBUG("getaddrinfo(): okay");
-  for (auto aip = rp; (aip); aip = aip->ai_next) {
-    *sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
-    if (*sock == -1) {
-      EMIT_WARNING("socket() failed: " << get_last_error());
-      continue;
+    assert(rp);
+    for (auto aip = rp; (aip); aip = aip->ai_next) {
+      *sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
+      if (*sock == -1) {
+        EMIT_WARNING("socket() failed: " << get_last_error());
+        continue;
+      }
+      // The following two lines ensure that casting `size_t` to
+      // SockLen is safe because SockLen is `int` and the value of
+      // the ai_addrlen field is always small enough.
+      static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
+      assert(aip->ai_addrlen <= INT_MAX);
+      if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
+        EMIT_DEBUG("connect(): okay");
+        break;
+      }
+      EMIT_WARNING("connect() failed: " << get_last_error());
+      this->closesocket(*sock);
+      *sock = -1;
     }
-    // The following two lines ensure that casting `size_t` to
-    // SockLen is safe because SockLen is `int` and the value of
-    // the ai_addrlen field is always small enough.
-    static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
-    assert(aip->ai_addrlen <= INT_MAX);
-    if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
-      EMIT_DEBUG("connect(): okay");
-      break;
+    this->freeaddrinfo(rp);
+    if (*sock != -1) {
+      break; // we have a connection!
     }
-    EMIT_WARNING("connect() failed: " << get_last_error());
-    this->closesocket(*sock);
-    *sock = -1;
   }
-  this->freeaddrinfo(rp);
   return *sock != -1;
 }
 
@@ -1030,6 +1038,46 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   return true;
 }
 
+// Utilities for low-level
+
+bool Client::resolve(const std::string &hostname,
+                     std::vector<std::string> *addrs) noexcept {
+  assert(addrs != nullptr);
+  EMIT_DEBUG("resolve: " << hostname);
+  addrinfo hints{};
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
+  addrinfo *rp = nullptr;
+  constexpr const char *portno = "80";  // any port would do
+  int rv = this->getaddrinfo(hostname.data(), portno, &hints, &rp);
+  if (rv != 0) {
+    hints.ai_flags &= ~AI_NUMERICHOST;
+    rv = this->getaddrinfo(hostname.data(), portno, &hints, &rp);
+    if (rv != 0) {
+      EMIT_WARNING("getaddrinfo() failed: " << gai_strerror(rv));
+      return false;
+    }
+    // FALLTHROUGH
+  }
+  assert(rp);
+  EMIT_DEBUG("getaddrinfo(): okay");
+  auto result = true;
+  for (auto aip = rp; (aip); aip = aip->ai_next) {
+    char address[NI_MAXHOST], port[NI_MAXSERV];
+    if (this->getnameinfo(aip->ai_addr, aip->ai_addrlen, address,
+                          sizeof(address), port, sizeof(port),
+                          NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
+      EMIT_WARNING("unexpected getnameinfo() failure");
+      result = false;
+      break;
+    }
+    addrs->push_back(address); // we only care about address
+    EMIT_DEBUG("- " << address);
+  }
+  this->freeaddrinfo(rp);
+  return result;
+}
+
 // Dependencies (curl)
 
 bool Client::query_mlabns_curl(const std::string &url, long timeout,
@@ -1083,6 +1131,12 @@ void Client::set_last_error(int err) noexcept {
 int Client::getaddrinfo(const char *domain, const char *port,
                         const addrinfo *hints, addrinfo **res) noexcept {
   return ::getaddrinfo(domain, port, hints, res);
+}
+
+int Client::getnameinfo(const sockaddr *sa, SockLen salen, char *host,
+                        SockLen hostlen, char *serv, SockLen servlen,
+                        int flags) noexcept {
+  return ::getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
 }
 
 void Client::freeaddrinfo(addrinfo *aip) noexcept { ::freeaddrinfo(aip); }
