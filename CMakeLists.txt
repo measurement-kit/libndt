@@ -125,7 +125,7 @@ install(
   TARGETS
   ndt
   DESTINATION
-  lib
+  lib/measurement_kit/
 )
 if("${WIN32}" OR "${MINGW}")
   target_link_libraries(ndt ws2_32 "${_EXTRA_LIBS}")
