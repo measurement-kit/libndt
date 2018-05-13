@@ -7,7 +7,7 @@ matrix:
       env: BUILD_TYPE="vanilla"
            CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Release"
-           CTEST_OPTIONS="-V"
+           CTEST_OPTIONS="--output-on-failure"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -21,7 +21,7 @@ matrix:
            LDFLAGS="-fsanitize=address"
            CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
-           CTEST_OPTIONS="-V"
+           CTEST_OPTIONS="--output-on-failure"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -35,7 +35,7 @@ matrix:
            LDFLAGS="-fsanitize=leak"
            CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
-           CTEST_OPTIONS="-V"
+           CTEST_OPTIONS="--output-on-failure"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -49,7 +49,7 @@ matrix:
            LDFLAGS="-fsanitize=undefined"
            CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
-           CTEST_OPTIONS="-V"
+           CTEST_OPTIONS="--output-on-failure"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -60,7 +60,7 @@ matrix:
       env: BUILD_TYPE="libc++-n-clang"
            CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Release"
-           CTEST_OPTIONS="-V"
+           CTEST_OPTIONS="--output-on-failure"
            CXXFLAGS="-stdlib=libc++"
            MK_CC=clang
            MK_CXX=clang++
@@ -76,7 +76,7 @@ matrix:
            CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
            COVERALLS_OPTIONS="--include curlx.hpp --include curlx.cpp --include libndt.cpp --include libndt.hpp --include strtonum.h --include strtonum.c"
-           CTEST_OPTIONS="-V"
+           CTEST_OPTIONS="--output-on-failure"
            CXXFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
            LDFLAGS="-lgcov"
       script:
