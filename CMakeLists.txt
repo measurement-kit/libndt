@@ -101,8 +101,8 @@ endif()
 # Library
 
 add_library(
-  ndt
-  STATIC
+  ndt_objects
+  OBJECT
   curlx.cpp
   curlx.hpp
   libndt.cpp
@@ -111,9 +111,11 @@ add_library(
   strtonum.h
 )
 target_include_directories(
-  ndt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
+  ndt_objects PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
   ${CURL_INCLUDE_DIRS}
 )
+
+add_library(ndt $<TARGET_OBJECTS:ndt_objects>)
 target_link_libraries(ndt ${CURL_LIBRARIES})
 install(
   FILES
