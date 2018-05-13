@@ -143,7 +143,7 @@ class Client {
 
   bool msg_write(uint8_t code, std::string &&msg) noexcept;
 
-  bool msg_write_legacy(uint8_t code, std::string &&msg) noexcept;
+  virtual bool msg_write_legacy(uint8_t code, std::string &&msg) noexcept;
 
   bool msg_expect_test_prepare(std::string *pport, uint8_t *pnflows) noexcept;
 

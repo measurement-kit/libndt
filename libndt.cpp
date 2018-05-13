@@ -780,6 +780,8 @@ bool Client::msg_write_login() noexcept {
       try {
         serio = msg.dump();
       } catch (nlohmann::json::exception &) {
+        // This should not happen since both `msg` and `tests` are
+        // so that they should always be serializable.
         EMIT_WARNING("msg_write_login: cannot serialize JSON");
         return false;
       }

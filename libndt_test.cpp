@@ -7,6 +7,7 @@
 #include <assert.h>
 
 #include "catch.hpp"
+#include "json.hpp"
 
 using namespace measurement_kit;
 
@@ -591,4 +592,55 @@ TEST_CASE("Client::connect_tcp() deals with Client::connect() failure") {
   libndt::Socket sock = -1;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
+}
+
+// Client::msg_write_login() tests
+// -------------------------------
+
+TEST_CASE("Client::msg_write_login() deals with invalid protocol") {
+  libndt::Client client;
+  // That is, more precisely, a valid but unimplemented proto
+  client.settings.proto = libndt::NdtProtocol::proto_websockets;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.msg_write_login() == false);
+}
+
+class FailMsgWriteLegacy : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_write_legacy(uint8_t, std::string &&) noexcept override {
+    return false;
+  }
+};
+
+TEST_CASE(
+    "Client::msg_write_login() deals with Client::msg_write_legacy() failure") {
+  FailMsgWriteLegacy client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.msg_write_login() == false);
+}
+
+class ValidatingMsgWriteLegacy : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_write_legacy(uint8_t, std::string &&value) noexcept override {
+    auto doc = nlohmann::json::parse(value);
+    std::string tests_string = doc.at("tests");
+    const char *errstr = nullptr;
+    auto tests = this->strtonum(tests_string.c_str(), 0, 256, &errstr);
+    REQUIRE(errstr == nullptr);
+    REQUIRE((tests & libndt::nettest_middlebox) == 0);
+    REQUIRE((tests & libndt::nettest_simple_firewall) == 0);
+    REQUIRE((tests & libndt::nettest_upload_ext) == 0);
+    return true;
+  }
+};
+
+TEST_CASE(
+    "Client::msg_write_login() does not propagate unknown tests ids") {
+  ValidatingMsgWriteLegacy client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  client.settings.proto = libndt::NdtProtocol::proto_json;
+  client.settings.test_suite = 0xff;
+  REQUIRE(client.msg_write_login() == true);
 }
