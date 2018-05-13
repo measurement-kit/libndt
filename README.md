@@ -88,8 +88,8 @@ class Client {
 
 To run a NDT test, create a `Client` instance, configure its `settings`, and
 then call `run()`. Measurement Kit will override the `virtual` methods of the
-`Client` class to collect logs and results, as well as to allow to interrupt
-the test at any time. See [example_client.cpp](example_client.cpp).
+`Client` class to gather logs and results and allow to interrupt tests. See
+[example_client.cpp](example_client.cpp).
 
 ## Clone
 
