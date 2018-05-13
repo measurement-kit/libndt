@@ -644,10 +644,10 @@ TEST_CASE("Client::msg_write_login() does not propagate unknown tests ids") {
   REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == true);
 }
 
-static std::vector<uint8_t> non_serializable() noexcept {
+static std::string non_serializable() noexcept {
   // This should be a `gzip -9`-ed `build.ninja` file. It's not something
   // we can serialize as JSON. So helps to fail this kind of tests.
-  static std::vector<uint8_t> input_vector = {
+  static std::vector<uint8_t> v = {
       31,  139, 8,   0,   8,   13,  239, 90,  2,   3,   101, 144, 205, 10,  194,
       48,  16,  132, 239, 121, 138, 57,  136, 151, 146, 74,  69,  68,  10,  250,
       10,  30,  61,  74,  154, 172, 18,  141, 73,  73,  19,  232, 193, 135, 215,
@@ -664,14 +664,38 @@ static std::vector<uint8_t> non_serializable() noexcept {
       168, 9,   131, 115, 247, 31,  109, 147, 44,  187, 99,  142, 9,   61,  63,
       109, 254, 238, 95,  166, 75,  117, 138, 125, 0,   96,  224, 123, 120, 208,
       1,   0,   0};
-  return input_vector;
+  return std::string{(char *)v.data(), v.size()};
 }
 
 TEST_CASE("Client::msg_write_login() deals with unserializable JSON") {
   libndt::Client client;
   client.settings.proto = libndt::NdtProtocol::proto_json;
-  auto v = non_serializable();
+  auto s = non_serializable();
   client.settings.verbosity = libndt::verbosity_quiet;
-  REQUIRE(client.msg_write_login(  //
-              std::string{(char *)v.data(), v.size()}) == false);
+  REQUIRE(client.msg_write_login(s) == false);
+}
+
+// Client::msg_write() tests
+// -------------------------
+
+TEST_CASE("Client::msg_write() deals with unserializable JSON") {
+  libndt::Client client;
+  client.settings.proto = libndt::NdtProtocol::proto_json;
+  auto s = non_serializable();
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.msg_write(libndt::msg_test_start, std::move(s)) == false);
+}
+
+TEST_CASE("Client::msg_write() deals with invalid protocol") {
+  libndt::Client client;
+  // That is, more precisely, a valid but unimplemented proto
+  client.settings.proto = libndt::NdtProtocol::proto_websockets;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.msg_write(libndt::msg_test_start, "foo") == false);
+}
+
+TEST_CASE("Client::msg_write() deals with Client::msg_write_legacy() failure") {
+  FailMsgWriteLegacy client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.msg_write(libndt::msg_test_start, "foo") == false);
 }
