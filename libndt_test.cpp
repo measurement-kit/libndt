@@ -837,3 +837,20 @@ TEST_CASE("Client::msg_expect_empty() deals with nonempty message") {
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.msg_expect_empty(libndt::msg_test_start) == false);
 }
+
+// Client::msg_expect() tests
+// --------------------------
+
+TEST_CASE("Client::msg_expect() deals with Client::msg_read() failure") {
+  FailMsgRead client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  std::string s;
+  REQUIRE(client.msg_expect(libndt::msg_test_start, &s) == false);
+}
+
+TEST_CASE("Client::msg_expect() deals with unexpected message") {
+  NeitherResultsNorLogout client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  std::string s;
+  REQUIRE(client.msg_expect(libndt::msg_logout, &s) == false);
+}
