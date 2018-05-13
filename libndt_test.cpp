@@ -1167,9 +1167,31 @@ TEST_CASE("Client::connect_tcp() requires initial socket to be -1") {
   REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
 }
 
-class FailGetaddrinfo : public libndt::Client {
+class FailResolve : public libndt::Client {
  public:
   using libndt::Client::Client;
+  bool resolve(const std::string &,
+               std::vector<std::string> *) noexcept override {
+    return false;
+  }
+};
+
+TEST_CASE("Client::connect_tcp() deals with Client::resolve() failure") {
+  FailResolve client;
+  libndt::Socket sock = -1;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
+}
+
+class FailGetaddrinfoInConnectTcp : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool resolve(const std::string &str,
+               std::vector<std::string> *addrs) noexcept override {
+    REQUIRE(str == "1.2.3.4"); // make sure it did not change
+    addrs->push_back(str);
+    return true;
+  }
   int getaddrinfo(const char *, const char *, const addrinfo *,
                   addrinfo **) noexcept override {
     return EAI_AGAIN;
@@ -1177,7 +1199,7 @@ class FailGetaddrinfo : public libndt::Client {
 };
 
 TEST_CASE("Client::connect_tcp() deals with Client::getaddrinfo() failure") {
-  FailGetaddrinfo client;
+  FailGetaddrinfoInConnectTcp client;
   libndt::Socket sock = -1;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
@@ -1585,6 +1607,41 @@ TEST_CASE(
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
+}
+
+// Client::resolve() tests
+// -----------------------
+
+class FailGetaddrinfo : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int getaddrinfo(const char *, const char *, const addrinfo *,
+                  addrinfo **) noexcept override {
+    return EAI_AGAIN;
+  }
+};
+
+TEST_CASE("Client::resolve() deals with Client::getaddrinfo() failure") {
+  FailGetaddrinfo client;
+  std::vector<std::string> addrs;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.resolve("x.org", &addrs) == false);
+}
+
+class FailGetnameinfo : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int getnameinfo(const sockaddr *, libndt::SockLen, char *, libndt::SockLen,
+                  char *, libndt::SockLen, int) noexcept override {
+    return EAI_AGAIN;
+  }
+};
+
+TEST_CASE("Client::resolve() deals with Client::getnameinfo() failure") {
+  FailGetnameinfo client;
+  std::vector<std::string> addrs;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.resolve("x.org", &addrs) == false);
 }
 
 // Client::query_mlabns_curl() tests
