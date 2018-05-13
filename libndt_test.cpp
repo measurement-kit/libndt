@@ -10,6 +10,12 @@
 #include "catch.hpp"
 #include "json.hpp"
 
+// Unit tests
+// ==========
+//
+// Speaking of coverage, if specific code is already tested by running the
+// example client, we don't need to write also a test for it here.
+
 using namespace measurement_kit;
 
 // Client::run() tests
@@ -181,16 +187,32 @@ TEST_CASE("Client::run() deals with Client::wait_close() failure") {
   REQUIRE(client.run() == false);
 }
 
+// Client::on_warning() tests
+// --------------------------
+
+TEST_CASE("Client::on_warning() works as expected") {
+  libndt::Client client;
+  client.on_warning("calling on_warning() to increase coverage");
+}
+
 // Client::query_mlabns() tests
 // ----------------------------
 
 class FailQueryMlabnsCurl : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns_curl(const std::string &, long, std::string *) noexcept {
+  bool query_mlabns_curl(const std::string &, long,
+                         std::string *) noexcept override {
     return false;
   }
 };
+
+TEST_CASE("Client::query_mlabns() does nothing when we already know hostname") {
+  FailQueryMlabnsCurl client;
+  client.settings.hostname = "neubot.mlab.mlab1.trn01.measurement-lab.org";
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.query_mlabns() == true);
+}
 
 TEST_CASE(
     "Client::query_mlabns() deals with Client::query_mlabns_curl() failure") {
@@ -202,7 +224,8 @@ TEST_CASE(
 class EmptyMlabnsJson : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns_curl(const std::string &, long, std::string *body) noexcept {
+  bool query_mlabns_curl(const std::string &, long,
+                         std::string *body) noexcept override {
     *body = "";
     return true;
   }
@@ -217,7 +240,8 @@ TEST_CASE("Client::query_mlabns() deals with empty JSON") {
 class InvalidMlabnsJson : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns_curl(const std::string &, long, std::string *body) noexcept {
+  bool query_mlabns_curl(const std::string &, long,
+                         std::string *body) noexcept override {
     *body = "{{{{";
     return true;
   }
@@ -232,7 +256,8 @@ TEST_CASE("Client::query_mlabns() deals with invalid JSON") {
 class IncompleteMlabnsJson : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns_curl(const std::string &, long, std::string *body) noexcept {
+  bool query_mlabns_curl(const std::string &, long,
+                         std::string *body) noexcept override {
     *body = "{}";
     return true;
   }
@@ -1133,7 +1158,7 @@ class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
     set_last_error(0);  // Anything not EPIPE would cause a failure
     return -1;
   }
-  bool msg_expect(uint8_t, std::string *) noexcept override { return false; }
+  bool msg_expect(uint8_t, std::string *) noexcept override { return true; }
 };
 
 TEST_CASE(
@@ -1584,6 +1609,22 @@ TEST_CASE("Client::query_mlabns_curl() deals with Curl{} failure") {
   REQUIRE(client.query_mlabns_curl("", 3, nullptr) == false);
 }
 #endif
+
+// Client::get_last_error() tests
+// ------------------------------
+
+#ifdef _WIN32
+#define OS_EINVAL WSAEINVAL
+#else
+#define OS_EINVAL EINVAL
+#endif
+
+TEST_CASE("Client::get_last_error() works as expected") {
+  libndt::Client client;
+  client.set_last_error(OS_EINVAL);
+  REQUIRE(client.get_last_error() == OS_EINVAL);
+  client.set_last_error(0); // clear
+}
 
 // Client::recv() tests
 // --------------------
