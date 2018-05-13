@@ -1079,7 +1079,7 @@ TEST_CASE("Client::run_upload() honours max_runtime") {
   FailSendDuringUpload client;
   client.settings.verbosity = libndt::verbosity_quiet;
   client.settings.max_runtime = 0;
-  REQUIRE(client.run_download() == false);
+  REQUIRE(client.run_upload() == false);
 }
 
 class FailMsgExpectDuringUpload : public libndt::Client {
@@ -1108,7 +1108,7 @@ class FailMsgExpectDuringUpload : public libndt::Client {
 TEST_CASE("Client::run_upload() deals with Client::msg_expect() failure") {
   FailMsgExpectDuringUpload client;
   client.settings.verbosity = libndt::verbosity_quiet;
-  REQUIRE(client.run_download() == false);
+  REQUIRE(client.run_upload() == false);
 }
 
 class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
@@ -1141,7 +1141,7 @@ TEST_CASE(
     "failure") {
   FailFinalMsgExpectEmptyDuringUpload client;
   client.settings.verbosity = libndt::verbosity_quiet;
-  REQUIRE(client.run_download() == false);
+  REQUIRE(client.run_upload() == false);
 }
 
 // Client::connect_tcp() tests
