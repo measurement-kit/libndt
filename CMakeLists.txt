@@ -93,6 +93,7 @@ if("${UNIX}" OR "${MINGW}")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wmissing-prototypes")
   endif()
 elseif("${MSVC}")
+  # TODO(bassosimone): extend this also to linker warnings.
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /WX")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
 endif()
