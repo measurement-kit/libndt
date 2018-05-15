@@ -17,14 +17,14 @@ constexpr uint64_t api_major = 0;
 constexpr uint64_t api_minor = 20;
 constexpr uint64_t api_patch = 1;
 
-constexpr uint8_t nettest_middlebox = 1 << 0;
-constexpr uint8_t nettest_upload = 1 << 1;
-constexpr uint8_t nettest_download = 1 << 2;
-constexpr uint8_t nettest_simple_firewall = 1 << 3;
-constexpr uint8_t nettest_status = 1 << 4;
-constexpr uint8_t nettest_meta = 1 << 5;
-constexpr uint8_t nettest_upload_ext = 1 << 6;
-constexpr uint8_t nettest_download_ext = 1 << 7;
+constexpr uint8_t nettest_middlebox = 1U << 0;
+constexpr uint8_t nettest_upload = 1U << 1;
+constexpr uint8_t nettest_download = 1U << 2;
+constexpr uint8_t nettest_simple_firewall = 1U << 3;
+constexpr uint8_t nettest_status = 1U << 4;
+constexpr uint8_t nettest_meta = 1U << 5;
+constexpr uint8_t nettest_upload_ext = 1U << 6;
+constexpr uint8_t nettest_download_ext = 1U << 7;
 
 constexpr const char *ndt_version_compat = "v3.7.0";
 
