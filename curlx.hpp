@@ -44,7 +44,7 @@ class Curl {
 
   virtual CURLcode perform() noexcept;
 
-  ~Curl() noexcept;
+  virtual ~Curl() noexcept;
 
   // For testability:
 
