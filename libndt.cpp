@@ -860,7 +860,7 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       return false;
     }
     EMIT_DEBUG("socks5h: connect_response_hdr: "
-               << represent(std::string{connect_response_hdr, (Size)rv}));
+               << represent(std::string{connect_response_hdr, (size_t)rv}));
     constexpr uint8_t version = 5;
     if (connect_response_hdr[0] != version) {
       EMIT_WARNING("socks5h: invalid message version");
@@ -913,7 +913,7 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       return false;
     }
     EMIT_DEBUG("socks5h: connect_response_body: "
-               << represent(std::string{connect_response_body, (Size)rv}));
+               << represent(std::string{connect_response_body, (size_t)rv}));
     if ((Size)rv < connect_response_body_min) {
       EMIT_WARNING("socks5h: connect_response_body is too short");
       this->closesocket(*sock);
