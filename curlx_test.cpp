@@ -129,7 +129,7 @@ TEST_CASE("Curl::init() deals with curl_easy_init() failure") {
 TEST_CASE("Curl::init() is idempotent") {
   libndt::Curl curl;
   REQUIRE(curl.init() == true);
-  REQUIRE(curl.init() == false);
+  REQUIRE(curl.init() == true);
 }
 
 #endif  // HAVE_CURL
