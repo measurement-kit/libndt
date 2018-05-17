@@ -119,7 +119,7 @@ static std::string represent(std::string message) noexcept {
   for (auto &c : message) {
     if (c <= ' ' || c > '~') {
       ss << "<0x" << std::fixed << std::setw(2) << std::setfill('0')
-         << std::hex << (uint16_t)(uint8_t)c << ">";
+         << std::hex << (unsigned)(uint8_t)c << ">";
     } else {
       ss << (char)c;
     }
