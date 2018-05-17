@@ -20,6 +20,7 @@ static void usage() {
   std::clog << "  --download-ext        : run multi-stream download test\n";
   std::clog << "  --json                : use the JSON protocol\n";
   std::clog << "  --port <port>         : use the specified port\n";
+  std::clog << "  --tor <port>          : use tor at 127.0.0.1:<port>\n";
   std::clog << "  --upload              : run upload test\n";
   std::clog << "  --verbose             : be verbose\n";
   std::clog << "\n";
@@ -34,6 +35,7 @@ int main(int, char **argv) {
   {
     argh::parser cmdline;
     cmdline.add_param("port");
+    cmdline.add_param("tor");
     cmdline.parse(argv);
     for (auto &flag : cmdline.flags()) {
       if (flag == "download") {
@@ -61,6 +63,9 @@ int main(int, char **argv) {
       if (param.first == "port") {
         client.settings.port = param.second;
         std::clog << "will use port: " << param.second << std::endl;
+      } else if (param.first == "tor") {
+        client.settings.socks5h_port = param.second;
+        std::clog << "will use tor at: 127.0.0.1:" << param.second << std::endl;
       } else {
         std::clog << "fatal: unrecognized param: " << param.first << std::endl;
         usage();

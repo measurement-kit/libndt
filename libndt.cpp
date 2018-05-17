@@ -115,11 +115,11 @@ static std::string represent(std::string message) noexcept {
     return message;
   }
   std::stringstream ss;
-  ss << "binary([ ";
+  ss << "binary([";
   for (auto &c : message) {
     if (c <= ' ' || c > '~') {
-      ss << " <0x" << std::fixed << std::setw(2) << std::setfill('0')
-         << std::hex << (unsigned)c << "> ";
+      ss << "<0x" << std::fixed << std::setw(2) << std::setfill('0')
+         << std::hex << (uint16_t)(uint8_t)c << ">";
     } else {
       ss << (char)c;
     }
@@ -286,7 +286,8 @@ bool Client::query_mlabns() noexcept {
 }
 
 bool Client::connect() noexcept {
-  return connect_tcp(settings.hostname, settings.port, &impl->sock);
+  return connect_tcp_maybe_socks5(settings.hostname, settings.port,
+                                  &impl->sock);
 }
 
 bool Client::send_login() noexcept {
@@ -450,7 +451,7 @@ bool Client::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
-    if (!connect_tcp(settings.hostname, port, &sock)) {
+    if (!connect_tcp_maybe_socks5(settings.hostname, port, &sock)) {
       break;
     }
     dload_socks.sockets.push_back(sock);
@@ -621,7 +622,7 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = -1;
-    if (!connect_tcp(settings.hostname, port, &sock)) {
+    if (!connect_tcp_maybe_socks5(settings.hostname, port, &sock)) {
       return false;
     }
     upload_socks.sockets.push_back(sock);
@@ -712,6 +713,241 @@ bool Client::run_upload() noexcept {
 
 // Low-level API
 
+bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
+                                      const std::string &port,
+                                      Socket *sock) noexcept {
+  if (settings.socks5h_port.empty()) {
+    return connect_tcp(hostname, port, sock);
+  }
+  if (!connect_tcp("127.0.0.1", settings.socks5h_port, sock)) {
+    return false;
+  }
+  EMIT_INFO("socks5h: connected to proxy");
+  // Implementation note: we're going to assume we're talking with tor on the
+  // local host. This simplifies the implementation because we don't need to
+  // buffer partial incoming messages or to deal with partially sent messages.
+  //
+  // We most likely don't need a more robust implementation. If we ever need
+  // that, we can just implement `recvn()` and replace all the calls of `recv()`
+  // below with calls to `recvn()`. Similarly, we can do for `send()`.
+  {
+    char auth_request[] = {
+        5,  // version
+        1,  // number of methods
+        0   // "no auth" method
+    };
+    auto rv = this->send(*sock, auth_request, sizeof(auth_request));
+    if (rv < 0) {
+      EMIT_WARNING(
+          "socks5h: cannot send auth_request: " << this->get_last_error());
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    if ((Size)rv != sizeof(auth_request)) {
+      EMIT_WARNING("socks5h: auth_request message truncated");
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    EMIT_DEBUG("socks5h: sent auth request");
+  }
+  {
+    char auth_response[2] = {
+        0,  // version
+        0   // method
+    };
+    auto rv = this->recv(*sock, auth_response, sizeof(auth_response));
+    if (rv < 0) {
+      EMIT_WARNING(
+          "socks5h: cannot recv auth_response: " << this->get_last_error());
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    if ((Size)rv != sizeof(auth_response)) {
+      EMIT_WARNING("socks5h: auth_response: received less bytes than expected");
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    constexpr uint8_t version = 5;
+    if (auth_response[0] != version) {
+      EMIT_WARNING("socks5h: received unexpected version number");
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    constexpr uint8_t auth_method = 0;
+    if (auth_response[1] != auth_method) {
+      EMIT_WARNING("socks5h: received unexpected auth_method");
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    EMIT_DEBUG("socks5h: authenticated with proxy");
+  }
+  {
+    std::string connect_request;
+    {
+      std::stringstream ss;
+      ss << (uint8_t)5;  // version
+      ss << (uint8_t)1;  // CMD_CONNECT
+      ss << (uint8_t)0;  // reserved
+      ss << (uint8_t)3;  // ATYPE_DOMAINNAME
+      if (hostname.size() > UINT8_MAX) {
+        EMIT_WARNING("socks5h: hostname is too long");
+        this->closesocket(*sock);
+        *sock = -1;
+        return false;
+      }
+      ss << (uint8_t)hostname.size();
+      ss << hostname;
+      uint16_t portno{};
+      {
+        const char *errstr = nullptr;
+        portno = (uint16_t)this->strtonum(port.c_str(), 0, UINT16_MAX, &errstr);
+        if (errstr != nullptr) {
+          EMIT_WARNING("socks5h: invalid port number: " << errstr);
+          this->closesocket(*sock);
+          *sock = -1;
+          return false;
+        }
+      }
+      portno = htons(portno);
+      ss << (uint8_t)((char *)&portno)[0] << (uint8_t)((char *)&portno)[1];
+      connect_request = ss.str();
+      EMIT_DEBUG("socks5h: connect_request: " << represent(connect_request));
+    }
+    auto rv = this->send(*sock, connect_request.data(), connect_request.size());
+    if (rv < 0) {
+      EMIT_WARNING(
+          "socks5h: cannot send connect_request: " << this->get_last_error());
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    if ((Size)rv != connect_request.size()) {
+      EMIT_WARNING("socks5h: connect_request message truncated");
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    EMIT_DEBUG("socks5h: sent connect request");
+  }
+  uint8_t atype = 0;
+  {
+    char connect_response_hdr[] = {
+        0,  // version
+        0,  // error
+        0,  // reserved
+        0   // type
+    };
+    auto rv = this->recv(  //
+        *sock, connect_response_hdr, sizeof(connect_response_hdr));
+    if (rv < 0) {
+      EMIT_WARNING("socks5h: cannot recv connect_response_hdr: "
+                   << this->get_last_error());
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    if ((Size)rv != sizeof(connect_response_hdr)) {
+      EMIT_WARNING(
+          "socks5h: connect_response_hdr: received less bytes than expected");
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    EMIT_DEBUG("socks5h: connect_response_hdr: "
+               << represent(std::string{connect_response_hdr, (Size)rv}));
+    constexpr uint8_t version = 5;
+    if (connect_response_hdr[0] != version) {
+      EMIT_WARNING("socks5h: invalid message version");
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    if (connect_response_hdr[1] != 0) {
+      EMIT_WARNING("socks5h: connect() failed: "
+                   << (unsigned)(uint8_t)connect_response_hdr[1]);
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    if (connect_response_hdr[2] != 0) {
+      EMIT_WARNING("socks5h: invalid reserved field");
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    switch (connect_response_hdr[3]) {
+      case 1:  // ipv4
+      case 3:  // domain
+      case 4:  // ipv6
+        atype = connect_response_hdr[3];
+        break;
+      default:
+        EMIT_WARNING("socks5h: invalid address type");
+        this->closesocket(*sock);
+        *sock = -1;
+        return false;
+    }
+    EMIT_DEBUG("socks5h: got valid connect-response header");
+  }
+  {
+    constexpr size_t connect_response_body_max = 1 +    // len
+                                                 255 +  // max(domain)
+                                                 2;     // port
+    constexpr size_t connect_response_body_min = 1 +    // len
+                                                 1 +    // min(domain)
+                                                 2;     // port
+    char connect_response_body[connect_response_body_max];
+    auto rv = this->recv(  //
+        *sock, connect_response_body, sizeof(connect_response_body));
+    if (rv < 0) {
+      EMIT_WARNING("socks5h: cannot recv connect_response_body: "
+                   << this->get_last_error());
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    EMIT_DEBUG("socks5h: connect_response_body: "
+               << represent(std::string{connect_response_body, (Size)rv}));
+    if ((Size)rv < connect_response_body_min) {
+      EMIT_WARNING("socks5h: connect_response_body is too short");
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    Size expected = 0;
+    switch (atype) {
+      case 1:              // ipv4
+        expected = 4 + 2;  // ipv4 + port
+        break;
+      case 3:                                         // domain
+        expected = 1 + connect_response_body[0] + 2;  // len + str + port
+        break;
+      case 4:               // ipv6
+        expected = 16 + 2;  // ipv6 + port
+        break;
+      default:
+        assert(false);
+    }
+    if ((Size)rv != expected) {
+      EMIT_WARNING("socks5h: connect_response_body of unexpected size");
+      this->closesocket(*sock);
+      *sock = -1;
+      return false;
+    }
+    EMIT_DEBUG("socks5h: got valid connect-response body");
+    // AFAICT tor returns a zeroed IP address, so there would be little point
+    // in trying to print it, in our use case.
+  }
+  EMIT_INFO("socks5h: the proxy has successfully connected");
+  return true;
+}
+
 bool Client::connect_tcp(const std::string &hostname, const std::string &port,
                          Socket *sock) noexcept {
   assert(sock != nullptr);
@@ -759,7 +995,7 @@ bool Client::connect_tcp(const std::string &hostname, const std::string &port,
     }
     this->freeaddrinfo(rp);
     if (*sock != -1) {
-      break; // we have a connection!
+      break;  // we have a connection!
     }
   }
   return *sock != -1;
@@ -1076,7 +1312,7 @@ bool Client::resolve(const std::string &hostname,
       result = false;
       break;
     }
-    addrs->push_back(address); // we only care about address
+    addrs->push_back(address);  // we only care about address
     EMIT_DEBUG("- " << address);
   }
   this->freeaddrinfo(rp);
@@ -1089,7 +1325,8 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
                                std::string *body) noexcept {
 #ifdef HAVE_CURL
   std::string err = "";
-  if (!Curl{}.method_get(url, timeout, body, &err)) {
+  if (!Curl{}.method_get_maybe_socks5(  //
+          settings.socks5h_port, url, timeout, body, &err)) {
     EMIT_WARNING("cannot query mlabns: " << err);
     return false;
   }

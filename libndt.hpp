@@ -27,7 +27,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 21;
+constexpr uint64_t api_minor = 22;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1U << 0;
@@ -91,6 +91,7 @@ class NdtSettings {
   };
   NdtProtocol proto = NdtProtocol::proto_legacy;
   double max_runtime = default_max_runtime;
+  std::string socks5h_port;
 };
 
 class Client {
@@ -137,6 +138,10 @@ class Client {
   virtual bool run_upload() noexcept;
 
   // Low-level API
+
+  virtual bool connect_tcp_maybe_socks5(const std::string &hostname,
+                                        const std::string &port,
+                                        Socket *sock) noexcept;
 
   virtual bool connect_tcp(const std::string &hostname, const std::string &port,
                            Socket *sock) noexcept;
