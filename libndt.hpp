@@ -177,8 +177,9 @@ class Settings {
 
 /// NDT client. In the typical usage, you just need to construct a Client,
 /// optionally providing settings, and to call the run() method. More advanced
-/// usage may require you to override some `protected` methods in a subclass
-/// to override the default behavior.
+/// usage may require you to override methods in a subclass to customize the
+/// default behavior. That is, you may want to customize `recv` and `send`
+/// to record when data is received and sent to the other endpoint.
 class Client {
  public:
   // Implementation note: this is the classic implementation of the pimpl
