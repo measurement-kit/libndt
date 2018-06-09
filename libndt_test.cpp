@@ -282,48 +282,50 @@ TEST_CASE("Client::query_mlabns() deals with incomplete JSON") {
 // Client::recv_kickoff() tests
 // ----------------------------
 
-class FailRecv : public libndt::Client {
+class FailRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+  libndt::Ssize recvn(libndt::Socket, void *, libndt::Size) noexcept override {
     return -1;
   }
 };
 
-TEST_CASE("Client::recv_kickoff() deals with Client::recv() failure") {
-  FailRecv client;
+TEST_CASE("Client::recv_kickoff() deals with Client::recvn() failure") {
+  FailRecvn client;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv_kickoff() == false);
 }
 
-class RecvEof : public libndt::Client {
+class RecvnEof : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+  libndt::Ssize recvn(libndt::Socket, void *, libndt::Size) noexcept override {
     return 0;
   }
 };
 
-TEST_CASE("Client::recv_kickoff() deals with Client::recv() EOF") {
-  RecvEof client;
+TEST_CASE("Client::recv_kickoff() deals with Client::recvn() EOF") {
+  RecvnEof client;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv_kickoff() == false);
 }
 
-class RecvInvalidKickoff : public libndt::Client {
+class RecvnInvalidKickoff : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recv(  //
+  libndt::Ssize recvn(  //
       libndt::Socket, void *buf, libndt::Size siz) noexcept override {
     REQUIRE(buf != nullptr);
     REQUIRE(siz >= 1);
-    ((char *)buf)[0] = 'x';
-    return 1;
+    for (libndt::Size i = 0; i < siz; ++i) {
+      ((char *)buf)[i] = 'x';
+    }
+    return siz;
   }
 };
 
 TEST_CASE("Client::recv_kickoff() deals with invalid kickoff") {
-  RecvInvalidKickoff client;
+  RecvnInvalidKickoff client;
   client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv_kickoff() == false);
 }
@@ -1352,19 +1354,19 @@ TEST_CASE("Client::msg_write_legacy() deals with too-big messages") {
               libndt::msg_test_start, std::move(m)) == false);
 }
 
-class FailSend : public libndt::Client {
+class FailSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size) noexcept override {
+  libndt::Ssize sendn(libndt::Socket, const void *,
+                      libndt::Size) noexcept override {
     return -1;
   }
 };
 
 TEST_CASE(
-    "Client::msg_write_legacy() deals with Client::send() failure when sending "
-    "header") {
-  FailSend client;
+    "Client::msg_write_legacy() deals with Client::sendn() failure when "
+    "sending header") {
+  FailSendn client;
   client.settings.verbosity = libndt::verbosity_quiet;
   std::string m{"foo"};
   client.set_last_error(0);
@@ -1372,19 +1374,19 @@ TEST_CASE(
               libndt::msg_test_start, std::move(m)) == false);
 }
 
-class FailLargeSend : public libndt::Client {
+class FailLargeSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size siz) noexcept override {
+  libndt::Ssize sendn(libndt::Socket, const void *,
+                      libndt::Size siz) noexcept override {
     return siz <= 3 ? 3 : -1;
   }
 };
 
 TEST_CASE(
-    "Client::msg_write_legacy() deals with Client::send() failure when sending "
-    "message") {
-  FailLargeSend client;
+    "Client::msg_write_legacy() deals with Client::sendn() failure when "
+    "sending message") {
+  FailLargeSendn client;
   client.settings.verbosity = libndt::verbosity_quiet;
   std::string m{"foobar"};
   client.set_last_error(0);
@@ -1574,7 +1576,7 @@ TEST_CASE("Client::msg_read() deals with unknown protocol") {
 TEST_CASE(
     "Client::msg_read_legacy() deals with Client::recv() failure when reading "
     "header") {
-  FailRecv client;
+  FailRecvn client;
   client.set_last_error(0);
   client.settings.verbosity = libndt::verbosity_quiet;
   uint8_t code = 0;
@@ -1582,11 +1584,11 @@ TEST_CASE(
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
 }
 
-class FailLargeRecv : public libndt::Client {
+class FailLargeRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recv(libndt::Socket, void *p,
-                     libndt::Size siz) noexcept override {
+  libndt::Ssize recvn(libndt::Socket, void *p,
+                      libndt::Size siz) noexcept override {
     if (siz == 3) {
       char *usablep = (char *)p;
       usablep[0] = libndt::msg_login;
@@ -1599,9 +1601,9 @@ class FailLargeRecv : public libndt::Client {
 };
 
 TEST_CASE(
-    "Client::msg_read_legacy() deals with Client::recv() failure when reading "
+    "Client::msg_read_legacy() deals with Client::recvn() failure when reading "
     "message") {
-  FailLargeRecv client;
+  FailLargeRecvn client;
   client.set_last_error(0);
   client.settings.verbosity = libndt::verbosity_quiet;
   uint8_t code = 0;
