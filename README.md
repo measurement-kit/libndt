@@ -21,7 +21,7 @@ int main() {
 
 See [codedocs.xyz/measurement-kit/libndt](
 https://codedocs.xyz/measurement-kit/libndt/) for API documentation. See
-[example_client.cpp](example_client.cpp) for a usage example. See
+[libndt-client.cpp](libndt-client.cpp) for a usage example. See
 [libndt.hpp](libndt.hpp) for the full API.
 
 ## Clone
