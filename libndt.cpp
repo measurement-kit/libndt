@@ -295,14 +295,12 @@ bool Client::send_login() noexcept {
 
 bool Client::recv_kickoff() noexcept {
   char buf[msg_kickoff_size];
-  for (Size off = 0; off < msg_kickoff_size;) {
-    Ssize n = this->recv(impl->sock, buf + off, sizeof(buf) - off);
-    if (n <= 0) {
-      EMIT_WARNING("recv_kickoff: recv() failed: " << get_last_error());
-      return false;
-    }
-    off += (Size)n;
+  Ssize tot = this->recvn(impl->sock, buf, sizeof (buf));
+  if (tot <= 0) {
+    EMIT_WARNING("recv_kickoff: recvn() failed: " << get_last_error());
+    return false;
   }
+  assert((Size)tot == sizeof (buf));
   if (memcmp(buf, msg_kickoff, sizeof(buf)) != 0) {
     EMIT_WARNING("recv_kickoff: invalid kickoff message");
     return false;
@@ -862,24 +860,24 @@ bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
     EMIT_DEBUG("msg_write_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_write_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
-    for (Size off = 0; off < sizeof(header);) {
-      Ssize n = this->send(impl->sock, header + off, sizeof(header) - off);
-      if (n <= 0) {
-        EMIT_WARNING("msg_write_legacy: send() failed: " << get_last_error());
-        return false;
-      }
-      off += (Size)n;
-    }
-    EMIT_DEBUG("msg_write_legacy: sent message header");
-  }
-  for (Size off = 0; off < msg.size();) {
-    Ssize n = this->send(impl->sock, msg.data() + off, msg.size() - off);
-    if (n <= 0) {
-      EMIT_WARNING("msg_write_legacy: send() failed: " << get_last_error());
+    Ssize tot = this->sendn(impl->sock, header, sizeof (header));
+    if (tot <= 0) {
+      EMIT_WARNING("msg_write_legacy: sendn() failed: " << get_last_error());
       return false;
     }
-    off += (Size)n;
+    assert((Size)tot == sizeof (header));
+    EMIT_DEBUG("msg_write_legacy: sent message header");
   }
+  if (msg.size() <= 0) {
+    EMIT_DEBUG("msg_write_legacy: zero length message");
+    return true;
+  }
+  Ssize tot = this->sendn(impl->sock, msg.data(), msg.size());
+  if (tot <= 0) {
+    EMIT_WARNING("msg_write_legacy: sendn() failed: " << get_last_error());
+    return false;
+  }
+  assert((Size)tot == msg.size());
   EMIT_DEBUG("msg_write_legacy: sent message body");
   return true;
 }
@@ -1003,14 +1001,12 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   uint16_t len = 0;
   {
     char header[3];
-    for (Size off = 0; off < sizeof(header);) {
-      Ssize n = this->recv(impl->sock, header + off, sizeof(header) - off);
-      if (n <= 0) {
-        EMIT_WARNING("msg_read_legacy: recv() failed: " << get_last_error());
-        return false;
-      }
-      off += (Size)n;
+    Ssize tot = this->recvn(impl->sock, header, sizeof (header));
+    if (tot <= 0) {
+      EMIT_WARNING("msg_read_legacy: recvn() failed: " << get_last_error());
+      return false;
     }
+    assert((Size)tot == sizeof (header));
     EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)header[2]);
@@ -1019,26 +1015,69 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
     len = ntohs(len);
     EMIT_DEBUG("msg_read_legacy: message length: " << len);
   }
+  if (len <= 0) {
+    EMIT_DEBUG("msg_read_legacy: zero length message");
+    *msg = "";
+    return true;
+  }
   // Allocating a unique pointer and then copying into a string seems better
   // than resizing() `msg` (because that appends zero characters to the end
   // of it). Returning something more buffer-like than a string might be better
   // for efficiency but NDT messages are generally small, and the performance
   // critical path is certainly not the one with control messages.
   std::unique_ptr<char[]> buf{new char[len]};
-  for (Size off = 0; off < len;) {
-    Ssize n = this->recv(impl->sock, buf.get() + off, len - off);
-    if (n <= 0) {
-      EMIT_WARNING("msg_read_legacy: recv() failed: " << get_last_error());
-      return false;
-    }
-    off += (Size)n;
+  Ssize tot = this->recvn(impl->sock, buf.get(), len);
+  if (tot <= 0) {
+    EMIT_WARNING("msg_read_legacy: recvn() failed: " << get_last_error());
+    return false;
   }
+  assert((Size)tot == len);
   *msg = std::string{buf.get(), len};
   EMIT_DEBUG("msg_read_legacy: raw message: " << represent(*msg));
   return true;
 }
 
 // Utilities for low-level
+
+#ifdef _WIN32
+#define OS_SSIZE_MAX INT_MAX
+#define OS_EINVAL WSAEINVAL
+#else
+#define OS_SSIZE_MAX SSIZE_MAX
+#define OS_EINVAL EINVAL
+#endif
+
+Ssize Client::recvn(Socket fd, void *base, Size count) noexcept {
+  if (count > OS_SSIZE_MAX) {
+    set_last_error(OS_EINVAL);
+    return -1;
+  }
+  Size off = 0;
+  while (off < count) {
+    Ssize n = this->recv(fd, ((char *)base) + off, count - off);
+    if (n <= 0) {
+      return n; // either return full success or error, ignore partial recv
+    }
+    off += (Size)n;
+  }
+  return (Ssize)off; // cast okay because of the initial check
+}
+
+Ssize Client::sendn(Socket fd, const void *base, Size count) noexcept {
+  if (count > OS_SSIZE_MAX) {
+    set_last_error(OS_EINVAL);
+    return -1;
+  }
+  Size off = 0;
+  while (off < count) {
+    Ssize n = this->send(fd, ((char *)base) + off, count - off);
+    if (n <= 0) {
+      return n; // either return full success or error, ignore partial send
+    }
+    off += (Size)n;
+  }
+  return (Ssize)off; // cast okay because of the initial check
+}
 
 bool Client::resolve(const std::string &hostname,
                      std::vector<std::string> *addrs) noexcept {
@@ -1107,14 +1146,10 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 #define AS_OS_SOCKLEN(n) ((int)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((int)n)
-#define OS_SSIZE_MAX INT_MAX
-#define OS_EINVAL WSAEINVAL
 #else
 #define AS_OS_SOCKLEN(n) ((socklen_t)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
-#define OS_SSIZE_MAX SSIZE_MAX
-#define OS_EINVAL EINVAL
 #endif
 
 int Client::get_last_error() noexcept {
