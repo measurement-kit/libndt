@@ -1235,6 +1235,7 @@ int Client::connect(Socket fd, const sockaddr *sa, SockLen len) noexcept {
       ::ERR_print_errors_fp(stderr); // TODO(bassosimone): remove
       ::SSL_free(ssl);
       this->closesocket(fd);
+      // TODO(bassosimone): correctly process SSL error here.
       return -1;
     }
     EMIT_DEBUG("SSL handshake completed");
@@ -1257,6 +1258,7 @@ Ssize Client::recv(Socket fd, void *base, Size count) noexcept {
     }
     auto ssl = impl->fd_to_ssl.at(fd);
     auto rv = ::SSL_read(ssl, base, count);
+    // TODO(bassosimone): correctly process SSL error here.
     return (rv <= 0) ? -1 : (Ssize)rv;
   }
 #endif
@@ -1281,6 +1283,7 @@ Ssize Client::send(Socket fd, const void *base, Size count) noexcept {
     }
     auto ssl = impl->fd_to_ssl.at(fd);
     auto rv = ::SSL_write(ssl, base, count);
+    // TODO(bassosimone): correctly process SSL error here.
     return (rv <= 0) ? -1 : (Ssize)rv;
   }
 #endif
@@ -1293,6 +1296,24 @@ Ssize Client::send(Socket fd, const void *base, Size count) noexcept {
 }
 
 int Client::shutdown(Socket fd, int how) noexcept {
+#if HAVE_OPENSSL
+  if ((impl->settings.proto & protocol::tls) != 0 &&
+      impl->fd_to_ssl.count(fd) > 0) {
+    if (how != OS_SHUT_RDWR) {
+      EMIT_WARNING("shutdown: cannot partially shutdown SSL socket");
+      set_last_error(OS_EINVAL);
+      return -1;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    if (::SSL_shutdown(ssl) != 1) {
+      // TODO(bassosimone): correctly process SSL error here.
+      EMIT_WARNING("shutdown: SSL_shutdown: ");
+      ERR_print_errors_fp(stderr);
+      return -1;
+    }
+    return 0;
+  }
+#endif
   return ::shutdown(AS_OS_SOCKET(fd), how);
 }
 
