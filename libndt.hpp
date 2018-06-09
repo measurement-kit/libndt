@@ -27,7 +27,7 @@ namespace measurement_kit {
 namespace libndt {
 
 constexpr uint64_t api_major = 0;
-constexpr uint64_t api_minor = 21;
+constexpr uint64_t api_minor = 22;
 constexpr uint64_t api_patch = 0;
 
 constexpr uint8_t nettest_middlebox = 1U << 0;
@@ -159,6 +159,10 @@ class Client {
   virtual bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
 
   // Utilities for low-level
+
+  virtual Ssize recvn(Socket fd, void *base, Size count) noexcept;
+
+  virtual Ssize sendn(Socket fd, const void *base, Size count) noexcept;
 
   virtual bool resolve(const std::string &hostname,
                        std::vector<std::string> *addrs) noexcept;
