@@ -803,32 +803,28 @@ bool Client::msg_write_login(const std::string &version) noexcept {
     impl->settings.test_suite &= ~nettest::upload_ext;
   }
   std::string serio;
-  switch (impl->settings.proto) {
-    case NdtProtocol::proto_legacy: {
-      serio = std::string{(char *)&impl->settings.test_suite,
-                          sizeof(impl->settings.test_suite)};
-      code = msg_login;
-      break;
-    }
-    case NdtProtocol::proto_json: {
-      code = msg_extended_login;
-      nlohmann::json msg{
-          {"msg", version},
-          {"tests", std::to_string((unsigned)impl->settings.test_suite)},
-      };
-      try {
-        serio = msg.dump();
-      } catch (nlohmann::json::exception &) {
-        EMIT_WARNING("msg_write_login: cannot serialize JSON");
-        return false;
-      }
-      break;
-    }
-    default:
-      EMIT_WARNING("msg_write_login: protocol not supported");
+  if ((impl->settings.proto & protocol::json) == 0) {
+    serio = std::string{(char *)&impl->settings.test_suite,
+                        sizeof(impl->settings.test_suite)};
+    code = msg_login;
+  } else {
+    code = msg_extended_login;
+    nlohmann::json msg{
+        {"msg", version},
+        {"tests", std::to_string((unsigned)impl->settings.test_suite)},
+    };
+    try {
+      serio = msg.dump();
+    } catch (nlohmann::json::exception &) {
+      EMIT_WARNING("msg_write_login: cannot serialize JSON");
       return false;
+    }
   }
   assert(code != 0);
+  if ((impl->settings.proto & protocol::websockets) != 0) {
+    EMIT_WARNING("msg_write_login: websockets not supported");
+    return false;
+  }
   if (!msg_write_legacy(code, std::move(serio))) {
     return false;
   }
@@ -840,28 +836,21 @@ bool Client::msg_write_login(const std::string &version) noexcept {
 // a different implementation depending on the actual protocol.
 bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
   EMIT_DEBUG("msg_write: message to send: " << represent(msg));
-  std::string s;
-  switch (impl->settings.proto) {
-    case NdtProtocol::proto_legacy: {
-      std::swap(s, msg);
-      break;
-    }
-    case NdtProtocol::proto_json: {
-      nlohmann::json json;
-      json["msg"] = msg;
-      try {
-        s = json.dump();
-      } catch (const nlohmann::json::exception &) {
-        EMIT_WARNING("msg_write: cannot serialize JSON");
-        return false;
-      }
-      break;
-    }
-    default:
-      EMIT_WARNING("msg_write: protocol not supported");
+  if ((impl->settings.proto & protocol::json) != 0) {
+    nlohmann::json json;
+    json["msg"] = msg;
+    try {
+      msg = json.dump();
+    } catch (const nlohmann::json::exception &) {
+      EMIT_WARNING("msg_write: cannot serialize JSON");
       return false;
+    }
   }
-  if (!msg_write_legacy(code, std::move(s))) {
+  if ((impl->settings.proto & protocol::websockets) != 0) {
+    EMIT_WARNING("msg_write: websockets not supported");
+    return false;
+  }
+  if (!msg_write_legacy(code, std::move(msg))) {
     return false;
   }
   return true;
@@ -987,33 +976,29 @@ bool Client::msg_expect(uint8_t expected_code, std::string *s) noexcept {
 bool Client::msg_read(uint8_t *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   std::string s;
+  if ((impl->settings.proto & protocol::websockets) != 0) {
+    EMIT_WARNING("msg_read: websockets not supported");
+    return false;
+  }
   if (!msg_read_legacy(code, &s)) {
     return false;
   }
-  switch (impl->settings.proto) {
-    case NdtProtocol::proto_legacy: {
-      std::swap(s, *msg);
-      break;
-    }
-    case NdtProtocol::proto_json: {
-      nlohmann::json json;
-      try {
-        json = nlohmann::json::parse(s);
-      } catch (const nlohmann::json::exception &) {
-        EMIT_WARNING("msg_read: cannot parse JSON");
-        return false;
-      }
-      try {
-        *msg = json.at("msg");
-      } catch (const nlohmann::json::exception &) {
-        EMIT_WARNING("msg_read: cannot find 'msg' field");
-        return false;
-      }
-      break;
-    }
-    default:
-      EMIT_WARNING("msg_read: protocol not supported");
+  if ((impl->settings.proto & protocol::json) == 0) {
+    std::swap(s, *msg);
+  } else {
+    nlohmann::json json;
+    try {
+      json = nlohmann::json::parse(s);
+    } catch (const nlohmann::json::exception &) {
+      EMIT_WARNING("msg_read: cannot parse JSON");
       return false;
+    }
+    try {
+      *msg = json.at("msg");
+    } catch (const nlohmann::json::exception &) {
+      EMIT_WARNING("msg_read: cannot find 'msg' field");
+      return false;
+    }
   }
   EMIT_DEBUG("msg_read: message: " << represent(*msg));
   return true;
