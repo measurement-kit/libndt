@@ -300,7 +300,6 @@ bool Client::recv_kickoff() noexcept {
     EMIT_WARNING("recv_kickoff: recvn() failed: " << get_last_error());
     return false;
   }
-  // TODO(bassosimone): write unit test for this
   assert((Size)tot == sizeof (buf));
   if (memcmp(buf, msg_kickoff, sizeof(buf)) != 0) {
     EMIT_WARNING("recv_kickoff: invalid kickoff message");

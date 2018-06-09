@@ -1626,6 +1626,104 @@ TEST_CASE("Client::recvn() deals with too-large buffer") {
   REQUIRE(client.recvn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
 }
 
+class FailRecv : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return -1;
+  }
+};
+
+TEST_CASE("Client::recvn() deals with Client::recv() failure") {
+  char buf[1024];
+  FailRecv client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.recvn(0, buf, sizeof (buf)) == -1);
+}
+
+class RecvEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return 0;
+  }
+};
+
+TEST_CASE("Client::recvn() deals with Client::recv() EOF") {
+  char buf[1024];
+  RecvEof client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.recvn(0, buf, sizeof (buf)) == 0);
+}
+
+class PartialRecvAndThenError : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 11;
+  static constexpr libndt::Size good_amount = 3;
+  libndt::Ssize recv(libndt::Socket, void *buf,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      for (size_t i = 0; i < good_amount; ++i) {
+        ((char *)buf)[i] = 'A';
+      }
+      return good_amount;
+    }
+    return -1;
+  }
+};
+
+TEST_CASE("Client::recvn() deals with partial Client::recv() and then error") {
+  char buf[PartialRecvAndThenError::amount] = {};
+  PartialRecvAndThenError client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.recvn(0, buf, sizeof(buf)) == -1);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return -1, not a short read.
+  for (size_t i = 0; i < sizeof(buf); ++i) {
+    if (i < PartialRecvAndThenError::good_amount) {
+      REQUIRE(buf[i] == 'A');
+    } else {
+      REQUIRE(buf[i] == '\0');
+    }
+  }
+}
+
+class PartialRecvAndThenEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 7;
+  static constexpr libndt::Size good_amount = 5;
+  libndt::Ssize recv(libndt::Socket, void *buf,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      for (size_t i = 0; i < good_amount; ++i) {
+        ((char *)buf)[i] = 'B';
+      }
+      return good_amount;
+    }
+    return 0;
+  }
+};
+
+TEST_CASE("Client::recvn() deals with partial Client::recv() and then EOF") {
+  char buf[PartialRecvAndThenEof::amount] = {};
+  PartialRecvAndThenEof client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.recvn(0, buf, sizeof(buf)) == 0);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return zero, not a short read.
+  for (size_t i = 0; i < sizeof(buf); ++i) {
+    if (i < PartialRecvAndThenEof::good_amount) {
+      REQUIRE(buf[i] == 'B');
+    } else {
+      REQUIRE(buf[i] == '\0');
+    }
+  }
+}
+
 // Client::sendn() tests
 // ---------------------
 
