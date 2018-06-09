@@ -124,12 +124,13 @@ using Socket = int64_t;
 /// Type wide enough to contain `socklen_t`.
 using SockLen = int;
 
-/// Contains flags definiting what protocol to use. By default NDT uses a
-/// binary, cleartext protocol for communicating with the server.
+/// Contains flags definiting what protocol to use. Historically NDT used a
+/// binary, cleartext protocol for communicating with the server. Historically
+/// messages were raw strings framed using the binary framing.
 namespace protocol {
 
 /// When this flag is set we use JSON messages. This specifically means that
-/// we send and receive JSON messages (as opposed to binary messages).
+/// we send and receive JSON messages (as opposed to raw strings).
 constexpr uint64_t json = (1 << 0);
 
 /// When this flag is set we use TLS. This specifically means that we will
@@ -137,7 +138,7 @@ constexpr uint64_t json = (1 << 0);
 constexpr uint64_t tls = (1 << 1);
 
 /// When this flag is set we use WebSockets. This specifically means that
-/// messages (be them JSON or binary) will be wrapped by WebSockets messages.
+/// we use the WebSockets framing (as opposed to the original binary framing).
 constexpr uint64_t websockets = (1 << 2);
 
 } // namespace protocol
