@@ -1379,7 +1379,7 @@ class FailLargeSendn : public libndt::Client {
   using libndt::Client::Client;
   libndt::Ssize sendn(libndt::Socket, const void *,
                       libndt::Size siz) noexcept override {
-    return siz <= 3 ? 3 : -1;
+    return siz == 3 ? 3 : -1;
   }
 };
 
