@@ -11,7 +11,9 @@
 /catch.hpp
 /cmake_install.cmake
 /example_client
+/html
 /json.hpp
+/latex
 /libndt.a
 /rules.ninja
 /tests
