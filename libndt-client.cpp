@@ -14,7 +14,7 @@
 
 static void usage() {
   std::clog << "\n";
-  std::clog << "Usage: client [options] [<hostname>]\n";
+  std::clog << "Usage: libndt-client [options] [<hostname>]\n";
   std::clog << "\n";
   std::clog << "  --download            : run download test\n";
   std::clog << "  --download-ext        : run multi-stream download test\n";

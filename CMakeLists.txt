@@ -129,6 +129,8 @@ target_include_directories(
   ${CURL_INCLUDE_DIRS}
 )
 target_link_libraries(ndt ${CURL_LIBRARIES})
+add_executable(libndt-client libndt-client.cpp)
+target_link_libraries(libndt-client ndt)
 install(
   FILES
   libndt.hpp
@@ -140,6 +142,12 @@ install(
   ndt
   DESTINATION
   lib/measurement_kit/
+)
+install(
+  TARGETS
+  libndt-client
+  DESTINATION
+  bin
 )
 if("${WIN32}" OR "${MINGW}")
   target_link_libraries(ndt ws2_32 "${_EXTRA_LIBS}")
@@ -159,8 +167,6 @@ set(BUILD_TESTING "ON" CACHE BOOL "Whether to build tests")
 
 if(${BUILD_TESTING} AND ${LIBNDT_ENABLE_TESTS})
   enable_testing()
-  add_executable(example_client example_client.cpp)
-  target_link_libraries(example_client ndt)
   add_executable(
     tests
     curlx_test.cpp
@@ -176,11 +182,11 @@ if(${BUILD_TESTING} AND ${LIBNDT_ENABLE_TESTS})
   if(${CURL_FOUND}) # Some tests require cURL for mlab-ns
     add_test(
       NAME simple_download_test
-      COMMAND example_client --verbose --download
+      COMMAND libndt-client --verbose --download
     )
     add_test(
       NAME simple_upload_test
-      COMMAND example_client --verbose --json --upload
+      COMMAND libndt-client --verbose --json --upload
     )
   endif()
 endif()
