@@ -1609,6 +1609,30 @@ TEST_CASE(
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
 }
 
+// Client::recvn() tests
+// ---------------------
+
+#ifdef _WIN32
+#define OS_SSIZE_MAX INT_MAX
+#else
+#define OS_SSIZE_MAX SSIZE_MAX
+#endif
+
+TEST_CASE("Client::recvn() deals with too-large buffer") {
+  libndt::Client client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.recvn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
+}
+
+// Client::sendn() tests
+// ---------------------
+
+TEST_CASE("Client::sendn() deals with too-large buffer") {
+  libndt::Client client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.sendn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
+}
+
 // Client::resolve() tests
 // -----------------------
 
@@ -1675,12 +1699,6 @@ TEST_CASE("Client::get_last_error() works as expected") {
 
 // Client::recv() tests
 // --------------------
-
-#ifdef _WIN32
-#define OS_SSIZE_MAX INT_MAX
-#else
-#define OS_SSIZE_MAX SSIZE_MAX
-#endif
 
 TEST_CASE("Client::recv() deals with too-large buffer") {
   libndt::Client client;
