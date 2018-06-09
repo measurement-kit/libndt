@@ -1733,6 +1733,100 @@ TEST_CASE("Client::sendn() deals with too-large buffer") {
   REQUIRE(client.sendn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
 }
 
+class FailSend : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size) noexcept override {
+    return -1;
+  }
+};
+
+TEST_CASE("Client::sendn() deals with Client::send() failure") {
+  char buf[1024];
+  FailSend client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.sendn(0, buf, sizeof (buf)) == -1);
+}
+
+// As much as EOF should not appear on a socket when sending, be ready.
+class SendEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size) noexcept override {
+    return 0;
+  }
+};
+
+TEST_CASE("Client::sendn() deals with Client::send() EOF") {
+  char buf[1024];
+  SendEof client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.sendn(0, buf, sizeof (buf)) == 0);
+}
+
+class PartialSendAndThenError : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 11;
+  static constexpr libndt::Size good_amount = 3;
+  libndt::Size successful = 0;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      successful += good_amount;
+      return good_amount;
+    }
+    return -1;
+  }
+};
+
+TEST_CASE("Client::send() deals with partial Client::send() and then error") {
+  char buf[PartialSendAndThenError::amount] = {};
+  PartialSendAndThenError client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.sendn(0, buf, sizeof(buf)) == -1);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return -1, not a short write.
+  //
+  // Usage of `exp` is required to make clang compile (unclear to me why).
+  auto exp = PartialSendAndThenError::good_amount;
+  REQUIRE(client.successful == exp);
+}
+
+// See above comment regarding likelihood of send returning EOF (i.e. zero)
+class PartialSendAndThenEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 7;
+  static constexpr libndt::Size good_amount = 5;
+  libndt::Size successful = 0;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      successful += good_amount;
+      return good_amount;
+    }
+    return 0;
+  }
+};
+
+TEST_CASE("Client::sendn() deals with partial Client::send() and then EOF") {
+  char buf[PartialSendAndThenEof::amount] = {};
+  PartialSendAndThenEof client;
+  client.settings.verbosity = libndt::verbosity_quiet;
+  REQUIRE(client.sendn(0, buf, sizeof(buf)) == 0);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return zero, not a short write.
+  //
+  // Usage of `exp` is required to make clang compile (unclear to me why).
+  auto exp = PartialSendAndThenEof::good_amount;
+  REQUIRE(client.successful == exp);
+}
+
 // Client::resolve() tests
 // -----------------------
 
