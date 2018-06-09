@@ -31,6 +31,7 @@
 #ifdef HAVE_OPENSSL
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+#include <openssl/x509v3.h>
 #endif
 
 #include "curlx.hpp"
@@ -778,11 +779,12 @@ bool Client::connect_tcp(const std::string &hostname, const std::string &port,
       // the ai_addrlen field is always small enough.
       static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
       assert(aip->ai_addrlen <= INT_MAX);
-      if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
-        EMIT_DEBUG("connect(): okay");
+      if (maybessl_connect(  //
+              hostname, *sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
+        EMIT_DEBUG("maybessl_connect(): okay");
         break;
       }
-      EMIT_WARNING("connect() failed: " << get_last_error());
+      EMIT_WARNING("maybessl_connect() failed: " << get_last_error());
       this->closesocket(*sock);
       *sock = -1;
     }
@@ -1139,6 +1141,82 @@ bool Client::resolve(const std::string &hostname,
   return result;
 }
 
+// Utilities (SSL)
+
+int Client::maybessl_connect(const std::string &hostname, Socket fd,
+                             const sockaddr *sa, SockLen len) noexcept {
+  auto rv = this->connect(fd, sa, len);
+  if (rv == 0 && (impl->settings.proto & protocol::tls) != 0) {
+#ifdef HAVE_OPENSSL
+    SSL *ssl = nullptr;
+    {
+      SSL_CTX *ctx = ::SSL_CTX_new(SSLv23_client_method());
+      if (ctx == nullptr) {
+        EMIT_WARNING("SSL_CTX_new() failed");
+        this->closesocket(fd);
+        return -1;
+      }
+      if (impl->settings.ca_bundle_path.empty()) {
+        EMIT_WARNING("maybessl_connect: ca_bundle_path is empty");
+        ::SSL_CTX_free(ctx);
+        this->closesocket(fd);
+        return -1;
+      }
+      if (!SSL_CTX_load_verify_locations(  //
+              ctx, impl->settings.ca_bundle_path.c_str(), nullptr)) {
+        EMIT_WARNING("SSL_CTX_load_verify_locations() failed");
+        ::SSL_CTX_free(ctx);
+        this->closesocket(fd);
+        return -1;
+      }
+      EMIT_DEBUG("SSL_CTX created");
+      ssl = ::SSL_new(ctx);
+      if (ssl == nullptr) {
+        EMIT_WARNING("SSL_new() failed");
+        ::SSL_CTX_free(ctx);
+        this->closesocket(fd);
+        return -1;
+      }
+      EMIT_DEBUG("SSL created");
+      ::SSL_CTX_free(ctx);
+      impl->fd_to_ssl[fd] = ssl;
+    }
+    {
+      if (!SSL_set_fd(ssl, fd)) {
+        EMIT_WARNING("SSL_set_fd() failed");
+        this->closesocket(fd);
+        return -1;
+      }
+      SSL_set_connect_state(ssl);
+      EMIT_DEBUG("SSL bound to socket");
+    }
+    {
+      // TODO(bassosimone): the following assumes OpenSSL v1.1 or greater. It'd
+      // be better to have a solution also for LibreSSL and BoringSSL.
+      SSL_set_hostflags(ssl, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+      if (!SSL_set1_host(ssl, hostname.c_str())) {
+        EMIT_WARNING("SSL_set1_host() failed");
+        this->closesocket(fd);
+        return -1;
+      }
+      SSL_set_verify(ssl, SSL_VERIFY_PEER, nullptr);
+    }
+    if (::SSL_do_handshake(ssl) != 1) {
+      EMIT_WARNING("SSL_do_handshake() failed: ");
+      ::ERR_print_errors_fp(stderr);  // TODO(bassosimone): remove
+      this->closesocket(fd);
+      // TODO(bassosimone): correctly process SSL error here.
+      return -1;
+    }
+    EMIT_DEBUG("SSL handshake completed");
+#else
+    EMIT_WARNING("connect: SSL support not compiled in");
+    return -1;
+#endif
+  }
+  return rv;
+}
+
 // Dependencies (curl)
 
 bool Client::query_mlabns_curl(const std::string &url, long timeout,
@@ -1203,46 +1281,7 @@ Socket Client::socket(int domain, int type, int protocol) noexcept {
 }
 
 int Client::connect(Socket fd, const sockaddr *sa, SockLen len) noexcept {
-  auto rv = ::connect(AS_OS_SOCKET(fd), sa, AS_OS_SOCKLEN(len));
-#ifdef HAVE_OPENSSL
-  if (rv == 0 && (impl->settings.proto & protocol::tls) != 0) {
-    SSL_CTX *ctx = ::SSL_CTX_new(SSLv23_client_method());
-    if (ctx == nullptr) {
-      EMIT_WARNING("SSL_CTX_new() failed");
-      this->closesocket(fd);
-      return -1;
-    }
-    EMIT_DEBUG("SSL_CTX created");
-    SSL *ssl = ::SSL_new(ctx);
-    if (ssl == nullptr) {
-      EMIT_WARNING("SSL_new() failed");
-      ::SSL_CTX_free(ctx);
-      this->closesocket(fd);
-      return -1;
-    }
-    EMIT_DEBUG("SSL created");
-    ::SSL_CTX_free(ctx);
-    if (!SSL_set_fd(ssl, fd)) {
-      EMIT_WARNING("SSL_set_fd() failed");
-      ::SSL_free(ssl);
-      this->closesocket(fd);
-      return -1;
-    }
-    EMIT_DEBUG("SSL bound to socket");
-    SSL_set_connect_state(ssl);
-    if (::SSL_do_handshake(ssl) != 1) {
-      EMIT_WARNING("SSL_do_handshake() failed: ");
-      ::ERR_print_errors_fp(stderr); // TODO(bassosimone): remove
-      ::SSL_free(ssl);
-      this->closesocket(fd);
-      // TODO(bassosimone): correctly process SSL error here.
-      return -1;
-    }
-    EMIT_DEBUG("SSL handshake completed");
-    impl->fd_to_ssl[fd] = ssl;
-  }
-#endif
-  return rv;
+  return ::connect(AS_OS_SOCKET(fd), sa, AS_OS_SOCKLEN(len));
 }
 
 Ssize Client::recv(Socket fd, void *base, Size count) noexcept {

@@ -186,6 +186,11 @@ class Settings {
   /// is meant as a safeguard to prevent the test for running for much more time
   /// than anticipated, due to buffering and/or changing network conditions.
   double max_runtime = 14 /* seconds */;
+
+  /// Path to OpenSSL-compatible CA bundle. If not provided, attempts to use
+  /// the protocol::tls option will fail because there is no place from which
+  /// to load the certificate authorities, so we cannot validate certs.
+  std::string ca_bundle_path;
 };
 
 /// NDT client. In the typical usage, you just need to construct a Client,
@@ -318,6 +323,11 @@ class Client {
 
   virtual bool resolve(const std::string &hostname,
                        std::vector<std::string> *addrs) noexcept;
+
+  // Utilities (SSL)
+
+  virtual int maybessl_connect(const std::string &hostname, Socket fd,
+                               const sockaddr *sa, SockLen n) noexcept;
 
   // Dependencies (cURL)
 

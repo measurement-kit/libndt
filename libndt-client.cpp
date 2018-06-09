@@ -36,6 +36,7 @@ int main(int, char **argv) {
 
   {
     argh::parser cmdline;
+    cmdline.add_param("ca-bundle-path");
     cmdline.add_param("port");
     cmdline.parse(argv);
     for (auto &flag : cmdline.flags()) {
@@ -65,7 +66,10 @@ int main(int, char **argv) {
       }
     }
     for (auto &param : cmdline.params()) {
-      if (param.first == "port") {
+      if (param.first == "ca-bundle-path") {
+        settings.ca_bundle_path = param.second;
+        std::clog << "will use ca-bundle-path: " << param.second << std::endl;
+      } else if (param.first == "port") {
         settings.port = param.second;
         std::clog << "will use port: " << param.second << std::endl;
       } else {
