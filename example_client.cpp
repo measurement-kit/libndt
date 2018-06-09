@@ -45,7 +45,7 @@ int main(int, char **argv) {
         settings.test_suite |= libndt::nettest::download_ext;
         std::clog << "will run download-ext" << std::endl;
       } else if (flag == "json") {
-        settings.proto = libndt::NdtProtocol::proto_json;
+        settings.proto = libndt::protocol::json;
         std::clog << "will use json" << std::endl;
       } else if (flag == "upload") {
         settings.test_suite |= libndt::nettest::upload;

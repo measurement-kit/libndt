@@ -1178,7 +1178,7 @@ TEST_CASE("Client::connect_tcp() deals with Client::connect() failure") {
 TEST_CASE("Client::msg_write_login() deals with invalid protocol") {
   libndt::Settings settings;
   // That is, more precisely, a valid but unimplemented proto
-  settings.proto = libndt::NdtProtocol::proto_websockets;
+  settings.proto = libndt::protocol::websockets;
   libndt::Client client{settings};
   REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == false);
 }
@@ -1215,7 +1215,7 @@ class ValidatingMsgWriteLegacy : public libndt::Client {
 
 TEST_CASE("Client::msg_write_login() does not propagate unknown tests ids") {
   libndt::Settings settings;
-  settings.proto = libndt::NdtProtocol::proto_json;
+  settings.proto = libndt::protocol::json;
   settings.test_suite = 0xff;
   ValidatingMsgWriteLegacy client{settings};
   REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == true);
@@ -1246,7 +1246,7 @@ static std::string non_serializable() noexcept {
 
 TEST_CASE("Client::msg_write_login() deals with unserializable JSON") {
   libndt::Settings settings;
-  settings.proto = libndt::NdtProtocol::proto_json;
+  settings.proto = libndt::protocol::json;
   libndt::Client client{settings};
   auto s = non_serializable();
   REQUIRE(client.msg_write_login(s) == false);
@@ -1257,7 +1257,7 @@ TEST_CASE("Client::msg_write_login() deals with unserializable JSON") {
 
 TEST_CASE("Client::msg_write() deals with unserializable JSON") {
   libndt::Settings settings;
-  settings.proto = libndt::NdtProtocol::proto_json;
+  settings.proto = libndt::protocol::json;
   libndt::Client client{settings};
   auto s = non_serializable();
   REQUIRE(client.msg_write(libndt::msg_test_start, std::move(s)) == false);
@@ -1266,7 +1266,7 @@ TEST_CASE("Client::msg_write() deals with unserializable JSON") {
 TEST_CASE("Client::msg_write() deals with invalid protocol") {
   libndt::Settings settings;
   // That is, more precisely, a valid but unimplemented proto
-  settings.proto = libndt::NdtProtocol::proto_websockets;
+  settings.proto = libndt::protocol::websockets;
   libndt::Client client{settings};
   REQUIRE(client.msg_write(libndt::msg_test_start, "foo") == false);
 }
@@ -1449,7 +1449,7 @@ class ReadInvalidJson : public libndt::Client {
 
 TEST_CASE("Client::msg_read() deals with invalid JSON") {
   libndt::Settings settings;
-  settings.proto = libndt::NdtProtocol::proto_json;
+  settings.proto = libndt::protocol::json;
   ReadInvalidJson client{settings};
   uint8_t code = 0;
   std::string s;
@@ -1467,7 +1467,7 @@ class ReadIncompleteJson : public libndt::Client {
 
 TEST_CASE("Client::msg_read() deals with incomplete JSON") {
   libndt::Settings settings;
-  settings.proto = libndt::NdtProtocol::proto_json;
+  settings.proto = libndt::protocol::json;
   ReadIncompleteJson client{settings};
   uint8_t code = 0;
   std::string s;
@@ -1485,7 +1485,7 @@ class OkayMsgReadLegacy : public libndt::Client {
 TEST_CASE("Client::msg_read() deals with unknown protocol") {
   libndt::Settings settings;
   // That is, more precisely, a valid but unimplemented proto
-  settings.proto = libndt::NdtProtocol::proto_websockets;
+  settings.proto = libndt::protocol::websockets;
   OkayMsgReadLegacy client{settings};
   uint8_t code = 0;
   std::string s;

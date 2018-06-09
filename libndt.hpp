@@ -6,7 +6,7 @@
 
 /// \file libndt.hpp
 ///
-/// \brief Public header of measurement-kit libndt. The basic usage is a simple
+/// \brief Public header of measurement-kit/libndt. The basic usage is a simple
 /// as creating a `libndt::Client c` instance and then calling `c.run()`. More
 /// advanced usage may require you to create a subclass of `libndt::Client` and
 /// override specific virtual methods to customize the behaviour.
@@ -124,11 +124,23 @@ using Socket = int64_t;
 /// Type wide enough to contain `socklen_t`.
 using SockLen = int;
 
-enum class NdtProtocol {
-  proto_legacy = 0,
-  proto_json = 1,
-  proto_websockets = 2
-};
+/// Contains flags definiting what protocol to use. By default NDT uses a
+/// binary, cleartext protocol for communicating with the server.
+namespace protocol {
+
+/// When this flag is set we use JSON messages. This specifically means that
+/// we send and receive JSON messages (as opposed to binary messages).
+constexpr uint64_t json = (1 << 0);
+
+/// When this flag is set we use TLS. This specifically means that we will
+/// use TLS channels for the control and the measurement connections.
+constexpr uint64_t tls = (1 << 1);
+
+/// When this flag is set we use WebSockets. This specifically means that
+/// messages (be them JSON or binary) will be wrapped by WebSockets messages.
+constexpr uint64_t websockets = (1 << 2);
+
+} // namespace protocol
 
 /// NDT client settings. If you do not customize the settings when creating
 /// a Client, the defaults listed below will be used instead.
@@ -166,7 +178,7 @@ class Settings {
   /// Type of NDT protocol that you want to use. Depending on the requested
   /// protocol, you may need to change also the port. By default, NDT listens
   /// on port 3001 for in-clear communications and port 3010 for TLS ones.
-  NdtProtocol proto = NdtProtocol::proto_legacy;
+  uint64_t proto = 0;
 
   /// Maximum time for which a nettest (i.e. download) is allowed to run. After
   /// this time has elapsed, the code will stop downloading (or uploading). It
@@ -178,7 +190,7 @@ class Settings {
 /// NDT client. In the typical usage, you just need to construct a Client,
 /// optionally providing settings, and to call the run() method. More advanced
 /// usage may require you to override methods in a subclass to customize the
-/// default behavior. That is, you may want to customize `recv` and `send`
+/// default behavior. E.g., you may want to customize `recv` and `send`
 /// to record when data is received and sent to the other endpoint.
 class Client {
  public:
@@ -213,7 +225,8 @@ class Client {
   /// to write the warning onto the `std::clog` standard stream.
   virtual void on_debug(const std::string &s) noexcept;
 
-  /// Called to inform you about the measured speed. @param tid is either
+  /// Called to inform you about the measured speed. The default behavior is
+  /// to write the provided information as an info message. @param tid is either
   /// nettest_download or nettest_upload. @param nflows is the number of flows
   /// that we're using. @param measured_bytes is the number of bytes received
   /// or sent since the previous measurement. @param measurement_interval is the
@@ -229,16 +242,18 @@ class Client {
                               double measurement_interval, double elapsed,
                               double max_runtime) noexcept;
 
-  /// Called to provide you with NDT results. @param scope is either "web100",
-  /// when we're passing you Web 100 variables, "tcp_info" when we're passing
-  /// you TCP info variables, or "summary" when we're passing you summary
-  /// variables. @param name is the name of the variable. @param value is the
-  /// variable value (variables are typically int, float, or string).
+  /// Called to provide you with NDT results. The default behavior is
+  /// to write the provided information as an info message. @param scope is
+  /// either "web100", when we're passing you Web 100 variables, "tcp_info" when
+  /// we're passing you TCP info variables, or "summary" when we're passing you
+  /// summary variables. @param name is the name of the variable. @param value
+  /// is the variable value (variables are typically int, float, or string).
   virtual void on_result(std::string scope, std::string name,
                          std::string value) noexcept;
 
-  /// Called when the server is busy. @param msg is the reason why the server
-  /// is busy, encoded according to the NDT protocol.
+  /// Called when the server is busy. The default behavior is to write a
+  /// warning message. @param msg is the reason why the server is busy, encoded
+  /// according to the NDT protocol.
   virtual void on_server_busy(std::string msg) noexcept;
 
   /*
