@@ -28,6 +28,11 @@
 #include <utility>
 #include <vector>
 
+#ifdef HAVE_OPENSSL
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#endif
+
 #include "curlx.hpp"
 #include "json.hpp"
 #include "strtonum.h"
@@ -88,6 +93,9 @@ class Client::Impl {
   Socket sock = -1;
   std::vector<uint64_t> granted_suite;
   Settings settings;
+#ifdef HAVE_OPENSSL
+  std::map<Socket, SSL *> fd_to_ssl;
+#endif
 };
 
 static void random_printable_fill(char *buffer, size_t length) noexcept {
@@ -288,7 +296,7 @@ bool Client::query_mlabns() noexcept {
   }
   std::string body;
   if (!query_mlabns_curl(  //
-      impl->settings.mlabns_url, impl->settings.curl_timeout, &body)) {
+          impl->settings.mlabns_url, impl->settings.curl_timeout, &body)) {
     return false;
   }
   nlohmann::json json;
@@ -318,12 +326,12 @@ bool Client::send_login() noexcept {
 
 bool Client::recv_kickoff() noexcept {
   char buf[msg_kickoff_size];
-  Ssize tot = this->recvn(impl->sock, buf, sizeof (buf));
+  Ssize tot = this->recvn(impl->sock, buf, sizeof(buf));
   if (tot <= 0) {
     EMIT_WARNING("recv_kickoff: recvn() failed: " << get_last_error());
     return false;
   }
-  assert((Size)tot == sizeof (buf));
+  assert((Size)tot == sizeof(buf));
   if (memcmp(buf, msg_kickoff, sizeof(buf)) != 0) {
     EMIT_WARNING("recv_kickoff: invalid kickoff message");
     return false;
@@ -780,7 +788,7 @@ bool Client::connect_tcp(const std::string &hostname, const std::string &port,
     }
     this->freeaddrinfo(rp);
     if (*sock != -1) {
-      break; // we have a connection!
+      break;  // we have a connection!
     }
   }
   return *sock != -1;
@@ -795,7 +803,8 @@ bool Client::msg_write_login(const std::string &version) noexcept {
     impl->settings.test_suite &= ~nettest::middlebox;
   }
   if ((impl->settings.test_suite & nettest::simple_firewall)) {
-    EMIT_WARNING("msg_write_login(): nettest::simple_firewall: not implemented");
+    EMIT_WARNING(
+        "msg_write_login(): nettest::simple_firewall: not implemented");
     impl->settings.test_suite &= ~nettest::simple_firewall;
   }
   if ((impl->settings.test_suite & nettest::upload_ext)) {
@@ -872,12 +881,12 @@ bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
     EMIT_DEBUG("msg_write_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_write_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
-    Ssize tot = this->sendn(impl->sock, header, sizeof (header));
+    Ssize tot = this->sendn(impl->sock, header, sizeof(header));
     if (tot <= 0) {
       EMIT_WARNING("msg_write_legacy: sendn() failed: " << get_last_error());
       return false;
     }
-    assert((Size)tot == sizeof (header));
+    assert((Size)tot == sizeof(header));
     EMIT_DEBUG("msg_write_legacy: sent message header");
   }
   if (msg.size() <= 0) {
@@ -1009,12 +1018,12 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   uint16_t len = 0;
   {
     char header[3];
-    Ssize tot = this->recvn(impl->sock, header, sizeof (header));
+    Ssize tot = this->recvn(impl->sock, header, sizeof(header));
     if (tot <= 0) {
       EMIT_WARNING("msg_read_legacy: recvn() failed: " << get_last_error());
       return false;
     }
-    assert((Size)tot == sizeof (header));
+    assert((Size)tot == sizeof(header));
     EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)header[2]);
@@ -1064,11 +1073,11 @@ Ssize Client::recvn(Socket fd, void *base, Size count) noexcept {
   while (off < count) {
     Ssize n = this->recv(fd, ((char *)base) + off, count - off);
     if (n <= 0) {
-      return n; // either return full success or error, ignore partial recv
+      return n;  // either return full success or error, ignore partial recv
     }
     off += (Size)n;
   }
-  return (Ssize)off; // cast okay because of the initial check
+  return (Ssize)off;  // cast okay because of the initial check
 }
 
 Ssize Client::sendn(Socket fd, const void *base, Size count) noexcept {
@@ -1080,11 +1089,11 @@ Ssize Client::sendn(Socket fd, const void *base, Size count) noexcept {
   while (off < count) {
     Ssize n = this->send(fd, ((char *)base) + off, count - off);
     if (n <= 0) {
-      return n; // either return full success or error, ignore partial send
+      return n;  // either return full success or error, ignore partial send
     }
     off += (Size)n;
   }
-  return (Ssize)off; // cast okay because of the initial check
+  return (Ssize)off;  // cast okay because of the initial check
 }
 
 bool Client::resolve(const std::string &hostname,
@@ -1123,7 +1132,7 @@ bool Client::resolve(const std::string &hostname,
       result = false;
       break;
     }
-    addrs->push_back(address); // we only care about address
+    addrs->push_back(address);  // we only care about address
     EMIT_DEBUG("- " << address);
   }
   this->freeaddrinfo(rp);
@@ -1194,10 +1203,63 @@ Socket Client::socket(int domain, int type, int protocol) noexcept {
 }
 
 int Client::connect(Socket fd, const sockaddr *sa, SockLen len) noexcept {
-  return ::connect(AS_OS_SOCKET(fd), sa, AS_OS_SOCKLEN(len));
+  auto rv = ::connect(AS_OS_SOCKET(fd), sa, AS_OS_SOCKLEN(len));
+#ifdef HAVE_OPENSSL
+  if (rv == 0 && (impl->settings.proto & protocol::tls) != 0) {
+    SSL_CTX *ctx = ::SSL_CTX_new(SSLv23_client_method());
+    if (ctx == nullptr) {
+      EMIT_WARNING("SSL_CTX_new() failed");
+      this->closesocket(fd);
+      return -1;
+    }
+    EMIT_DEBUG("SSL_CTX created");
+    SSL *ssl = ::SSL_new(ctx);
+    if (ssl == nullptr) {
+      EMIT_WARNING("SSL_new() failed");
+      ::SSL_CTX_free(ctx);
+      this->closesocket(fd);
+      return -1;
+    }
+    EMIT_DEBUG("SSL created");
+    ::SSL_CTX_free(ctx);
+    if (!SSL_set_fd(ssl, fd)) {
+      EMIT_WARNING("SSL_set_fd() failed");
+      ::SSL_free(ssl);
+      this->closesocket(fd);
+      return -1;
+    }
+    EMIT_DEBUG("SSL bound to socket");
+    SSL_set_connect_state(ssl);
+    if (::SSL_do_handshake(ssl) != 1) {
+      EMIT_WARNING("SSL_do_handshake() failed: ");
+      ::ERR_print_errors_fp(stderr); // TODO(bassosimone): remove
+      ::SSL_free(ssl);
+      this->closesocket(fd);
+      return -1;
+    }
+    EMIT_DEBUG("SSL handshake completed");
+    impl->fd_to_ssl[fd] = ssl;
+  }
+#endif
+  return rv;
 }
 
 Ssize Client::recv(Socket fd, void *base, Size count) noexcept {
+#if HAVE_OPENSSL
+  if ((impl->settings.proto & protocol::tls) != 0) {
+    if (count > INT_MAX) {
+      set_last_error(OS_EINVAL);
+      return -1;
+    }
+    if (impl->fd_to_ssl.count(fd) <= 0) {
+      set_last_error(OS_EINVAL);
+      return -1;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    auto rv = ::SSL_read(ssl, base, count);
+    return (rv <= 0) ? -1 : (Ssize)rv;
+  }
+#endif
   if (count > OS_SSIZE_MAX) {
     set_last_error(OS_EINVAL);
     return -1;
@@ -1207,6 +1269,21 @@ Ssize Client::recv(Socket fd, void *base, Size count) noexcept {
 }
 
 Ssize Client::send(Socket fd, const void *base, Size count) noexcept {
+#if HAVE_OPENSSL
+  if ((impl->settings.proto & protocol::tls) != 0) {
+    if (count > INT_MAX) {
+      set_last_error(OS_EINVAL);
+      return -1;
+    }
+    if (impl->fd_to_ssl.count(fd) <= 0) {
+      set_last_error(OS_EINVAL);
+      return -1;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    auto rv = ::SSL_write(ssl, base, count);
+    return (rv <= 0) ? -1 : (Ssize)rv;
+  }
+#endif
   if (count > OS_SSIZE_MAX) {
     set_last_error(OS_EINVAL);
     return -1;
@@ -1220,6 +1297,13 @@ int Client::shutdown(Socket fd, int how) noexcept {
 }
 
 int Client::closesocket(Socket fd) noexcept {
+#if HAVE_OPENSSL
+  if ((impl->settings.proto & protocol::tls) != 0 &&
+      impl->fd_to_ssl.count(fd) > 0) {
+    ::SSL_free(impl->fd_to_ssl.at(fd));
+    impl->fd_to_ssl.erase(fd);
+  }
+#endif
 #ifdef _WIN32
   return ::closesocket(AS_OS_SOCKET(fd));
 #else

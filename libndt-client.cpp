@@ -20,6 +20,7 @@ static void usage() {
   std::clog << "  --download-ext        : run multi-stream download test\n";
   std::clog << "  --json                : use the JSON protocol\n";
   std::clog << "  --port <port>         : use the specified port\n";
+  std::clog << "  --tls                 : use transport layer security\n";
   std::clog << "  --upload              : run upload test\n";
   std::clog << "  --verbose             : be verbose\n";
   std::clog << "\n";
@@ -45,8 +46,12 @@ int main(int, char **argv) {
         settings.test_suite |= libndt::nettest::download_ext;
         std::clog << "will run download-ext" << std::endl;
       } else if (flag == "json") {
-        settings.proto = libndt::protocol::json;
+        settings.proto |= libndt::protocol::json;
         std::clog << "will use json" << std::endl;
+      } else if (flag == "tls") {
+        settings.proto |= libndt::protocol::tls;
+        settings.mlabns_url += "_ssl"; // Not very well documented
+        std::clog << "will use tls" << std::endl;
       } else if (flag == "upload") {
         settings.test_suite |= libndt::nettest::upload;
         std::clog << "will run upload" << std::endl;
