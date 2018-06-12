@@ -14,7 +14,7 @@
 
 static void usage() {
   std::clog << "\n";
-  std::clog << "Usage: client [options] [<hostname>]\n";
+  std::clog << "Usage: libndt-client [options] [<hostname>]\n";
   std::clog << "\n";
   std::clog << "  --download            : run download test\n";
   std::clog << "  --download-ext        : run multi-stream download test\n";
@@ -30,7 +30,9 @@ static void usage() {
 
 int main(int, char **argv) {
   using namespace measurement_kit;
-  libndt::Client client;
+  libndt::Settings settings;
+  settings.verbosity = libndt::verbosity::quiet;
+  settings.test_suite = 0; // you need to enable tests explicitly
 
   {
     argh::parser cmdline;
@@ -39,19 +41,19 @@ int main(int, char **argv) {
     cmdline.parse(argv);
     for (auto &flag : cmdline.flags()) {
       if (flag == "download") {
-        client.settings.test_suite |= libndt::nettest_download;
+        settings.test_suite |= libndt::nettest::download;
         std::clog << "will run download" << std::endl;
       } else if (flag == "download-ext") {
-        client.settings.test_suite |= libndt::nettest_download_ext;
+        settings.test_suite |= libndt::nettest::download_ext;
         std::clog << "will run download-ext" << std::endl;
       } else if (flag == "json") {
-        client.settings.proto = libndt::NdtProtocol::proto_json;
+        settings.proto = libndt::protocol::json;
         std::clog << "will use json" << std::endl;
       } else if (flag == "upload") {
-        client.settings.test_suite |= libndt::nettest_upload;
+        settings.test_suite |= libndt::nettest::upload;
         std::clog << "will run upload" << std::endl;
       } else if (flag == "verbose") {
-        client.settings.verbosity = libndt::verbosity_debug;
+        settings.verbosity = libndt::verbosity::debug;
         std::clog << "will be verbose" << std::endl;
       } else {
         std::clog << "fatal: unrecognized flag: " << flag << std::endl;
@@ -61,7 +63,7 @@ int main(int, char **argv) {
     }
     for (auto &param : cmdline.params()) {
       if (param.first == "port") {
-        client.settings.port = param.second;
+        settings.port = param.second;
         std::clog << "will use port: " << param.second << std::endl;
       } else if (param.first == "tor") {
         client.settings.socks5h_port = param.second;
@@ -78,11 +80,11 @@ int main(int, char **argv) {
       exit(EXIT_FAILURE);
     }
     if (sz == 2) {
-      client.settings.hostname = cmdline.pos_args()[1];
+      settings.hostname = cmdline.pos_args()[1];
       std::clog << "will use host: " << cmdline.pos_args()[1] << std::endl;
     } else {
       std::clog << "will find a suitable server" << std::endl;
-      client.settings.mlabns_url += "?policy=random";
+      settings.mlabns_url += "?policy=random";
     }
   }
 
@@ -105,6 +107,7 @@ int main(int, char **argv) {
   }
 #endif
 
+  libndt::Client client{settings};
   bool rv = client.run();
   return (rv) ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -35,33 +35,40 @@
 namespace measurement_kit {
 namespace libndt {
 
+// Private constants
+
+constexpr auto max_loops = 256;
+
+constexpr char msg_kickoff[] = "123456 654321";
+constexpr size_t msg_kickoff_size = sizeof(msg_kickoff) - 1;
+
 // Private utils
 
-#define EMIT_WARNING(statements)                   \
-  do {                                             \
-    if (settings.verbosity >= verbosity_warning) { \
-      std::stringstream ss;                        \
-      ss << statements;                            \
-      on_warning(ss.str());                        \
-    }                                              \
+#define EMIT_WARNING(statements)                          \
+  do {                                                    \
+    if (impl->settings.verbosity >= verbosity::warning) { \
+      std::stringstream ss;                               \
+      ss << statements;                                   \
+      on_warning(ss.str());                               \
+    }                                                     \
   } while (0)
 
-#define EMIT_INFO(statements)                   \
-  do {                                          \
-    if (settings.verbosity >= verbosity_info) { \
-      std::stringstream ss;                     \
-      ss << statements;                         \
-      on_info(ss.str());                        \
-    }                                           \
+#define EMIT_INFO(statements)                          \
+  do {                                                 \
+    if (impl->settings.verbosity >= verbosity::info) { \
+      std::stringstream ss;                            \
+      ss << statements;                                \
+      on_info(ss.str());                               \
+    }                                                  \
   } while (0)
 
-#define EMIT_DEBUG(statements)                   \
-  do {                                           \
-    if (settings.verbosity >= verbosity_debug) { \
-      std::stringstream ss;                      \
-      ss << statements;                          \
-      on_debug(ss.str());                        \
-    }                                            \
+#define EMIT_DEBUG(statements)                          \
+  do {                                                  \
+    if (impl->settings.verbosity >= verbosity::debug) { \
+      std::stringstream ss;                             \
+      ss << statements;                                 \
+      on_debug(ss.str());                               \
+    }                                                   \
   } while (0)
 
 #ifdef _WIN32
@@ -80,6 +87,7 @@ class Client::Impl {
  public:
   Socket sock = -1;
   std::vector<uint64_t> granted_suite;
+  Settings settings;
 };
 
 static void random_printable_fill(char *buffer, size_t length) noexcept {
@@ -178,6 +186,20 @@ SocketVector::~SocketVector() noexcept {
   }
 }
 
+// Constructor and destructor
+
+Client::Client() noexcept { impl.reset(new Client::Impl); }
+
+Client::Client(Settings settings) noexcept : Client::Client() {
+  std::swap(impl->settings, settings);
+}
+
+Client::~Client() noexcept {
+  if (impl->sock != -1) {
+    this->closesocket(impl->sock);
+  }
+}
+
 // Top-level API
 
 bool Client::run() noexcept {
@@ -260,12 +282,13 @@ void Client::on_server_busy(std::string msg) noexcept {
 // High-level API
 
 bool Client::query_mlabns() noexcept {
-  if (!settings.hostname.empty()) {
+  if (!impl->settings.hostname.empty()) {
     EMIT_DEBUG("no need to query mlab-ns; we have hostname");
     return true;
   }
   std::string body;
-  if (!query_mlabns_curl(settings.mlabns_url, settings.curl_timeout, &body)) {
+  if (!query_mlabns_curl(  //
+      impl->settings.mlabns_url, impl->settings.curl_timeout, &body)) {
     return false;
   }
   nlohmann::json json;
@@ -276,17 +299,18 @@ bool Client::query_mlabns() noexcept {
     return false;
   }
   try {
-    settings.hostname = json.at("fqdn");
+    impl->settings.hostname = json.at("fqdn");
   } catch (const nlohmann::json::exception &exc) {
     EMIT_WARNING("cannot access FQDN field: " << exc.what());
     return false;
   }
-  EMIT_INFO("discovered host: " << settings.hostname);
+  EMIT_INFO("discovered host: " << impl->settings.hostname);
   return true;
 }
 
 bool Client::connect() noexcept {
-  return connect_tcp_maybe_socks5(settings.hostname, settings.port,
+  return connect_tcp_maybe_socks5(impl->settings.hostname,
+                                  impl->settings.port,
                                   &impl->sock);
 }
 
@@ -296,14 +320,12 @@ bool Client::send_login() noexcept {
 
 bool Client::recv_kickoff() noexcept {
   char buf[msg_kickoff_size];
-  for (Size off = 0; off < msg_kickoff_size;) {
-    Ssize n = this->recv(impl->sock, buf + off, sizeof(buf) - off);
-    if (n <= 0) {
-      EMIT_WARNING("recv_kickoff: recv() failed: " << get_last_error());
-      return false;
-    }
-    off += (Size)n;
+  Ssize tot = this->recvn(impl->sock, buf, sizeof (buf));
+  if (tot <= 0) {
+    EMIT_WARNING("recv_kickoff: recvn() failed: " << get_last_error());
+    return false;
   }
+  assert((Size)tot == sizeof (buf));
   if (memcmp(buf, msg_kickoff, sizeof(buf)) != 0) {
     EMIT_WARNING("recv_kickoff: invalid kickoff message");
     return false;
@@ -358,20 +380,20 @@ bool Client::recv_tests_ids() noexcept {
 bool Client::run_tests() noexcept {
   for (auto &tid : impl->granted_suite) {
     switch (tid) {
-      case nettest_upload:
+      case nettest::upload:
         EMIT_INFO("running upload test");
         if (!run_upload()) {
           return false;
         }
         break;
-      case nettest_meta:
+      case nettest::meta:
         EMIT_DEBUG("running meta test");  // don't annoy the user with this
         if (!run_meta()) {
           return false;
         }
         break;
-      case nettest_download:
-      case nettest_download_ext:
+      case nettest::download:
+      case nettest::download_ext:
         EMIT_INFO("running download test");
         if (!run_download()) {
           return false;
@@ -451,7 +473,7 @@ bool Client::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
-    if (!connect_tcp_maybe_socks5(settings.hostname, port, &sock)) {
+    if (!connect_tcp_maybe_socks5(impl->settings.hostname, port, &sock)) {
       break;
     }
     dload_socks.sockets.push_back(sock);
@@ -512,13 +534,13 @@ bool Client::run_download() noexcept {
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       if (measurement_interval.count() > 0.25) {
-        on_performance(nettest_download, nflows, recent_data,
+        on_performance(nettest::download, nflows, recent_data,
                        measurement_interval.count(), elapsed.count(),
-                       settings.max_runtime);
+                       impl->settings.max_runtime);
         recent_data = 0;
         prev = now;
       }
-      if (elapsed.count() > settings.max_runtime) {
+      if (elapsed.count() > impl->settings.max_runtime) {
         EMIT_WARNING("run_download(): running for too much time");
         done = true;
       }
@@ -580,7 +602,7 @@ bool Client::run_meta() noexcept {
     return false;
   }
 
-  for (auto &kv : settings.metadata) {
+  for (auto &kv : impl->settings.metadata) {
     std::stringstream ss;
     ss << kv.first << ":" << kv.second;
     if (!msg_write(msg_test_msg, ss.str())) {
@@ -622,7 +644,7 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = -1;
-    if (!connect_tcp_maybe_socks5(settings.hostname, port, &sock)) {
+    if (!connect_tcp_maybe_socks5(impl->settings.hostname, port, &sock)) {
       return false;
     }
     upload_socks.sockets.push_back(sock);
@@ -675,13 +697,13 @@ bool Client::run_upload() noexcept {
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       if (measurement_interval.count() > 0.25) {
-        on_performance(nettest_upload, nflows, recent_data,
+        on_performance(nettest::upload, nflows, recent_data,
                        measurement_interval.count(), elapsed.count(),
-                       settings.max_runtime);
+                       impl->settings.max_runtime);
         recent_data = 0;
         prev = now;
       }
-      if (elapsed.count() > settings.max_runtime) {
+      if (elapsed.count() > impl->settings.max_runtime) {
         EMIT_WARNING("run_upload(): running for too much time");
         done = true;
       }
@@ -1002,48 +1024,44 @@ bool Client::connect_tcp(const std::string &hostname, const std::string &port,
 }
 
 bool Client::msg_write_login(const std::string &version) noexcept {
-  static_assert(sizeof(settings.test_suite) == 1, "test_suite too large");
+  static_assert(sizeof(impl->settings.test_suite) == 1, "test_suite too large");
   uint8_t code = 0;
-  settings.test_suite |= nettest_status | nettest_meta;
-  if ((settings.test_suite & nettest_middlebox)) {
-    EMIT_WARNING("msg_write_login(): nettest_middlebox: not implemented");
-    settings.test_suite &= ~nettest_middlebox;
+  impl->settings.test_suite |= nettest::status | nettest::meta;
+  if ((impl->settings.test_suite & nettest::middlebox)) {
+    EMIT_WARNING("msg_write_login(): nettest::middlebox: not implemented");
+    impl->settings.test_suite &= ~nettest::middlebox;
   }
-  if ((settings.test_suite & nettest_simple_firewall)) {
-    EMIT_WARNING("msg_write_login(): nettest_simple_firewall: not implemented");
-    settings.test_suite &= ~nettest_simple_firewall;
+  if ((impl->settings.test_suite & nettest::simple_firewall)) {
+    EMIT_WARNING("msg_write_login(): nettest::simple_firewall: not implemented");
+    impl->settings.test_suite &= ~nettest::simple_firewall;
   }
-  if ((settings.test_suite & nettest_upload_ext)) {
-    EMIT_WARNING("msg_write_login(): nettest_upload_ext: not implemented");
-    settings.test_suite &= ~nettest_upload_ext;
+  if ((impl->settings.test_suite & nettest::upload_ext)) {
+    EMIT_WARNING("msg_write_login(): nettest::upload_ext: not implemented");
+    impl->settings.test_suite &= ~nettest::upload_ext;
   }
   std::string serio;
-  switch (settings.proto) {
-    case NdtProtocol::proto_legacy: {
-      serio = std::string{(char *)&settings.test_suite,
-                          sizeof(settings.test_suite)};
-      code = msg_login;
-      break;
-    }
-    case NdtProtocol::proto_json: {
-      code = msg_extended_login;
-      nlohmann::json msg{
-          {"msg", version},
-          {"tests", std::to_string((unsigned)settings.test_suite)},
-      };
-      try {
-        serio = msg.dump();
-      } catch (nlohmann::json::exception &) {
-        EMIT_WARNING("msg_write_login: cannot serialize JSON");
-        return false;
-      }
-      break;
-    }
-    default:
-      EMIT_WARNING("msg_write_login: protocol not supported");
+  if ((impl->settings.proto & protocol::json) == 0) {
+    serio = std::string{(char *)&impl->settings.test_suite,
+                        sizeof(impl->settings.test_suite)};
+    code = msg_login;
+  } else {
+    code = msg_extended_login;
+    nlohmann::json msg{
+        {"msg", version},
+        {"tests", std::to_string((unsigned)impl->settings.test_suite)},
+    };
+    try {
+      serio = msg.dump();
+    } catch (nlohmann::json::exception &) {
+      EMIT_WARNING("msg_write_login: cannot serialize JSON");
       return false;
+    }
   }
   assert(code != 0);
+  if ((impl->settings.proto & protocol::websockets) != 0) {
+    EMIT_WARNING("msg_write_login: websockets not supported");
+    return false;
+  }
   if (!msg_write_legacy(code, std::move(serio))) {
     return false;
   }
@@ -1055,28 +1073,21 @@ bool Client::msg_write_login(const std::string &version) noexcept {
 // a different implementation depending on the actual protocol.
 bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
   EMIT_DEBUG("msg_write: message to send: " << represent(msg));
-  std::string s;
-  switch (settings.proto) {
-    case NdtProtocol::proto_legacy: {
-      std::swap(s, msg);
-      break;
-    }
-    case NdtProtocol::proto_json: {
-      nlohmann::json json;
-      json["msg"] = msg;
-      try {
-        s = json.dump();
-      } catch (const nlohmann::json::exception &) {
-        EMIT_WARNING("msg_write: cannot serialize JSON");
-        return false;
-      }
-      break;
-    }
-    default:
-      EMIT_WARNING("msg_write: protocol not supported");
+  if ((impl->settings.proto & protocol::json) != 0) {
+    nlohmann::json json;
+    json["msg"] = msg;
+    try {
+      msg = json.dump();
+    } catch (const nlohmann::json::exception &) {
+      EMIT_WARNING("msg_write: cannot serialize JSON");
       return false;
+    }
   }
-  if (!msg_write_legacy(code, std::move(s))) {
+  if ((impl->settings.proto & protocol::websockets) != 0) {
+    EMIT_WARNING("msg_write: websockets not supported");
+    return false;
+  }
+  if (!msg_write_legacy(code, std::move(msg))) {
     return false;
   }
   return true;
@@ -1098,24 +1109,24 @@ bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
     EMIT_DEBUG("msg_write_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_write_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
-    for (Size off = 0; off < sizeof(header);) {
-      Ssize n = this->send(impl->sock, header + off, sizeof(header) - off);
-      if (n <= 0) {
-        EMIT_WARNING("msg_write_legacy: send() failed: " << get_last_error());
-        return false;
-      }
-      off += (Size)n;
-    }
-    EMIT_DEBUG("msg_write_legacy: sent message header");
-  }
-  for (Size off = 0; off < msg.size();) {
-    Ssize n = this->send(impl->sock, msg.data() + off, msg.size() - off);
-    if (n <= 0) {
-      EMIT_WARNING("msg_write_legacy: send() failed: " << get_last_error());
+    Ssize tot = this->sendn(impl->sock, header, sizeof (header));
+    if (tot <= 0) {
+      EMIT_WARNING("msg_write_legacy: sendn() failed: " << get_last_error());
       return false;
     }
-    off += (Size)n;
+    assert((Size)tot == sizeof (header));
+    EMIT_DEBUG("msg_write_legacy: sent message header");
   }
+  if (msg.size() <= 0) {
+    EMIT_DEBUG("msg_write_legacy: zero length message");
+    return true;
+  }
+  Ssize tot = this->sendn(impl->sock, msg.data(), msg.size());
+  if (tot <= 0) {
+    EMIT_WARNING("msg_write_legacy: sendn() failed: " << get_last_error());
+    return false;
+  }
+  assert((Size)tot == msg.size());
   EMIT_DEBUG("msg_write_legacy: sent message body");
   return true;
 }
@@ -1202,33 +1213,29 @@ bool Client::msg_expect(uint8_t expected_code, std::string *s) noexcept {
 bool Client::msg_read(uint8_t *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   std::string s;
+  if ((impl->settings.proto & protocol::websockets) != 0) {
+    EMIT_WARNING("msg_read: websockets not supported");
+    return false;
+  }
   if (!msg_read_legacy(code, &s)) {
     return false;
   }
-  switch (settings.proto) {
-    case NdtProtocol::proto_legacy: {
-      std::swap(s, *msg);
-      break;
-    }
-    case NdtProtocol::proto_json: {
-      nlohmann::json json;
-      try {
-        json = nlohmann::json::parse(s);
-      } catch (const nlohmann::json::exception &) {
-        EMIT_WARNING("msg_read: cannot parse JSON");
-        return false;
-      }
-      try {
-        *msg = json.at("msg");
-      } catch (const nlohmann::json::exception &) {
-        EMIT_WARNING("msg_read: cannot find 'msg' field");
-        return false;
-      }
-      break;
-    }
-    default:
-      EMIT_WARNING("msg_read: protocol not supported");
+  if ((impl->settings.proto & protocol::json) == 0) {
+    std::swap(s, *msg);
+  } else {
+    nlohmann::json json;
+    try {
+      json = nlohmann::json::parse(s);
+    } catch (const nlohmann::json::exception &) {
+      EMIT_WARNING("msg_read: cannot parse JSON");
       return false;
+    }
+    try {
+      *msg = json.at("msg");
+    } catch (const nlohmann::json::exception &) {
+      EMIT_WARNING("msg_read: cannot find 'msg' field");
+      return false;
+    }
   }
   EMIT_DEBUG("msg_read: message: " << represent(*msg));
   return true;
@@ -1239,14 +1246,12 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   uint16_t len = 0;
   {
     char header[3];
-    for (Size off = 0; off < sizeof(header);) {
-      Ssize n = this->recv(impl->sock, header + off, sizeof(header) - off);
-      if (n <= 0) {
-        EMIT_WARNING("msg_read_legacy: recv() failed: " << get_last_error());
-        return false;
-      }
-      off += (Size)n;
+    Ssize tot = this->recvn(impl->sock, header, sizeof (header));
+    if (tot <= 0) {
+      EMIT_WARNING("msg_read_legacy: recvn() failed: " << get_last_error());
+      return false;
     }
+    assert((Size)tot == sizeof (header));
     EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)header[2]);
@@ -1255,26 +1260,69 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
     len = ntohs(len);
     EMIT_DEBUG("msg_read_legacy: message length: " << len);
   }
+  if (len <= 0) {
+    EMIT_DEBUG("msg_read_legacy: zero length message");
+    *msg = "";
+    return true;
+  }
   // Allocating a unique pointer and then copying into a string seems better
   // than resizing() `msg` (because that appends zero characters to the end
   // of it). Returning something more buffer-like than a string might be better
   // for efficiency but NDT messages are generally small, and the performance
   // critical path is certainly not the one with control messages.
   std::unique_ptr<char[]> buf{new char[len]};
-  for (Size off = 0; off < len;) {
-    Ssize n = this->recv(impl->sock, buf.get() + off, len - off);
-    if (n <= 0) {
-      EMIT_WARNING("msg_read_legacy: recv() failed: " << get_last_error());
-      return false;
-    }
-    off += (Size)n;
+  Ssize tot = this->recvn(impl->sock, buf.get(), len);
+  if (tot <= 0) {
+    EMIT_WARNING("msg_read_legacy: recvn() failed: " << get_last_error());
+    return false;
   }
+  assert((Size)tot == len);
   *msg = std::string{buf.get(), len};
   EMIT_DEBUG("msg_read_legacy: raw message: " << represent(*msg));
   return true;
 }
 
 // Utilities for low-level
+
+#ifdef _WIN32
+#define OS_SSIZE_MAX INT_MAX
+#define OS_EINVAL WSAEINVAL
+#else
+#define OS_SSIZE_MAX SSIZE_MAX
+#define OS_EINVAL EINVAL
+#endif
+
+Ssize Client::recvn(Socket fd, void *base, Size count) noexcept {
+  if (count > OS_SSIZE_MAX) {
+    set_last_error(OS_EINVAL);
+    return -1;
+  }
+  Size off = 0;
+  while (off < count) {
+    Ssize n = this->recv(fd, ((char *)base) + off, count - off);
+    if (n <= 0) {
+      return n; // either return full success or error, ignore partial recv
+    }
+    off += (Size)n;
+  }
+  return (Ssize)off; // cast okay because of the initial check
+}
+
+Ssize Client::sendn(Socket fd, const void *base, Size count) noexcept {
+  if (count > OS_SSIZE_MAX) {
+    set_last_error(OS_EINVAL);
+    return -1;
+  }
+  Size off = 0;
+  while (off < count) {
+    Ssize n = this->send(fd, ((char *)base) + off, count - off);
+    if (n <= 0) {
+      return n; // either return full success or error, ignore partial send
+    }
+    off += (Size)n;
+  }
+  return (Ssize)off; // cast okay because of the initial check
+}
 
 bool Client::resolve(const std::string &hostname,
                      std::vector<std::string> *addrs) noexcept {
@@ -1344,14 +1392,10 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 #define AS_OS_SOCKLEN(n) ((int)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((int)n)
-#define OS_SSIZE_MAX INT_MAX
-#define OS_EINVAL WSAEINVAL
 #else
 #define AS_OS_SOCKLEN(n) ((socklen_t)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
-#define OS_SSIZE_MAX SSIZE_MAX
-#define OS_EINVAL EINVAL
 #endif
 
 int Client::get_last_error() noexcept {
@@ -1429,16 +1473,6 @@ int Client::select(int numfd, fd_set *readset, fd_set *writeset,
 long long Client::strtonum(const char *s, long long minval, long long maxval,
                            const char **errp) noexcept {
   return ::strtonum(s, minval, maxval, errp);
-}
-
-// Constructor and destructor
-
-Client::Client() noexcept { impl.reset(new Client::Impl); }
-
-Client::~Client() noexcept {
-  if (impl->sock != -1) {
-    this->closesocket(impl->sock);
-  }
 }
 
 }  // namespace libndt

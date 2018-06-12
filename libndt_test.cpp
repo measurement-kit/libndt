@@ -39,7 +39,6 @@ class FailQueryMlabns : public libndt::Client {
 
 TEST_CASE("Client::run() deals with Client::query_mlabns() failure") {
   FailQueryMlabns client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run() == false);
 }
 
@@ -52,7 +51,6 @@ class FailConnect : public libndt::Client {
 
 TEST_CASE("Client::run() deals with Client::connect() failure") {
   FailConnect client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run() == false);
 }
 
@@ -66,7 +64,6 @@ class FailSendLogin : public libndt::Client {
 
 TEST_CASE("Client::run() deals with Client::send_login() failure") {
   FailSendLogin client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run() == false);
 }
 
@@ -81,7 +78,6 @@ class FailRecvKickoff : public libndt::Client {
 
 TEST_CASE("Client::run() deals with Client::recv_kickoff() failure") {
   FailRecvKickoff client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run() == false);
 }
 
@@ -97,7 +93,6 @@ class FailWaitInQueue : public libndt::Client {
 
 TEST_CASE("Client::run() deals with Client::wait_in_queue() failure") {
   FailWaitInQueue client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run() == false);
 }
 
@@ -114,7 +109,6 @@ class FailRecvVersion : public libndt::Client {
 
 TEST_CASE("Client::run() deals with Client::recv_version() failure") {
   FailRecvVersion client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run() == false);
 }
 
@@ -132,7 +126,6 @@ class FailRecvTestsId : public libndt::Client {
 
 TEST_CASE("Client::run() deals with Client::recv_tests_ids() failure") {
   FailRecvTestsId client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run() == false);
 }
 
@@ -151,7 +144,6 @@ class FailRunTests : public libndt::Client {
 
 TEST_CASE("Client::run() deals with Client::run_tests() failure") {
   FailRunTests client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run() == false);
 }
 
@@ -172,7 +164,6 @@ class FailRecvResultsAndLogout : public libndt::Client {
 TEST_CASE(  //
     "Client::run() deals with Client::recv_results_and_logout() failure") {
   FailRecvResultsAndLogout client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run() == false);
 }
 
@@ -193,7 +184,6 @@ class FailWaitClose : public libndt::Client {
 
 TEST_CASE("Client::run() deals with Client::wait_close() failure") {
   FailWaitClose client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run() == false);
 }
 
@@ -218,16 +208,15 @@ class FailQueryMlabnsCurl : public libndt::Client {
 };
 
 TEST_CASE("Client::query_mlabns() does nothing when we already know hostname") {
-  FailQueryMlabnsCurl client;
-  client.settings.hostname = "neubot.mlab.mlab1.trn01.measurement-lab.org";
-  client.settings.verbosity = libndt::verbosity_quiet;
+  libndt::Settings settings;
+  settings.hostname = "neubot.mlab.mlab1.trn01.measurement-lab.org";
+  FailQueryMlabnsCurl client{settings};
   REQUIRE(client.query_mlabns() == true);
 }
 
 TEST_CASE(
     "Client::query_mlabns() deals with Client::query_mlabns_curl() failure") {
   FailQueryMlabnsCurl client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.query_mlabns() == false);
 }
 
@@ -243,7 +232,6 @@ class EmptyMlabnsJson : public libndt::Client {
 
 TEST_CASE("Client::query_mlabns() deals with empty JSON") {
   EmptyMlabnsJson client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.query_mlabns() == false);
 }
 
@@ -259,7 +247,6 @@ class InvalidMlabnsJson : public libndt::Client {
 
 TEST_CASE("Client::query_mlabns() deals with invalid JSON") {
   InvalidMlabnsJson client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.query_mlabns() == false);
 }
 
@@ -275,56 +262,54 @@ class IncompleteMlabnsJson : public libndt::Client {
 
 TEST_CASE("Client::query_mlabns() deals with incomplete JSON") {
   IncompleteMlabnsJson client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.query_mlabns() == false);
 }
 
 // Client::recv_kickoff() tests
 // ----------------------------
 
-class FailRecv : public libndt::Client {
+class FailRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+  libndt::Ssize recvn(libndt::Socket, void *, libndt::Size) noexcept override {
     return -1;
   }
 };
 
-TEST_CASE("Client::recv_kickoff() deals with Client::recv() failure") {
-  FailRecv client;
-  client.settings.verbosity = libndt::verbosity_quiet;
+TEST_CASE("Client::recv_kickoff() deals with Client::recvn() failure") {
+  FailRecvn client;
   REQUIRE(client.recv_kickoff() == false);
 }
 
-class RecvEof : public libndt::Client {
+class RecvnEof : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+  libndt::Ssize recvn(libndt::Socket, void *, libndt::Size) noexcept override {
     return 0;
   }
 };
 
-TEST_CASE("Client::recv_kickoff() deals with Client::recv() EOF") {
-  RecvEof client;
-  client.settings.verbosity = libndt::verbosity_quiet;
+TEST_CASE("Client::recv_kickoff() deals with Client::recvn() EOF") {
+  RecvnEof client;
   REQUIRE(client.recv_kickoff() == false);
 }
 
-class RecvInvalidKickoff : public libndt::Client {
+class RecvnInvalidKickoff : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recv(  //
+  libndt::Ssize recvn(  //
       libndt::Socket, void *buf, libndt::Size siz) noexcept override {
     REQUIRE(buf != nullptr);
     REQUIRE(siz >= 1);
-    ((char *)buf)[0] = 'x';
-    return 1;
+    for (libndt::Size i = 0; i < siz; ++i) {
+      ((char *)buf)[i] = 'x';
+    }
+    return siz;
   }
 };
 
 TEST_CASE("Client::recv_kickoff() deals with invalid kickoff") {
-  RecvInvalidKickoff client;
-  client.settings.verbosity = libndt::verbosity_quiet;
+  RecvnInvalidKickoff client;
   REQUIRE(client.recv_kickoff() == false);
 }
 
@@ -339,7 +324,6 @@ class FailMsgExpect : public libndt::Client {
 
 TEST_CASE("Client::wait_in_queue() deals with Client::msg_expect() failure") {
   FailMsgExpect client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.wait_in_queue() == false);
 }
 
@@ -354,7 +338,6 @@ class ServerBusy : public libndt::Client {
 
 TEST_CASE("Client::wait_in_queue() fails when server is busy") {
   ServerBusy client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.wait_in_queue() == false);
 }
 
@@ -363,7 +346,6 @@ TEST_CASE("Client::wait_in_queue() fails when server is busy") {
 
 TEST_CASE("Client::recv_version() deals with Client::msg_expect() failure") {
   FailMsgExpect client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv_version() == false);
 }
 
@@ -372,7 +354,6 @@ TEST_CASE("Client::recv_version() deals with Client::msg_expect() failure") {
 
 TEST_CASE("Client::recv_tests_ids() deals with Client::msg_expect() failure") {
   FailMsgExpect client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv_tests_ids() == false);
 }
 
@@ -387,7 +368,6 @@ class InvalidTestsIds : public libndt::Client {
 
 TEST_CASE("Client::recv_tests_ids() fails with invalid tests ids") {
   InvalidTestsIds client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv_tests_ids() == false);
 }
 
@@ -411,32 +391,28 @@ class RunTestsMock : public libndt::Client {
 
 TEST_CASE("Client::run_tests() deals with Client::run_upload() failure") {
   RunTestsMock client;
-  client.settings.verbosity = libndt::verbosity_quiet;
-  client.tests_ids = std::to_string(libndt::nettest_upload);
+  client.tests_ids = std::to_string(libndt::nettest::upload);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
 
 TEST_CASE("Client::run_tests() deals with Client::run_meta() failure") {
   RunTestsMock client;
-  client.settings.verbosity = libndt::verbosity_quiet;
-  client.tests_ids = std::to_string(libndt::nettest_meta);
+  client.tests_ids = std::to_string(libndt::nettest::meta);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
 
 TEST_CASE("Client::run_tests() deals with Client::run_download() failure") {
   RunTestsMock client;
-  client.settings.verbosity = libndt::verbosity_quiet;
-  client.tests_ids = std::to_string(libndt::nettest_download);
+  client.tests_ids = std::to_string(libndt::nettest::download);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
 
 TEST_CASE("Client::run_tests() deals with unexpected test-id") {
   RunTestsMock client;
-  client.settings.verbosity = libndt::verbosity_quiet;
-  client.tests_ids = std::to_string(libndt::nettest_status);
+  client.tests_ids = std::to_string(libndt::nettest::status);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
@@ -453,7 +429,6 @@ class FailMsgRead : public libndt::Client {
 TEST_CASE(
     "Client::recv_results_and_logout() deals with Client::msg_read() failure") {
   FailMsgRead client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv_results_and_logout() == false);
 }
 
@@ -469,7 +444,6 @@ class NeitherResultsNorLogout : public libndt::Client {
 
 TEST_CASE("Client::recv_results_and_logout() deals with unexpected message") {
   NeitherResultsNorLogout client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv_results_and_logout() == false);
 }
 
@@ -485,7 +459,6 @@ class InvalidResults : public libndt::Client {
 
 TEST_CASE("Client::recv_results_and_logout() deals with invalid results") {
   InvalidResults client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv_results_and_logout() == false);
 }
 
@@ -501,7 +474,6 @@ class TooManyResults : public libndt::Client {
 
 TEST_CASE("Client::recv_results_and_logout() deals with too many results") {
   TooManyResults client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv_results_and_logout() == false);
 }
 
@@ -523,7 +495,6 @@ class SelectHardFailure : public libndt::Client {
 
 TEST_CASE("Client::wait_close() deals with Client::select() hard failure") {
   SelectHardFailure client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.wait_close() == false);
 }
 
@@ -539,7 +510,6 @@ class SelectEintr : public libndt::Client {
 
 TEST_CASE("Client::wait_close() deals with Client::select() EINTR") {
   SelectEintr client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.wait_close() == true /* Being tolerant */);
 }
 #endif
@@ -554,7 +524,6 @@ class SelectTimeout : public libndt::Client {
 
 TEST_CASE("Client::wait_close() deals with Client::select() timeout") {
   SelectTimeout client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.wait_close() == true /* Being tolerant */);
 }
 
@@ -571,7 +540,6 @@ class FailRecvAfterGoodSelect : public libndt::Client {
 
 TEST_CASE("Client::wait_close() deals with Client::recv() failure") {
   FailRecvAfterGoodSelect client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.wait_close() == false);
 }
 
@@ -590,7 +558,6 @@ TEST_CASE(
     "Client::run_download() deals with Client::msg_expect_test_prepare() "
     "failure") {
   FailMsgExpectTestPrepare client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -608,7 +575,6 @@ class FailConnectTcp : public libndt::Client {
 
 TEST_CASE("Client::run_download() deals with Client::connect_tcp() failure") {
   FailConnectTcp client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -629,7 +595,6 @@ class FailMsgExpectEmpty : public libndt::Client {
 TEST_CASE(
     "Client::run_download() deals with Client::msg_expect_empty() failure") {
   FailMsgExpectEmpty client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -653,7 +618,6 @@ class FailSelectDuringDownload : public libndt::Client {
 
 TEST_CASE("Client::run_download() deals with Client::select() failure") {
   FailSelectDuringDownload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -680,7 +644,6 @@ class FailRecvDuringDownload : public libndt::Client {
 
 TEST_CASE("Client::run_download() deals with Client::recv() failure") {
   FailRecvDuringDownload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -705,9 +668,9 @@ class RecvEofDuringDownload : public libndt::Client {
 };
 
 TEST_CASE("Client::run_download() honours max_runtime") {
-  RecvEofDuringDownload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
-  client.settings.max_runtime = 0;
+  libndt::Settings settings;
+  settings.max_runtime = 0;
+  RecvEofDuringDownload client{settings};
   REQUIRE(client.run_download() == false);
 }
 
@@ -737,7 +700,6 @@ class FailMsgReadLegacyDuringDownload : public libndt::Client {
 TEST_CASE(
     "Client::run_download() deals with Client::msg_read_legacy_failure()") {
   FailMsgReadLegacyDuringDownload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -767,7 +729,6 @@ class RecvNonTestMsgDuringDownload : public libndt::Client {
 
 TEST_CASE("Client::run_download() deals with non-msg_test_msg receipt") {
   RecvNonTestMsgDuringDownload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -798,7 +759,6 @@ class FailMsgWriteDuringDownload : public libndt::Client {
 
 TEST_CASE("Client::run_download() deals with Client::msg_write() failure") {
   FailMsgWriteDuringDownload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -830,7 +790,6 @@ class FailMsgReadDuringDownload : public libndt::Client {
 
 TEST_CASE("Client::run_download() deals with Client::msg_read() failure") {
   FailMsgReadDuringDownload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -865,7 +824,6 @@ class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
 
 TEST_CASE("Client::run_download() deals with non-logout-or-test msg") {
   RecvNonTestOrLogoutMsgDuringDownload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -901,7 +859,6 @@ class FailEmitResultDuringDownload : public libndt::Client {
 
 TEST_CASE("Client::run_download() deals with emit_result() failure") {
   FailEmitResultDuringDownload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -937,7 +894,6 @@ class TooManyTestMsgsDuringDownload : public libndt::Client {
 
 TEST_CASE("Client::run_download() deals with too many results messages") {
   TooManyTestMsgsDuringDownload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_download() == false);
 }
 
@@ -953,7 +909,6 @@ class FailFirstMsgExpectEmpty : public libndt::Client {
 TEST_CASE(
     "Client::run_meta() deals with first Client::msg_expect_empty() failure") {
   FailFirstMsgExpectEmpty client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_meta() == false);
 }
 
@@ -968,7 +923,6 @@ class FailSecondMsgExpectEmpty : public libndt::Client {
 TEST_CASE(
     "Client::run_meta() deals with second Client::msg_expect_empty() failure") {
   FailSecondMsgExpectEmpty client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_meta() == false);
 }
 
@@ -981,7 +935,6 @@ class FailMsgWriteDuringMeta : public libndt::Client {
 
 TEST_CASE("Client::run_meta() deals with Client::msg_write() failure") {
   FailMsgWriteDuringMeta client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_meta() == false);
 }
 
@@ -994,7 +947,6 @@ class FailFinalMsgWriteDuringMeta : public libndt::Client {
 
 TEST_CASE("Client::run_meta() deals with final Client::msg_write() failure") {
   FailFinalMsgWriteDuringMeta client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_meta() == false);
 }
 
@@ -1010,7 +962,6 @@ class FailFinalMsgExpectEmptyDuringMeta : public libndt::Client {
 TEST_CASE(
     "Client::run_meta() deals with final Client::msg_expect_empty() failure") {
   FailFinalMsgExpectEmptyDuringMeta client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_meta() == false);
 }
 
@@ -1021,7 +972,6 @@ TEST_CASE(
     "Client::run_upload() deals with Client::msg_expect_test_prepare() "
     "failure") {
   FailMsgExpectTestPrepare client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_upload() == false);
 }
 
@@ -1037,26 +987,22 @@ class TestPrepareMoreThanOneFlow : public libndt::Client {
 
 TEST_CASE("Client::run_upload() deals with more than one flow") {
   TestPrepareMoreThanOneFlow client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_upload() == false);
 }
 
 TEST_CASE("Client::run_upload() deals with Client::connect_tcp() failure") {
   FailConnectTcp client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_upload() == false);
 }
 
 TEST_CASE(
     "Client::run_upload() deals with Client::msg_expect_empty() failure") {
   FailMsgExpectEmpty client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_upload() == false);
 }
 
 TEST_CASE("Client::run_upload() deals with Client::select() failure") {
   FailSelectDuringDownload client;  // Works also for upload phase
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_upload() == false);
 }
 
@@ -1084,14 +1030,13 @@ class FailSendDuringUpload : public libndt::Client {
 
 TEST_CASE("Client::run_upload() deals with Client::send() failure") {
   FailSendDuringUpload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_upload() == false);
 }
 
 TEST_CASE("Client::run_upload() honours max_runtime") {
-  FailSendDuringUpload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
-  client.settings.max_runtime = 0;
+  libndt::Settings settings;
+  settings.max_runtime = 0;
+  FailSendDuringUpload client{settings};
   REQUIRE(client.run_upload() == false);
 }
 
@@ -1120,7 +1065,6 @@ class FailMsgExpectDuringUpload : public libndt::Client {
 
 TEST_CASE("Client::run_upload() deals with Client::msg_expect() failure") {
   FailMsgExpectDuringUpload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_upload() == false);
 }
 
@@ -1153,7 +1097,6 @@ TEST_CASE(
     "Client::run_upload() deals with final Client::msg_expect_empty() "
     "failure") {
   FailFinalMsgExpectEmptyDuringUpload client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.run_upload() == false);
 }
 
@@ -1163,7 +1106,6 @@ TEST_CASE(
 TEST_CASE("Client::connect_tcp() requires initial socket to be -1") {
   libndt::Client client;
   libndt::Socket sock = 21;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
 }
 
@@ -1179,7 +1121,6 @@ class FailResolve : public libndt::Client {
 TEST_CASE("Client::connect_tcp() deals with Client::resolve() failure") {
   FailResolve client;
   libndt::Socket sock = -1;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
 }
 
@@ -1201,7 +1142,6 @@ class FailGetaddrinfoInConnectTcp : public libndt::Client {
 TEST_CASE("Client::connect_tcp() deals with Client::getaddrinfo() failure") {
   FailGetaddrinfoInConnectTcp client;
   libndt::Socket sock = -1;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
 }
 
@@ -1214,7 +1154,6 @@ class FailSocket : public libndt::Client {
 TEST_CASE("Client::connect_tcp() deals with Client::socket() failure") {
   FailSocket client;
   libndt::Socket sock = -1;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
 }
 
@@ -1230,7 +1169,6 @@ class FailSocketConnect : public libndt::Client {
 TEST_CASE("Client::connect_tcp() deals with Client::connect() failure") {
   FailSocketConnect client{};
   libndt::Socket sock = -1;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
 }
 
@@ -1238,10 +1176,10 @@ TEST_CASE("Client::connect_tcp() deals with Client::connect() failure") {
 // -------------------------------
 
 TEST_CASE("Client::msg_write_login() deals with invalid protocol") {
-  libndt::Client client;
+  libndt::Settings settings;
   // That is, more precisely, a valid but unimplemented proto
-  client.settings.proto = libndt::NdtProtocol::proto_websockets;
-  client.settings.verbosity = libndt::verbosity_quiet;
+  settings.proto = libndt::protocol::websockets;
+  libndt::Client client{settings};
   REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == false);
 }
 
@@ -1256,7 +1194,6 @@ class FailMsgWriteLegacy : public libndt::Client {
 TEST_CASE(
     "Client::msg_write_login() deals with Client::msg_write_legacy() failure") {
   FailMsgWriteLegacy client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == false);
 }
 
@@ -1269,18 +1206,18 @@ class ValidatingMsgWriteLegacy : public libndt::Client {
     const char *errstr = nullptr;
     auto tests = this->strtonum(tests_string.c_str(), 0, 256, &errstr);
     REQUIRE(errstr == nullptr);
-    REQUIRE((tests & libndt::nettest_middlebox) == 0);
-    REQUIRE((tests & libndt::nettest_simple_firewall) == 0);
-    REQUIRE((tests & libndt::nettest_upload_ext) == 0);
+    REQUIRE((tests & libndt::nettest::middlebox) == 0);
+    REQUIRE((tests & libndt::nettest::simple_firewall) == 0);
+    REQUIRE((tests & libndt::nettest::upload_ext) == 0);
     return true;
   }
 };
 
 TEST_CASE("Client::msg_write_login() does not propagate unknown tests ids") {
-  ValidatingMsgWriteLegacy client;
-  client.settings.verbosity = libndt::verbosity_quiet;
-  client.settings.proto = libndt::NdtProtocol::proto_json;
-  client.settings.test_suite = 0xff;
+  libndt::Settings settings;
+  settings.proto = libndt::protocol::json;
+  settings.test_suite = 0xff;
+  ValidatingMsgWriteLegacy client{settings};
   REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == true);
 }
 
@@ -1308,10 +1245,10 @@ static std::string non_serializable() noexcept {
 }
 
 TEST_CASE("Client::msg_write_login() deals with unserializable JSON") {
-  libndt::Client client;
-  client.settings.proto = libndt::NdtProtocol::proto_json;
+  libndt::Settings settings;
+  settings.proto = libndt::protocol::json;
+  libndt::Client client{settings};
   auto s = non_serializable();
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.msg_write_login(s) == false);
 }
 
@@ -1319,24 +1256,23 @@ TEST_CASE("Client::msg_write_login() deals with unserializable JSON") {
 // -------------------------
 
 TEST_CASE("Client::msg_write() deals with unserializable JSON") {
-  libndt::Client client;
-  client.settings.proto = libndt::NdtProtocol::proto_json;
+  libndt::Settings settings;
+  settings.proto = libndt::protocol::json;
+  libndt::Client client{settings};
   auto s = non_serializable();
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.msg_write(libndt::msg_test_start, std::move(s)) == false);
 }
 
 TEST_CASE("Client::msg_write() deals with invalid protocol") {
-  libndt::Client client;
+  libndt::Settings settings;
   // That is, more precisely, a valid but unimplemented proto
-  client.settings.proto = libndt::NdtProtocol::proto_websockets;
-  client.settings.verbosity = libndt::verbosity_quiet;
+  settings.proto = libndt::protocol::websockets;
+  libndt::Client client{settings};
   REQUIRE(client.msg_write(libndt::msg_test_start, "foo") == false);
 }
 
 TEST_CASE("Client::msg_write() deals with Client::msg_write_legacy() failure") {
   FailMsgWriteLegacy client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.msg_write(libndt::msg_test_start, "foo") == false);
 }
 
@@ -1345,47 +1281,44 @@ TEST_CASE("Client::msg_write() deals with Client::msg_write_legacy() failure") {
 
 TEST_CASE("Client::msg_write_legacy() deals with too-big messages") {
   libndt::Client client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   std::string m;
   m.resize(UINT16_MAX + 1);
   REQUIRE(client.msg_write_legacy(  //
               libndt::msg_test_start, std::move(m)) == false);
 }
 
-class FailSend : public libndt::Client {
+class FailSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size) noexcept override {
+  libndt::Ssize sendn(libndt::Socket, const void *,
+                      libndt::Size) noexcept override {
     return -1;
   }
 };
 
 TEST_CASE(
-    "Client::msg_write_legacy() deals with Client::send() failure when sending "
-    "header") {
-  FailSend client;
-  client.settings.verbosity = libndt::verbosity_quiet;
+    "Client::msg_write_legacy() deals with Client::sendn() failure when "
+    "sending header") {
+  FailSendn client;
   std::string m{"foo"};
   client.set_last_error(0);
   REQUIRE(client.msg_write_legacy(  //
               libndt::msg_test_start, std::move(m)) == false);
 }
 
-class FailLargeSend : public libndt::Client {
+class FailLargeSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size siz) noexcept override {
-    return siz <= 3 ? 3 : -1;
+  libndt::Ssize sendn(libndt::Socket, const void *,
+                      libndt::Size siz) noexcept override {
+    return siz == 3 ? 3 : -1;
   }
 };
 
 TEST_CASE(
-    "Client::msg_write_legacy() deals with Client::send() failure when sending "
-    "message") {
-  FailLargeSend client;
-  client.settings.verbosity = libndt::verbosity_quiet;
+    "Client::msg_write_legacy() deals with Client::sendn() failure when "
+    "sending message") {
+  FailLargeSendn client;
   std::string m{"foobar"};
   client.set_last_error(0);
   REQUIRE(client.msg_write_legacy(  //
@@ -1399,7 +1332,6 @@ TEST_CASE(
     "Client::msg_expect_test_prepare() deals with Client::msg_expect() "
     "failure") {
   FailMsgExpect client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   std::string port;
   uint8_t nflows = 0;
   REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
@@ -1413,7 +1345,6 @@ class TooShortVector : public libndt::Client {
 
 TEST_CASE("Client::msg_expect_test_prepare() deals with too-short vector") {
   TooShortVector client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   std::string port;
   uint8_t nflows = 0;
   REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
@@ -1430,7 +1361,6 @@ class InvalidPortVector : public libndt::Client {
 
 TEST_CASE("Client::msg_expect_test_prepare() deals with invalid port") {
   InvalidPortVector client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   std::string port;
   uint8_t nflows = 0;
   REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
@@ -1447,7 +1377,6 @@ class InvalidNumFlowsVector : public libndt::Client {
 
 TEST_CASE("Client::msg_expect_test_prepare() deals with invalid num-flows") {
   InvalidNumFlowsVector client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   std::string port;
   uint8_t nflows = 0;
   REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
@@ -1459,7 +1388,6 @@ TEST_CASE("Client::msg_expect_test_prepare() deals with invalid num-flows") {
 TEST_CASE(
     "Client::msg_expect_empty() deals with Client::msg_expect() failure") {
   FailMsgExpect client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.msg_expect_empty(libndt::msg_test_start) == false);
 }
 
@@ -1474,7 +1402,6 @@ class NonEmptyMessage : public libndt::Client {
 
 TEST_CASE("Client::msg_expect_empty() deals with nonempty message") {
   NonEmptyMessage client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.msg_expect_empty(libndt::msg_test_start) == false);
 }
 
@@ -1483,14 +1410,12 @@ TEST_CASE("Client::msg_expect_empty() deals with nonempty message") {
 
 TEST_CASE("Client::msg_expect() deals with Client::msg_read() failure") {
   FailMsgRead client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   std::string s;
   REQUIRE(client.msg_expect(libndt::msg_test_start, &s) == false);
 }
 
 TEST_CASE("Client::msg_expect() deals with unexpected message") {
   NeitherResultsNorLogout client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   std::string s;
   REQUIRE(client.msg_expect(libndt::msg_logout, &s) == false);
 }
@@ -1508,7 +1433,6 @@ class FailMsgReadLegacy : public libndt::Client {
 
 TEST_CASE("Client::msg_read() deals with Client::msg_read_legacy() failure") {
   FailMsgReadLegacy client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
@@ -1524,9 +1448,9 @@ class ReadInvalidJson : public libndt::Client {
 };
 
 TEST_CASE("Client::msg_read() deals with invalid JSON") {
-  ReadInvalidJson client;
-  client.settings.verbosity = libndt::verbosity_quiet;
-  client.settings.proto = libndt::NdtProtocol::proto_json;
+  libndt::Settings settings;
+  settings.proto = libndt::protocol::json;
+  ReadInvalidJson client{settings};
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
@@ -1542,9 +1466,9 @@ class ReadIncompleteJson : public libndt::Client {
 };
 
 TEST_CASE("Client::msg_read() deals with incomplete JSON") {
-  ReadIncompleteJson client;
-  client.settings.verbosity = libndt::verbosity_quiet;
-  client.settings.proto = libndt::NdtProtocol::proto_json;
+  libndt::Settings settings;
+  settings.proto = libndt::protocol::json;
+  ReadIncompleteJson client{settings};
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
@@ -1559,10 +1483,10 @@ class OkayMsgReadLegacy : public libndt::Client {
 };
 
 TEST_CASE("Client::msg_read() deals with unknown protocol") {
-  OkayMsgReadLegacy client;
-  client.settings.verbosity = libndt::verbosity_quiet;
+  libndt::Settings settings;
   // That is, more precisely, a valid but unimplemented proto
-  client.settings.proto = libndt::NdtProtocol::proto_websockets;
+  settings.proto = libndt::protocol::websockets;
+  OkayMsgReadLegacy client{settings};
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
@@ -1574,19 +1498,18 @@ TEST_CASE("Client::msg_read() deals with unknown protocol") {
 TEST_CASE(
     "Client::msg_read_legacy() deals with Client::recv() failure when reading "
     "header") {
-  FailRecv client;
+  FailRecvn client;
   client.set_last_error(0);
-  client.settings.verbosity = libndt::verbosity_quiet;
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
 }
 
-class FailLargeRecv : public libndt::Client {
+class FailLargeRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recv(libndt::Socket, void *p,
-                     libndt::Size siz) noexcept override {
+  libndt::Ssize recvn(libndt::Socket, void *p,
+                      libndt::Size siz) noexcept override {
     if (siz == 3) {
       char *usablep = (char *)p;
       usablep[0] = libndt::msg_login;
@@ -1599,14 +1522,219 @@ class FailLargeRecv : public libndt::Client {
 };
 
 TEST_CASE(
-    "Client::msg_read_legacy() deals with Client::recv() failure when reading "
+    "Client::msg_read_legacy() deals with Client::recvn() failure when reading "
     "message") {
-  FailLargeRecv client;
+  FailLargeRecvn client;
   client.set_last_error(0);
-  client.settings.verbosity = libndt::verbosity_quiet;
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
+}
+
+// Client::recvn() tests
+// ---------------------
+
+#ifdef _WIN32
+#define OS_SSIZE_MAX INT_MAX
+#else
+#define OS_SSIZE_MAX SSIZE_MAX
+#endif
+
+TEST_CASE("Client::recvn() deals with too-large buffer") {
+  libndt::Client client;
+  REQUIRE(client.recvn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
+}
+
+class FailRecv : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return -1;
+  }
+};
+
+TEST_CASE("Client::recvn() deals with Client::recv() failure") {
+  char buf[1024];
+  FailRecv client;
+  REQUIRE(client.recvn(0, buf, sizeof (buf)) == -1);
+}
+
+class RecvEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return 0;
+  }
+};
+
+TEST_CASE("Client::recvn() deals with Client::recv() EOF") {
+  char buf[1024];
+  RecvEof client;
+  REQUIRE(client.recvn(0, buf, sizeof (buf)) == 0);
+}
+
+class PartialRecvAndThenError : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 11;
+  static constexpr libndt::Size good_amount = 3;
+  libndt::Ssize recv(libndt::Socket, void *buf,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      for (size_t i = 0; i < good_amount; ++i) {
+        ((char *)buf)[i] = 'A';
+      }
+      return good_amount;
+    }
+    return -1;
+  }
+};
+
+TEST_CASE("Client::recvn() deals with partial Client::recv() and then error") {
+  char buf[PartialRecvAndThenError::amount] = {};
+  PartialRecvAndThenError client;
+  REQUIRE(client.recvn(0, buf, sizeof(buf)) == -1);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return -1, not a short read.
+  for (size_t i = 0; i < sizeof(buf); ++i) {
+    if (i < PartialRecvAndThenError::good_amount) {
+      REQUIRE(buf[i] == 'A');
+    } else {
+      REQUIRE(buf[i] == '\0');
+    }
+  }
+}
+
+class PartialRecvAndThenEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 7;
+  static constexpr libndt::Size good_amount = 5;
+  libndt::Ssize recv(libndt::Socket, void *buf,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      for (size_t i = 0; i < good_amount; ++i) {
+        ((char *)buf)[i] = 'B';
+      }
+      return good_amount;
+    }
+    return 0;
+  }
+};
+
+TEST_CASE("Client::recvn() deals with partial Client::recv() and then EOF") {
+  char buf[PartialRecvAndThenEof::amount] = {};
+  PartialRecvAndThenEof client;
+  REQUIRE(client.recvn(0, buf, sizeof(buf)) == 0);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return zero, not a short read.
+  for (size_t i = 0; i < sizeof(buf); ++i) {
+    if (i < PartialRecvAndThenEof::good_amount) {
+      REQUIRE(buf[i] == 'B');
+    } else {
+      REQUIRE(buf[i] == '\0');
+    }
+  }
+}
+
+// Client::sendn() tests
+// ---------------------
+
+TEST_CASE("Client::sendn() deals with too-large buffer") {
+  libndt::Client client;
+  REQUIRE(client.sendn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
+}
+
+class FailSend : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size) noexcept override {
+    return -1;
+  }
+};
+
+TEST_CASE("Client::sendn() deals with Client::send() failure") {
+  char buf[1024];
+  FailSend client;
+  REQUIRE(client.sendn(0, buf, sizeof (buf)) == -1);
+}
+
+// As much as EOF should not appear on a socket when sending, be ready.
+class SendEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size) noexcept override {
+    return 0;
+  }
+};
+
+TEST_CASE("Client::sendn() deals with Client::send() EOF") {
+  char buf[1024];
+  SendEof client;
+  REQUIRE(client.sendn(0, buf, sizeof (buf)) == 0);
+}
+
+class PartialSendAndThenError : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 11;
+  static constexpr libndt::Size good_amount = 3;
+  libndt::Size successful = 0;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      successful += good_amount;
+      return good_amount;
+    }
+    return -1;
+  }
+};
+
+TEST_CASE("Client::send() deals with partial Client::send() and then error") {
+  char buf[PartialSendAndThenError::amount] = {};
+  PartialSendAndThenError client;
+  REQUIRE(client.sendn(0, buf, sizeof(buf)) == -1);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return -1, not a short write.
+  //
+  // Usage of `exp` is required to make clang compile (unclear to me why).
+  auto exp = PartialSendAndThenError::good_amount;
+  REQUIRE(client.successful == exp);
+}
+
+// See above comment regarding likelihood of send returning EOF (i.e. zero)
+class PartialSendAndThenEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 7;
+  static constexpr libndt::Size good_amount = 5;
+  libndt::Size successful = 0;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      successful += good_amount;
+      return good_amount;
+    }
+    return 0;
+  }
+};
+
+TEST_CASE("Client::sendn() deals with partial Client::send() and then EOF") {
+  char buf[PartialSendAndThenEof::amount] = {};
+  PartialSendAndThenEof client;
+  REQUIRE(client.sendn(0, buf, sizeof(buf)) == 0);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return zero, not a short write.
+  //
+  // Usage of `exp` is required to make clang compile (unclear to me why).
+  auto exp = PartialSendAndThenEof::good_amount;
+  REQUIRE(client.successful == exp);
 }
 
 // Client::resolve() tests
@@ -1624,7 +1752,6 @@ class FailGetaddrinfo : public libndt::Client {
 TEST_CASE("Client::resolve() deals with Client::getaddrinfo() failure") {
   FailGetaddrinfo client;
   std::vector<std::string> addrs;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.resolve("x.org", &addrs) == false);
 }
 
@@ -1640,7 +1767,6 @@ class FailGetnameinfo : public libndt::Client {
 TEST_CASE("Client::resolve() deals with Client::getnameinfo() failure") {
   FailGetnameinfo client;
   std::vector<std::string> addrs;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.resolve("x.org", &addrs) == false);
 }
 
@@ -1650,7 +1776,6 @@ TEST_CASE("Client::resolve() deals with Client::getnameinfo() failure") {
 #ifdef HAVE_CURL
 TEST_CASE("Client::query_mlabns_curl() deals with Curl{} failure") {
   libndt::Client client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   // Note: passing `nullptr` should cause Curl{} to fail and hence we can
   // also easily check for cases where Curl{} fails.
   REQUIRE(client.query_mlabns_curl("", 3, nullptr) == false);
@@ -1676,15 +1801,8 @@ TEST_CASE("Client::get_last_error() works as expected") {
 // Client::recv() tests
 // --------------------
 
-#ifdef _WIN32
-#define OS_SSIZE_MAX INT_MAX
-#else
-#define OS_SSIZE_MAX SSIZE_MAX
-#endif
-
 TEST_CASE("Client::recv() deals with too-large buffer") {
   libndt::Client client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.recv(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
 }
 
@@ -1693,6 +1811,5 @@ TEST_CASE("Client::recv() deals with too-large buffer") {
 
 TEST_CASE("Client::send() deals with too-large buffer") {
   libndt::Client client;
-  client.settings.verbosity = libndt::verbosity_quiet;
   REQUIRE(client.send(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
 }
