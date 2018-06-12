@@ -738,10 +738,10 @@ bool Client::run_upload() noexcept {
 bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
                                       const std::string &port,
                                       Socket *sock) noexcept {
-  if (settings.socks5h_port.empty()) {
+  if (impl->settings.socks5h_port.empty()) {
     return connect_tcp(hostname, port, sock);
   }
-  if (!connect_tcp("127.0.0.1", settings.socks5h_port, sock)) {
+  if (!connect_tcp("127.0.0.1", impl->settings.socks5h_port, sock)) {
     return false;
   }
   EMIT_INFO("socks5h: connected to proxy");
@@ -1373,8 +1373,9 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
                                std::string *body) noexcept {
 #ifdef HAVE_CURL
   std::string err = "";
-  if (!Curl{}.method_get_maybe_socks5(  //
-          settings.socks5h_port, url, timeout, body, &err)) {
+  Curl curl;
+  if (!curl.method_get_maybe_socks5(  //
+          impl->settings.socks5h_port, url, timeout, body, &err)) {
     EMIT_WARNING("cannot query mlabns: " << err);
     return false;
   }
