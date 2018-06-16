@@ -160,4 +160,13 @@ TEST_CASE("Curl::init() is idempotent") {
   REQUIRE(curl.init() == true);
 }
 
+// Curl::setopt_proxy() tests
+// --------------------------
+
+TEST_CASE("Curl::setopt_proxy() works") {
+  libndt::Curl curl;
+  REQUIRE(curl.init() == true);
+  REQUIRE(curl.setopt_proxy("socks5h://127.0.0.1:9050") == CURLE_OK);
+}
+
 #endif  // HAVE_CURL
