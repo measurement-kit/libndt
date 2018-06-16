@@ -789,8 +789,11 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       *sock = -1;
       return false;
     }
+    // Make sure with casts that we can cast `rv` to `size_t`
+    static_assert(sizeof(auth_response) < SIZE_MAX, "auth_response too big");
+    assert((Size)rv < SIZE_MAX);
     EMIT_DEBUG("socks5h: authenticated with proxy; response: "
-               << represent(std::string{auth_response, (Size)rv}));
+               << represent(std::string{auth_response, (size_t)rv}));
   }
   {
     std::string connect_request;
@@ -851,6 +854,10 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       return false;
     }
     assert((Size)rv == sizeof(connect_response_hdr));
+    // Make sure with casts that we can cast `rv` to `size_t`
+    static_assert(sizeof(connect_response_hdr) < SIZE_MAX,
+                  "connect_response_hdr too big");
+    assert((Size)rv < SIZE_MAX);
     EMIT_DEBUG("socks5h: connect_response_hdr: "
                << represent(std::string{connect_response_hdr, (size_t)rv}));
     constexpr uint8_t version = 5;
@@ -887,7 +894,8 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
           return false;
         }
         assert((Size)rv == sizeof(buf));
-        // TODO(bassosimone): log the ipv4 address
+        // TODO(bassosimone): log the ipv4 address. However tor returns a zero
+        // ipv4 and so there is little added value in logging.
         break;
       }
       case 3:  // domain
@@ -925,8 +933,9 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
           *sock = -1;
           return false;
         }
-        assert((Size)rv == sizeof (buf));
-        // TODO(bassosimone): log the ipv6 address
+        assert((Size)rv == sizeof(buf));
+        // TODO(bassosimone): log the ipv6 address. However tor returns a zero
+        // ipv6 and so there is little added value in logging.
         break;
       }
       default:
@@ -945,7 +954,7 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
         *sock = -1;
         return false;
       }
-      assert((Size)rv == sizeof (port));
+      assert((Size)rv == sizeof(port));
       port = ntohs(port);
       EMIT_DEBUG("socks5h: port number: " << port);
     }
