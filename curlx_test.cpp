@@ -9,6 +9,40 @@
 
 using namespace measurement_kit;
 
+// Curl::method_get_maybe_socks5() tests
+// -------------------------------------
+
+class FailInit : public libndt::Curl {
+ public:
+  using libndt::Curl::Curl;
+  virtual bool init() noexcept override { return false; }
+};
+
+TEST_CASE("Curl::method_get_maybe_socks5() deals with Curl::init() failure") {
+  FailInit curl;
+  std::string body;
+  std::string err;
+  REQUIRE(!curl.method_get_maybe_socks5("", "http://x.org", 1, &body, &err));
+}
+
+class FailSetoptProxy : public libndt::Curl {
+ public:
+  using libndt::Curl::Curl;
+  virtual CURLcode setopt_proxy(const std::string &) noexcept override {
+    return CURLE_UNSUPPORTED_PROTOCOL;
+  }
+};
+
+TEST_CASE(
+    "Curl::method_get_maybe_socks5() deals with Curl::setopt_proxy() failure") {
+  FailSetoptProxy curl;
+  std::string body;
+  std::string err;
+  REQUIRE(
+      !curl.method_get_maybe_socks5("9050", "http://x.org", 1, &body, &err));
+  REQUIRE(err == "cannot set proxy");
+}
+
 // Curl::method_get() tests
 // ------------------------
 
@@ -23,12 +57,6 @@ TEST_CASE("Curl::method_get() deals with null err") {
   std::string body;
   REQUIRE(curl.method_get("http://x.org", 1, &body, nullptr) == false);
 }
-
-class FailInit : public libndt::Curl {
- public:
-  using libndt::Curl::Curl;
-  virtual bool init() noexcept override { return false; }
-};
 
 TEST_CASE("Curl::method_get() deals with Curl::init() failure") {
   FailInit curl;
