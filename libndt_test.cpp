@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include <algorithm>
+#include <deque>
 #include <vector>
 
 #include "catch.hpp"
@@ -1547,6 +1548,76 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5FailAddressRecvn client{settings};
   client.type = 7;
+  libndt::Socket sock = -1;
+  REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
+}
+
+class ConnectTcpMaybeSocks5WithArray : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  libndt::Ssize sendn(libndt::Socket, const void *,
+                      libndt::Size size) noexcept override {
+    return (libndt::Ssize)size;
+  }
+  std::deque<std::string> array;
+  libndt::Ssize recvn(libndt::Socket, void *buf,
+                      libndt::Size size) noexcept override {
+    if (!array.empty() && size == array[0].size()) {
+      for (size_t idx = 0; idx < array[0].size(); ++idx) {
+        ((char *)buf)[idx] = array[0][idx];
+      }
+      array.pop_front();
+    }
+    return -1;
+  }
+};
+
+TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+          "error when failing to read domain length") {
+  libndt::Settings settings;
+  settings.socks5h_port = "9050";
+  ConnectTcpMaybeSocks5WithArray client{settings};
+  client.array = {
+    "\5\0",
+    "\5\0\0\3"
+  };
+  libndt::Socket sock = -1;
+  REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
+}
+
+TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+          "error when failing to read domain") {
+  libndt::Settings settings;
+  settings.socks5h_port = "9050";
+  ConnectTcpMaybeSocks5WithArray client{settings};
+  client.array = {
+    "\5\0",
+    "\5\0\0\3"
+    "\7"
+  };
+  libndt::Socket sock = -1;
+  REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
+}
+
+TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+          "error when failing to read port") {
+  libndt::Settings settings;
+  settings.socks5h_port = "9050";
+  ConnectTcpMaybeSocks5WithArray client{settings};
+  client.array = {
+    "\5\0",
+    "\5\0\0\3"
+    "\7"
+    "123.org"
+  };
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
 }
