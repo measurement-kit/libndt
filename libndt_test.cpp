@@ -1307,7 +1307,7 @@ class ConnectTcpMaybeSocks5FailSecondSendn : public libndt::Client {
   }
   libndt::Ssize sendn(libndt::Socket, const void *,
                       libndt::Size size) noexcept override {
-    return size == 2 ? (libndt::Ssize)size : -1;
+    return size == 3 ? (libndt::Ssize)size : -1;
   }
   libndt::Ssize recvn(libndt::Socket, void *buf,
                       libndt::Size size) noexcept override {
