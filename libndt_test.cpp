@@ -1204,7 +1204,7 @@ class ConnectTcpMaybeSocks5InvalidAuthResponseVersion : public libndt::Client {
     assert(size == 2);
     ((char *)buf)[0] = 0;
     ((char *)buf)[1] = 0;
-    return 2;
+    return (libndt::Size)size;
   }
 };
 
@@ -1237,7 +1237,7 @@ class ConnectTcpMaybeSocks5InvalidAuthResponseMethod : public libndt::Client {
     assert(size == 2);
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 1;
-    return 2;
+    return (libndt::Size)size;
   }
 };
 
