@@ -1623,6 +1623,34 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
 }
 
+TEST_CASE("Client::connect_tcp_maybe_socks5() works with IPv4 (mocked)") {
+  libndt::Settings settings;
+  settings.socks5h_port = "9050";
+  ConnectTcpMaybeSocks5WithArray client{settings};
+  client.array = {
+    std::string{"\5\0", 2},
+    std::string{"\5\0\0\1", 4},
+    std::string{"\0\0\0\0", 4},
+    std::string{"\0\0", 2},
+  };
+  libndt::Socket sock = -1;
+  REQUIRE(!!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
+}
+
+TEST_CASE("Client::connect_tcp_maybe_socks5() works with IPv6 (mocked)") {
+  libndt::Settings settings;
+  settings.socks5h_port = "9050";
+  ConnectTcpMaybeSocks5WithArray client{settings};
+  client.array = {
+    std::string{"\5\0", 2},
+    std::string{"\5\0\0\4", 4},
+    std::string{"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16},
+    std::string{"\0\0", 2},
+  };
+  libndt::Socket sock = -1;
+  REQUIRE(!!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
+}
+
 // Client::connect_tcp() tests
 // ---------------------------
 
