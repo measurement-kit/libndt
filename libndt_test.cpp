@@ -1575,6 +1575,7 @@ class ConnectTcpMaybeSocks5WithArray : public libndt::Client {
         ((char *)buf)[idx] = array[0][idx];
       }
       array.pop_front();
+      return (libndt::Ssize)size;
     }
     return -1;
   }
@@ -1586,8 +1587,8 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5WithArray client{settings};
   client.array = {
-    "\5\0",
-    "\5\0\0\3"
+    std::string{"\5\0", 2},
+    std::string{"\5\0\0\3", 4},
   };
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
@@ -1599,9 +1600,9 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5WithArray client{settings};
   client.array = {
-    "\5\0",
-    "\5\0\0\3"
-    "\7"
+    std::string{"\5\0", 2},
+    std::string{"\5\0\0\3", 4},
+    std::string{"\7", 1},
   };
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
@@ -1613,10 +1614,10 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5WithArray client{settings};
   client.array = {
-    "\5\0",
-    "\5\0\0\3"
-    "\7"
-    "123.org"
+    std::string{"\5\0", 2},
+    std::string{"\5\0\0\3", 4},
+    std::string{"\7", 1},
+    std::string{"123.org", 7},
   };
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
