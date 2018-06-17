@@ -186,6 +186,10 @@ class Settings {
   /// is meant as a safeguard to prevent the test for running for much more time
   /// than anticipated, due to buffering and/or changing network conditions.
   double max_runtime = 14 /* seconds */;
+
+  /// SOCKSv5h port to use for tunnelling traffic using, e.g., Tor. If non
+  /// empty, all DNS and TCP traffic should be tunnelled over such port.
+  std::string socks5h_port;
 };
 
 /// NDT client. In the typical usage, you just need to construct a Client,
@@ -289,6 +293,10 @@ class Client {
   virtual bool run_upload() noexcept;
 
   // Low-level API
+
+  virtual bool connect_tcp_maybe_socks5(const std::string &hostname,
+                                        const std::string &port,
+                                        Socket *sock) noexcept;
 
   virtual bool connect_tcp(const std::string &hostname, const std::string &port,
                            Socket *sock) noexcept;

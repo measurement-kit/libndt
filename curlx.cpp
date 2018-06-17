@@ -42,6 +42,25 @@ void CurlDeleter::operator()(CURL *handle) noexcept {
 
 Curl::Curl() noexcept {}
 
+bool Curl::method_get_maybe_socks5(const std::string &proxy_port,
+                                   const std::string &url, long timeout,
+                                   std::string *body,
+                                   std::string *err) noexcept {
+  if (!init()) {
+    *err = "cannot initialize cURL";
+    return false;
+  }
+  if (!proxy_port.empty()) {
+    std::stringstream ss;
+    ss << "socks5h://127.0.0.1:" << proxy_port;
+    if (setopt_proxy(ss.str()) != CURLE_OK) {
+      *err = "cannot set proxy";
+      return false;
+    }
+  }
+  return method_get(url, timeout, body, err);
+}
+
 bool Curl::method_get(const std::string &url, long timeout, std::string *body,
                       std::string *err) noexcept {
   if (body == nullptr || err == nullptr) {
@@ -80,7 +99,7 @@ bool Curl::method_get(const std::string &url, long timeout, std::string *body,
 
 bool Curl::init() noexcept {
   if (!!handle_) {
-    return false;
+    return true; // make the method idempotent
   }
   auto handle = this->easy_init();
   if (!handle) {
@@ -93,6 +112,11 @@ bool Curl::init() noexcept {
 CURLcode Curl::setopt_url(const std::string &url) noexcept {
   assert(handle_);
   return ::curl_easy_setopt(handle_.get(), CURLOPT_URL, url.c_str());
+}
+
+CURLcode Curl::setopt_proxy(const std::string &url) noexcept {
+  assert(handle_);
+  return ::curl_easy_setopt(handle_.get(), CURLOPT_PROXY, url.c_str());
 }
 
 CURLcode Curl::setopt_writefunction(size_t (*callback)(
