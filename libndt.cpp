@@ -789,7 +789,7 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       *sock = -1;
       return false;
     }
-    // Make sure with casts that we can cast `rv` to `size_t`
+    // Make sure that we can cast `rv` to `size_t`
     static_assert(sizeof(auth_response) < SIZE_MAX, "auth_response too big");
     assert((Size)rv < SIZE_MAX);
     EMIT_DEBUG("socks5h: authenticated with proxy; response: "
@@ -854,7 +854,7 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       return false;
     }
     assert((Size)rv == sizeof(connect_response_hdr));
-    // Make sure with casts that we can cast `rv` to `size_t`
+    // Make sure that we can cast `rv` to `size_t`
     static_assert(sizeof(connect_response_hdr) < SIZE_MAX,
                   "connect_response_hdr too big");
     assert((Size)rv < SIZE_MAX);
@@ -868,6 +868,7 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       return false;
     }
     if (connect_response_hdr[1] != 0) {
+      // TODO(bassosimone): map the socks5 error to a system error
       EMIT_WARNING("socks5h: connect() failed: "
                    << (unsigned)(uint8_t)connect_response_hdr[1]);
       this->closesocket(*sock);
@@ -909,7 +910,7 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
           return false;
         }
         assert((Size)rv == sizeof(len));
-        char domain[UINT8_MAX + 1];
+        char domain[UINT8_MAX + 1]; // space for final '\0'
         rv = this->recvn(*sock, domain, len);
         if (rv <= 0) {
           EMIT_WARNING("socks5h: cannot recv domain");

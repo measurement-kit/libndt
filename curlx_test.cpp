@@ -29,7 +29,7 @@ class FailSetoptProxy : public libndt::Curl {
  public:
   using libndt::Curl::Curl;
   virtual CURLcode setopt_proxy(const std::string &) noexcept override {
-    return CURLE_UNSUPPORTED_PROTOCOL;
+    return CURLE_UNSUPPORTED_PROTOCOL; // any error is okay here
   }
 };
 
