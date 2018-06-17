@@ -1245,7 +1245,84 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with invalid method "
           "number in the auth_response") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
-  ConnectTcpMaybeSocks5InvalidAuthResponseVersion client{settings};
+  ConnectTcpMaybeSocks5InvalidAuthResponseMethod client{settings};
+  libndt::Socket sock = -1;
+  REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
+}
+
+class ConnectTcpMaybeSocks5InitialHandshakeOkay : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  libndt::Ssize sendn(libndt::Socket, const void *,
+                      libndt::Size size) noexcept override {
+    return (libndt::Ssize)size;
+  }
+  libndt::Ssize recvn(libndt::Socket, void *buf,
+                      libndt::Size size) noexcept override {
+    assert(size == 2);
+    ((char *)buf)[0] = 5;
+    ((char *)buf)[1] = 0;
+    return (libndt::Size)size;
+  }
+};
+
+TEST_CASE("Client::connect_tcp_maybe_socks5() deals with too long hostname") {
+  libndt::Settings settings;
+  settings.socks5h_port = "9050";
+  ConnectTcpMaybeSocks5InitialHandshakeOkay client{settings};
+  libndt::Socket sock = -1;
+  std::string hostname;
+  for (size_t i = 0; i < 300; ++i) {
+    hostname += "A";
+  }
+  REQUIRE(!client.connect_tcp_maybe_socks5(hostname, "80", &sock));
+}
+
+TEST_CASE("Client::connect_tcp_maybe_socks5() deals with invalid port") {
+  libndt::Settings settings;
+  settings.socks5h_port = "9050";
+  ConnectTcpMaybeSocks5InitialHandshakeOkay client{settings};
+  libndt::Socket sock = -1;
+  REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "xx", &sock));
+}
+
+class ConnectTcpMaybeSocks5FailSecondSendn : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  libndt::Ssize sendn(libndt::Socket, const void *,
+                      libndt::Size size) noexcept override {
+    return size == 2 ? (libndt::Ssize)size : -1;
+  }
+  libndt::Ssize recvn(libndt::Socket, void *buf,
+                      libndt::Size size) noexcept override {
+    assert(size == 2);
+    ((char *)buf)[0] = 5;
+    ((char *)buf)[1] = 0;
+    return (libndt::Size)size;
+  }
+};
+
+TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::sendn() "
+          "error while sending connect_request") {
+  libndt::Settings settings;
+  settings.socks5h_port = "9050";
+  ConnectTcpMaybeSocks5FailSecondSendn client{settings};
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
 }
