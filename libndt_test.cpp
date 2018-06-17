@@ -1111,9 +1111,6 @@ TEST_CASE(
 class FailConnectTcp : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *) noexcept override {
     return false;
@@ -1132,9 +1129,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::connect_tcp() "
 class ConnectTcpMaybeSocks5FailFirstSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
@@ -1158,9 +1152,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::sendn() "
 class ConnectTcpMaybeSocks5FailFirstRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
@@ -1188,9 +1179,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::sendn() "
 class ConnectTcpMaybeSocks5InvalidAuthResponseVersion : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
@@ -1221,9 +1209,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with invalid version "
 class ConnectTcpMaybeSocks5InvalidAuthResponseMethod : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
@@ -1254,9 +1239,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with invalid method "
 class ConnectTcpMaybeSocks5InitialHandshakeOkay : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
@@ -1298,9 +1280,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with invalid port") {
 class ConnectTcpMaybeSocks5FailSecondSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
@@ -1331,9 +1310,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::sendn() "
 class ConnectTcpMaybeSocks5FailSecondRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
@@ -1366,9 +1342,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
 class ConnectTcpMaybeSocks5InvalidSecondVersion : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
@@ -1406,9 +1379,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with receiving "
 class ConnectTcpMaybeSocks5ErrorResult : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
@@ -1446,9 +1416,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with receiving "
 class ConnectTcpMaybeSocks5InvalidReserved : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
@@ -1487,9 +1454,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with receiving "
 class ConnectTcpMaybeSocks5FailAddressRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
@@ -1555,9 +1519,6 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
 class ConnectTcpMaybeSocks5WithArray : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
   bool connect_tcp(const std::string &, const std::string &,
                    libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
