@@ -1483,6 +1483,74 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with receiving "
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
 }
 
+class ConnectTcpMaybeSocks5FailAddressRecvn : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+  bool connect_tcp(const std::string &, const std::string &,
+                   libndt::Socket *sock) noexcept override {
+    *sock = 17 /* Something "valid" */;
+    return true;
+  }
+  libndt::Ssize sendn(libndt::Socket, const void *,
+                      libndt::Size size) noexcept override {
+    return (libndt::Ssize)size;
+  }
+  uint8_t type = 0;
+  bool seen = false;
+  libndt::Ssize recvn(libndt::Socket, void *buf,
+                      libndt::Size size) noexcept override {
+    if (size == 2) {
+      ((char *)buf)[0] = 5;
+      ((char *)buf)[1] = 0;
+      return (libndt::Size)size;
+    }
+    if (size == 4 && !seen) {
+      seen = true; // use flag because IPv4 is also 4 bytes
+      assert(type != 0);
+      ((char *)buf)[0] = 5;
+      ((char *)buf)[1] = 0;
+      ((char *)buf)[2] = 0;
+      ((char *)buf)[3] = type;
+      return (libndt::Size)size;
+    }
+    // the subsequent recvn() will fail
+    return -1;
+  }
+};
+
+TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+          "error when reading a IPv4") {
+  libndt::Settings settings;
+  settings.socks5h_port = "9050";
+  ConnectTcpMaybeSocks5FailAddressRecvn client{settings};
+  client.type = 1;
+  libndt::Socket sock = -1;
+  REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
+}
+
+TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+          "error when reading a IPv6") {
+  libndt::Settings settings;
+  settings.socks5h_port = "9050";
+  ConnectTcpMaybeSocks5FailAddressRecvn client{settings};
+  client.type = 4;
+  libndt::Socket sock = -1;
+  REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
+}
+
+TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+          "error when reading a invalid address type") {
+  libndt::Settings settings;
+  settings.socks5h_port = "9050";
+  ConnectTcpMaybeSocks5FailAddressRecvn client{settings};
+  client.type = 7;
+  libndt::Socket sock = -1;
+  REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
+}
+
 // Client::connect_tcp() tests
 // ---------------------------
 
