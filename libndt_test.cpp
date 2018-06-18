@@ -486,9 +486,9 @@ class SelectHardFailure : public libndt::Client {
   using libndt::Client::Client;
   int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
 #ifdef _WIN32
-    set_last_error(WSAEBADF);
+    set_last_system_error(WSAEBADF);
 #else
-    set_last_error(EBADF);
+    set_last_system_error(EBADF);
 #endif
     return -1;
   }
@@ -504,7 +504,7 @@ class SelectEintr : public libndt::Client {
  public:
   using libndt::Client::Client;
   int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    set_last_error(EINTR);
+    set_last_system_error(EINTR);
     return -1;
   }
 };
@@ -614,7 +614,7 @@ class FailSelectDuringDownload : public libndt::Client {
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
   int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    set_last_error(0);  // The code checks whether it's EINTR
+    set_last_system_error(0);  // The code checks whether it's EINTR
     return -1;
   }
 };
@@ -640,7 +640,7 @@ class FailRecvDuringDownload : public libndt::Client {
     return 1;
   }
   libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
-    set_last_error(0);
+    set_last_system_error(0);
     return -1;
   }
 };
@@ -1028,7 +1028,7 @@ class FailSendDuringUpload : public libndt::Client {
   }
   libndt::Ssize send(libndt::Socket, const void *,
                      libndt::Size) noexcept override {
-    set_last_error(0);  // Anything not EPIPE would cause a failure
+    set_last_system_error(0);  // Anything not EPIPE would cause a failure
     return -1;
   }
 };
@@ -1062,7 +1062,7 @@ class FailMsgExpectDuringUpload : public libndt::Client {
   }
   libndt::Ssize send(libndt::Socket, const void *,
                      libndt::Size) noexcept override {
-    set_last_error(0);  // Anything not EPIPE would cause a failure
+    set_last_system_error(0);  // Anything not EPIPE would cause a failure
     return -1;
   }
   bool msg_expect(uint8_t, std::string *) noexcept override { return false; }
@@ -1092,7 +1092,7 @@ class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
   }
   libndt::Ssize send(libndt::Socket, const void *,
                      libndt::Size) noexcept override {
-    set_last_error(0);  // Anything not EPIPE would cause a failure
+    set_last_system_error(0);  // Anything not EPIPE would cause a failure
     return -1;
   }
   bool msg_expect(uint8_t, std::string *) noexcept override { return true; }
@@ -1117,8 +1117,9 @@ class FailConnectTcp : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::connect_tcp() "
-          "error when a socks5 port is specified") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with Client::connect_tcp() "
+    "error when a socks5 port is specified") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   FailConnectTcp client{settings};
@@ -1135,13 +1136,14 @@ class ConnectTcpMaybeSocks5FailFirstSendn : public libndt::Client {
     return true;
   }
   libndt::Ssize sendn(libndt::Socket, const void *,
-                     libndt::Size) noexcept override {
+                      libndt::Size) noexcept override {
     return -1;
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::sendn() "
-          "failure when sending auth_request") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with Client::sendn() "
+    "failure when sending auth_request") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5FailFirstSendn client{settings};
@@ -1161,14 +1163,14 @@ class ConnectTcpMaybeSocks5FailFirstRecvn : public libndt::Client {
                       libndt::Size size) noexcept override {
     return (libndt::Ssize)size;
   }
-  libndt::Ssize recvn(libndt::Socket, void *,
-                      libndt::Size) noexcept override {
+  libndt::Ssize recvn(libndt::Socket, void *, libndt::Size) noexcept override {
     return -1;
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::sendn() "
-          "failure when receiving auth_response") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with Client::sendn() "
+    "failure when receiving auth_response") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5FailFirstRecvn client{settings};
@@ -1191,14 +1193,15 @@ class ConnectTcpMaybeSocks5InvalidAuthResponseVersion : public libndt::Client {
   libndt::Ssize recvn(libndt::Socket, void *buf,
                       libndt::Size size) noexcept override {
     assert(size == 2);
-    ((char *)buf)[0] = 4; // unexpected
+    ((char *)buf)[0] = 4;  // unexpected
     ((char *)buf)[1] = 0;
     return (libndt::Size)size;
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with invalid version "
-          "number in the auth_response") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with invalid version "
+    "number in the auth_response") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5InvalidAuthResponseVersion client{settings};
@@ -1227,8 +1230,9 @@ class ConnectTcpMaybeSocks5InvalidAuthResponseMethod : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with invalid method "
-          "number in the auth_response") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with invalid method "
+    "number in the auth_response") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5InvalidAuthResponseMethod client{settings};
@@ -1298,8 +1302,9 @@ class ConnectTcpMaybeSocks5FailSecondSendn : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::sendn() "
-          "error while sending connect_request") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with Client::sendn() "
+    "error while sending connect_request") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5FailSecondSendn client{settings};
@@ -1330,8 +1335,9 @@ class ConnectTcpMaybeSocks5FailSecondRecvn : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
-          "error while receiving connect_response_hdr") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+    "error while receiving connect_response_hdr") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5FailSecondRecvn client{settings};
@@ -1359,7 +1365,7 @@ class ConnectTcpMaybeSocks5InvalidSecondVersion : public libndt::Client {
       return (libndt::Size)size;
     }
     if (size == 4) {
-      ((char *)buf)[0] = 4; // unexpected
+      ((char *)buf)[0] = 4;  // unexpected
       ((char *)buf)[1] = 0;
       return (libndt::Size)size;
     }
@@ -1367,8 +1373,9 @@ class ConnectTcpMaybeSocks5InvalidSecondVersion : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with receiving "
-          "invalid version number in second Client::recvn()") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with receiving "
+    "invalid version number in second Client::recvn()") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5InvalidSecondVersion client{settings};
@@ -1397,15 +1404,16 @@ class ConnectTcpMaybeSocks5ErrorResult : public libndt::Client {
     }
     if (size == 4) {
       ((char *)buf)[0] = 5;
-      ((char *)buf)[1] = 1; // error occurred
+      ((char *)buf)[1] = 1;  // error occurred
       return (libndt::Size)size;
     }
     return -1;
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with receiving "
-          "an error code in second Client::recvn()") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with receiving "
+    "an error code in second Client::recvn()") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5ErrorResult client{settings};
@@ -1435,15 +1443,16 @@ class ConnectTcpMaybeSocks5InvalidReserved : public libndt::Client {
     if (size == 4) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      ((char *)buf)[2] = 1; // should instead be zero
+      ((char *)buf)[2] = 1;  // should instead be zero
       return (libndt::Size)size;
     }
     return -1;
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with receiving "
-          "an invalid reserved field in second Client::recvn()") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with receiving "
+    "an invalid reserved field in second Client::recvn()") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5InvalidReserved client{settings};
@@ -1473,7 +1482,7 @@ class ConnectTcpMaybeSocks5FailAddressRecvn : public libndt::Client {
       return (libndt::Size)size;
     }
     if (size == 4 && !seen) {
-      seen = true; // use flag because IPv4 is also 4 bytes
+      seen = true;  // use flag because IPv4 is also 4 bytes
       assert(type != 0);
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
@@ -1486,8 +1495,9 @@ class ConnectTcpMaybeSocks5FailAddressRecvn : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
-          "error when reading a IPv4") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+    "error when reading a IPv4") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5FailAddressRecvn client{settings};
@@ -1496,8 +1506,9 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
 }
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
-          "error when reading a IPv6") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+    "error when reading a IPv6") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5FailAddressRecvn client{settings};
@@ -1506,8 +1517,9 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
 }
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
-          "error when reading a invalid address type") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+    "error when reading a invalid address type") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5FailAddressRecvn client{settings};
@@ -1542,43 +1554,46 @@ class ConnectTcpMaybeSocks5WithArray : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
-          "error when failing to read domain length") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+    "error when failing to read domain length") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5WithArray client{settings};
   client.array = {
-    std::string{"\5\0", 2},
-    std::string{"\5\0\0\3", 4},
+      std::string{"\5\0", 2},
+      std::string{"\5\0\0\3", 4},
   };
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
 }
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
-          "error when failing to read domain") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+    "error when failing to read domain") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5WithArray client{settings};
   client.array = {
-    std::string{"\5\0", 2},
-    std::string{"\5\0\0\3", 4},
-    std::string{"\7", 1},
+      std::string{"\5\0", 2},
+      std::string{"\5\0\0\3", 4},
+      std::string{"\7", 1},
   };
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
 }
 
-TEST_CASE("Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
-          "error when failing to read port") {
+TEST_CASE(
+    "Client::connect_tcp_maybe_socks5() deals with Client::recvn() "
+    "error when failing to read port") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5WithArray client{settings};
   client.array = {
-    std::string{"\5\0", 2},
-    std::string{"\5\0\0\3", 4},
-    std::string{"\7", 1},
-    std::string{"123.org", 7},
+      std::string{"\5\0", 2},
+      std::string{"\5\0\0\3", 4},
+      std::string{"\7", 1},
+      std::string{"123.org", 7},
   };
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
@@ -1589,10 +1604,10 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() works with IPv4 (mocked)") {
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5WithArray client{settings};
   client.array = {
-    std::string{"\5\0", 2},
-    std::string{"\5\0\0\1", 4},
-    std::string{"\0\0\0\0", 4},
-    std::string{"\0\0", 2},
+      std::string{"\5\0", 2},
+      std::string{"\5\0\0\1", 4},
+      std::string{"\0\0\0\0", 4},
+      std::string{"\0\0", 2},
   };
   libndt::Socket sock = -1;
   REQUIRE(!!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
@@ -1603,10 +1618,10 @@ TEST_CASE("Client::connect_tcp_maybe_socks5() works with IPv6 (mocked)") {
   settings.socks5h_port = "9050";
   ConnectTcpMaybeSocks5WithArray client{settings};
   client.array = {
-    std::string{"\5\0", 2},
-    std::string{"\5\0\0\4", 4},
-    std::string{"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16},
-    std::string{"\0\0", 2},
+      std::string{"\5\0", 2},
+      std::string{"\5\0\0\4", 4},
+      std::string{"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16},
+      std::string{"\0\0", 2},
   };
   libndt::Socket sock = -1;
   REQUIRE(!!client.connect_tcp_maybe_socks5("www.google.com", "80", &sock));
@@ -1641,7 +1656,7 @@ class FailGetaddrinfoInConnectTcp : public libndt::Client {
   using libndt::Client::Client;
   bool resolve(const std::string &str,
                std::vector<std::string> *addrs) noexcept override {
-    REQUIRE(str == "1.2.3.4"); // make sure it did not change
+    REQUIRE(str == "1.2.3.4");  // make sure it did not change
     addrs->push_back(str);
     return true;
   }
@@ -1813,7 +1828,7 @@ TEST_CASE(
     "sending header") {
   FailSendn client;
   std::string m{"foo"};
-  client.set_last_error(0);
+  client.set_last_system_error(0);
   REQUIRE(client.msg_write_legacy(  //
               libndt::msg_test_start, std::move(m)) == false);
 }
@@ -1832,7 +1847,7 @@ TEST_CASE(
     "sending message") {
   FailLargeSendn client;
   std::string m{"foobar"};
-  client.set_last_error(0);
+  client.set_last_system_error(0);
   REQUIRE(client.msg_write_legacy(  //
               libndt::msg_test_start, std::move(m)) == false);
 }
@@ -2011,7 +2026,7 @@ TEST_CASE(
     "Client::msg_read_legacy() deals with Client::recv() failure when reading "
     "header") {
   FailRecvn client;
-  client.set_last_error(0);
+  client.set_last_system_error(0);
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
@@ -2037,7 +2052,7 @@ TEST_CASE(
     "Client::msg_read_legacy() deals with Client::recvn() failure when reading "
     "message") {
   FailLargeRecvn client;
-  client.set_last_error(0);
+  client.set_last_system_error(0);
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
@@ -2068,7 +2083,7 @@ class FailRecv : public libndt::Client {
 TEST_CASE("Client::recvn() deals with Client::recv() failure") {
   char buf[1024];
   FailRecv client;
-  REQUIRE(client.recvn(0, buf, sizeof (buf)) == -1);
+  REQUIRE(client.recvn(0, buf, sizeof(buf)) == -1);
 }
 
 class RecvEof : public libndt::Client {
@@ -2082,7 +2097,7 @@ class RecvEof : public libndt::Client {
 TEST_CASE("Client::recvn() deals with Client::recv() EOF") {
   char buf[1024];
   RecvEof client;
-  REQUIRE(client.recvn(0, buf, sizeof (buf)) == 0);
+  REQUIRE(client.recvn(0, buf, sizeof(buf)) == 0);
 }
 
 class PartialRecvAndThenError : public libndt::Client {
@@ -2171,7 +2186,7 @@ class FailSend : public libndt::Client {
 TEST_CASE("Client::sendn() deals with Client::send() failure") {
   char buf[1024];
   FailSend client;
-  REQUIRE(client.sendn(0, buf, sizeof (buf)) == -1);
+  REQUIRE(client.sendn(0, buf, sizeof(buf)) == -1);
 }
 
 // As much as EOF should not appear on a socket when sending, be ready.
@@ -2187,7 +2202,7 @@ class SendEof : public libndt::Client {
 TEST_CASE("Client::sendn() deals with Client::send() EOF") {
   char buf[1024];
   SendEof client;
-  REQUIRE(client.sendn(0, buf, sizeof (buf)) == 0);
+  REQUIRE(client.sendn(0, buf, sizeof(buf)) == 0);
 }
 
 class PartialSendAndThenError : public libndt::Client {
@@ -2294,8 +2309,8 @@ TEST_CASE("Client::query_mlabns_curl() deals with Curl{} failure") {
 }
 #endif
 
-// Client::get_last_error() tests
-// ------------------------------
+// Client::get_last_system_error() tests
+// -------------------------------------
 
 #ifdef _WIN32
 #define OS_EINVAL WSAEINVAL
@@ -2303,11 +2318,11 @@ TEST_CASE("Client::query_mlabns_curl() deals with Curl{} failure") {
 #define OS_EINVAL EINVAL
 #endif
 
-TEST_CASE("Client::get_last_error() works as expected") {
+TEST_CASE("Client::get_last_system_error() works as expected") {
   libndt::Client client;
-  client.set_last_error(OS_EINVAL);
-  REQUIRE(client.get_last_error() == OS_EINVAL);
-  client.set_last_error(0);  // clear
+  client.set_last_system_error(OS_EINVAL);
+  REQUIRE(client.get_last_system_error() == OS_EINVAL);
+  client.set_last_system_error(0);  // clear
 }
 
 // Client::recv() tests
