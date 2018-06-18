@@ -190,6 +190,11 @@ class Settings {
   /// SOCKSv5h port to use for tunnelling traffic using, e.g., Tor. If non
   /// empty, all DNS and TCP traffic should be tunnelled over such port.
   std::string socks5h_port;
+
+  /// Path to OpenSSL-compatible CA bundle. If not provided, attempts to use
+  /// the protocol::tls option will fail because there is no place from which
+  /// to load the certificate authorities, so we cannot validate certs.
+  std::string ca_bundle_path;
 };
 
 /// NDT client. In the typical usage, you just need to construct a Client,
@@ -326,6 +331,11 @@ class Client {
 
   virtual bool resolve(const std::string &hostname,
                        std::vector<std::string> *addrs) noexcept;
+
+  // Utilities (SSL)
+
+  virtual int maybessl_connect(const std::string &hostname, Socket fd,
+                               const sockaddr *sa, SockLen n) noexcept;
 
   // Dependencies (cURL)
 

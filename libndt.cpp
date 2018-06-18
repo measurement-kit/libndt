@@ -28,6 +28,12 @@
 #include <utility>
 #include <vector>
 
+#ifdef HAVE_OPENSSL
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+#endif
+
 #include "curlx.hpp"
 #include "json.hpp"
 #include "strtonum.h"
@@ -88,6 +94,9 @@ class Client::Impl {
   Socket sock = -1;
   std::vector<uint64_t> granted_suite;
   Settings settings;
+#ifdef HAVE_OPENSSL
+  std::map<Socket, SSL *> fd_to_ssl;
+#endif
 };
 
 static void random_printable_fill(char *buffer, size_t length) noexcept {
@@ -1004,11 +1013,12 @@ bool Client::connect_tcp(const std::string &hostname, const std::string &port,
       // the ai_addrlen field is always small enough.
       static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
       assert(aip->ai_addrlen <= INT_MAX);
-      if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
-        EMIT_DEBUG("connect(): okay");
+      if (maybessl_connect(  //
+              hostname, *sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
+        EMIT_DEBUG("maybessl_connect(): okay");
         break;
       }
-      EMIT_WARNING("connect() failed: " << get_last_system_error());
+      EMIT_WARNING("maybessl_connect() failed: " << get_last_system_error());
       this->closesocket(*sock);
       *sock = -1;
     }
@@ -1369,6 +1379,83 @@ bool Client::resolve(const std::string &hostname,
   return result;
 }
 
+// Utilities (SSL)
+
+int Client::maybessl_connect(const std::string &hostname, Socket fd,
+                             const sockaddr *sa, SockLen len) noexcept {
+  auto rv = this->connect(fd, sa, len);
+  if (rv == 0 && (impl->settings.proto & protocol::tls) != 0) {
+#ifdef HAVE_OPENSSL
+    SSL *ssl = nullptr;
+    {
+      SSL_CTX *ctx = ::SSL_CTX_new(SSLv23_client_method());
+      if (ctx == nullptr) {
+        EMIT_WARNING("SSL_CTX_new() failed");
+        this->closesocket(fd);
+        return -1;
+      }
+      if (impl->settings.ca_bundle_path.empty()) {
+        EMIT_WARNING("maybessl_connect: ca_bundle_path is empty");
+        ::SSL_CTX_free(ctx);
+        this->closesocket(fd);
+        return -1;
+      }
+      if (!SSL_CTX_load_verify_locations(  //
+              ctx, impl->settings.ca_bundle_path.c_str(), nullptr)) {
+        EMIT_WARNING("SSL_CTX_load_verify_locations() failed");
+        ::SSL_CTX_free(ctx);
+        this->closesocket(fd);
+        return -1;
+      }
+      EMIT_DEBUG("SSL_CTX created");
+      ssl = ::SSL_new(ctx);
+      if (ssl == nullptr) {
+        EMIT_WARNING("SSL_new() failed");
+        ::SSL_CTX_free(ctx);
+        this->closesocket(fd);
+        return -1;
+      }
+      EMIT_DEBUG("SSL created");
+      ::SSL_CTX_free(ctx);
+      impl->fd_to_ssl[fd] = ssl;
+    }
+    {
+      if (!SSL_set_fd(ssl, fd)) {
+        EMIT_WARNING("SSL_set_fd() failed");
+        this->closesocket(fd);
+        return -1;
+      }
+      SSL_set_connect_state(ssl);
+      EMIT_DEBUG("SSL bound to socket");
+    }
+    {
+      // TODO(bassosimone): the following assumes OpenSSL v1.1 or greater. It'd
+      // be better to have a solution also for LibreSSL and BoringSSL.
+      SSL_set_hostflags(ssl, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+      if (!SSL_set1_host(ssl, hostname.c_str())) {
+        EMIT_WARNING("SSL_set1_host() failed");
+        this->closesocket(fd);
+        return -1;
+      }
+      SSL_set_verify(ssl, SSL_VERIFY_PEER, nullptr);
+    }
+    if (::SSL_do_handshake(ssl) != 1) {
+      EMIT_WARNING("SSL_do_handshake() failed: ");
+      ::ERR_print_errors_fp(stderr);  // TODO(bassosimone): remove
+      this->closesocket(fd);
+      // TODO(bassosimone): correctly process SSL error here.
+      return -1;
+    }
+    EMIT_DEBUG("SSL handshake completed");
+#else
+    (void)hostname;
+    EMIT_WARNING("connect: SSL support not compiled in");
+    return -1;
+#endif
+  }
+  return rv;
+}
+
 // Dependencies (curl)
 
 uint64_t Client::get_verbosity() const noexcept {
@@ -1441,6 +1528,22 @@ int Client::connect(Socket fd, const sockaddr *sa, SockLen len) noexcept {
 }
 
 Ssize Client::recv(Socket fd, void *base, Size count) noexcept {
+#if HAVE_OPENSSL
+  if ((impl->settings.proto & protocol::tls) != 0) {
+    if (count > INT_MAX) {
+      set_last_system_error(OS_EINVAL);
+      return -1;
+    }
+    if (impl->fd_to_ssl.count(fd) <= 0) {
+      set_last_system_error(OS_EINVAL);
+      return -1;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    auto rv = ::SSL_read(ssl, base, count);
+    // TODO(bassosimone): correctly process SSL error here.
+    return (rv <= 0) ? -1 : (Ssize)rv;
+  }
+#endif
   if (count > OS_SSIZE_MAX) {
     set_last_system_error(OS_EINVAL);
     return -1;
@@ -1450,6 +1553,22 @@ Ssize Client::recv(Socket fd, void *base, Size count) noexcept {
 }
 
 Ssize Client::send(Socket fd, const void *base, Size count) noexcept {
+#if HAVE_OPENSSL
+  if ((impl->settings.proto & protocol::tls) != 0) {
+    if (count > INT_MAX) {
+      set_last_system_error(OS_EINVAL);
+      return -1;
+    }
+    if (impl->fd_to_ssl.count(fd) <= 0) {
+      set_last_system_error(OS_EINVAL);
+      return -1;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    auto rv = ::SSL_write(ssl, base, count);
+    // TODO(bassosimone): correctly process SSL error here.
+    return (rv <= 0) ? -1 : (Ssize)rv;
+  }
+#endif
   if (count > OS_SSIZE_MAX) {
     set_last_system_error(OS_EINVAL);
     return -1;
@@ -1459,10 +1578,35 @@ Ssize Client::send(Socket fd, const void *base, Size count) noexcept {
 }
 
 int Client::shutdown(Socket fd, int how) noexcept {
+#if HAVE_OPENSSL
+  if ((impl->settings.proto & protocol::tls) != 0 &&
+      impl->fd_to_ssl.count(fd) > 0) {
+    if (how != OS_SHUT_RDWR) {
+      EMIT_WARNING("shutdown: cannot partially shutdown SSL socket");
+      set_last_system_error(OS_EINVAL);
+      return -1;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    if (::SSL_shutdown(ssl) != 1) {
+      // TODO(bassosimone): correctly process SSL error here.
+      EMIT_WARNING("shutdown: SSL_shutdown: ");
+      ERR_print_errors_fp(stderr);
+      return -1;
+    }
+    return 0;
+  }
+#endif
   return ::shutdown(AS_OS_SOCKET(fd), how);
 }
 
 int Client::closesocket(Socket fd) noexcept {
+#if HAVE_OPENSSL
+  if ((impl->settings.proto & protocol::tls) != 0 &&
+      impl->fd_to_ssl.count(fd) > 0) {
+    ::SSL_free(impl->fd_to_ssl.at(fd));
+    impl->fd_to_ssl.erase(fd);
+  }
+#endif
 #ifdef _WIN32
   return ::closesocket(AS_OS_SOCKET(fd));
 #else
