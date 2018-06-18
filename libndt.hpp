@@ -187,6 +187,10 @@ class Settings {
   /// than anticipated, due to buffering and/or changing network conditions.
   double max_runtime = 14 /* seconds */;
 
+  /// SOCKSv5h port to use for tunnelling traffic using, e.g., Tor. If non
+  /// empty, all DNS and TCP traffic should be tunnelled over such port.
+  std::string socks5h_port;
+
   /// Path to OpenSSL-compatible CA bundle. If not provided, attempts to use
   /// the protocol::tls option will fail because there is no place from which
   /// to load the certificate authorities, so we cannot validate certs.
@@ -294,6 +298,10 @@ class Client {
   virtual bool run_upload() noexcept;
 
   // Low-level API
+
+  virtual bool connect_tcp_maybe_socks5(const std::string &hostname,
+                                        const std::string &port,
+                                        Socket *sock) noexcept;
 
   virtual bool connect_tcp(const std::string &hostname, const std::string &port,
                            Socket *sock) noexcept;

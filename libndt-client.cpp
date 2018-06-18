@@ -17,13 +17,15 @@ static void usage() {
   std::clog << "Usage: libndt-client [options] [<hostname>]\n";
   std::clog << "\n";
   std::clog << "  --ca-bundle-path <path> : use the specified CA bundle path\n";
-  std::clog << "  --download              : run download test\n";
-  std::clog << "  --download-ext          : run multi-stream download test\n";
-  std::clog << "  --json                  : use the JSON protocol\n";
-  std::clog << "  --port <port>           : use the specified port\n";
+  std::clog << "  --download            : run download test\n";
+  std::clog << "  --download-ext        : run multi-stream download test\n";
+  std::clog << "  --json                : use the JSON protocol\n";
+  std::clog << "  --port <port>         : use the specified port\n";
   std::clog << "  --tls                   : use transport layer security\n";
-  std::clog << "  --upload                : run upload test\n";
-  std::clog << "  --verbose               : be verbose\n";
+  std::clog
+      << "  --socks5h <port>      : use socks5h proxy at 127.0.0.1:<port>\n";
+  std::clog << "  --upload              : run upload test\n";
+  std::clog << "  --verbose             : be verbose\n";
   std::clog << "\n";
   std::clog << "If <hostname> is omitted, we pick a random server.\n";
   std::clog << std::endl;
@@ -33,12 +35,13 @@ int main(int, char **argv) {
   using namespace measurement_kit;
   libndt::Settings settings;
   settings.verbosity = libndt::verbosity::quiet;
-  settings.test_suite = 0; // you need to enable tests explicitly
+  settings.test_suite = 0;  // you need to enable tests explicitly
 
   {
     argh::parser cmdline;
     cmdline.add_param("ca-bundle-path");
     cmdline.add_param("port");
+    cmdline.add_param("socks5h");
     cmdline.parse(argv);
     for (auto &flag : cmdline.flags()) {
       if (flag == "download") {
@@ -73,6 +76,10 @@ int main(int, char **argv) {
       } else if (param.first == "port") {
         settings.port = param.second;
         std::clog << "will use port: " << param.second << std::endl;
+      } else if (param.first == "socks5h") {
+        settings.socks5h_port = param.second;
+        std::clog << "will use socks5h proxy at: 127.0.0.1:" << param.second
+                  << std::endl;
       } else {
         std::clog << "fatal: unrecognized param: " << param.first << std::endl;
         usage();

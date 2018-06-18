@@ -26,6 +26,10 @@ class Curl {
 
   Curl() noexcept;
 
+  bool method_get_maybe_socks5(const std::string &proxy_port,
+                               const std::string &url, long timeout,
+                               std::string *body, std::string *err) noexcept;
+
   bool method_get(const std::string &url, long timeout, std::string *body,
                   std::string *err) noexcept;
 
@@ -34,6 +38,8 @@ class Curl {
   virtual bool init() noexcept;
 
   virtual CURLcode setopt_url(const std::string &url) noexcept;
+
+  virtual CURLcode setopt_proxy(const std::string &url) noexcept;
 
   virtual CURLcode setopt_writefunction(size_t (*callback)(
       char *ptr, size_t size, size_t nmemb, void *userdata)) noexcept;
