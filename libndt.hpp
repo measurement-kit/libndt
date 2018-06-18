@@ -26,11 +26,15 @@
 
 #ifndef _WIN32
 #include <sys/select.h>
+#include <sys/socket.h>
 #else
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #endif
 
+#ifndef _WIN32
+#include <netdb.h>
+#endif
 #include <stddef.h>
 #include <stdint.h>  // IWYU pragma: export
 
@@ -38,10 +42,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
-struct addrinfo;
-struct sockaddr;
-struct timeval;
 
 /// Contains measurement-kit code.
 namespace measurement_kit {
