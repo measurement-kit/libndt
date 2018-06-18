@@ -58,7 +58,7 @@ namespace version {
 constexpr uint64_t api_major = 0;
 
 /// Minor API version number of measurement-kit/libndt.
-constexpr uint64_t api_minor = 22;
+constexpr uint64_t api_minor = 23;
 
 /// Patch API version number of measurement-kit/libndt.
 constexpr uint64_t api_patch = 0;
