@@ -19,10 +19,10 @@ class FailInit : public libndt::Curl {
 };
 
 TEST_CASE("Curl::method_get_maybe_socks5() deals with Curl::init() failure") {
-  FailInit curl;
+  libndt::Client client;
+  FailInit curl{&client};
   std::string body;
-  std::string err;
-  REQUIRE(!curl.method_get_maybe_socks5("", "http://x.org", 1, &body, &err));
+  REQUIRE(!curl.method_get_maybe_socks5("", "http://x.org", 1, &body));
 }
 
 class FailSetoptProxy : public libndt::Curl {
@@ -35,34 +35,27 @@ class FailSetoptProxy : public libndt::Curl {
 
 TEST_CASE(
     "Curl::method_get_maybe_socks5() deals with Curl::setopt_proxy() failure") {
-  FailSetoptProxy curl;
+  libndt::Client client;
+  FailSetoptProxy curl{&client};
   std::string body;
-  std::string err;
   REQUIRE(
-      !curl.method_get_maybe_socks5("9050", "http://x.org", 1, &body, &err));
-  REQUIRE(err == "cannot set proxy");
+      !curl.method_get_maybe_socks5("9050", "http://x.org", 1, &body));
 }
 
 // Curl::method_get() tests
 // ------------------------
 
 TEST_CASE("Curl::method_get() deals with null body") {
-  libndt::Curl curl;
-  std::string err;
-  REQUIRE(curl.method_get("http://x.org", 1, nullptr, &err) == false);
-}
-
-TEST_CASE("Curl::method_get() deals with null err") {
-  libndt::Curl curl;
-  std::string body;
-  REQUIRE(curl.method_get("http://x.org", 1, &body, nullptr) == false);
+  libndt::Client client;
+  libndt::Curl curl{&client};
+  REQUIRE(curl.method_get("http://x.org", 1, nullptr) == false);
 }
 
 TEST_CASE("Curl::method_get() deals with Curl::init() failure") {
-  FailInit curl;
+  libndt::Client client;
+  FailInit curl{&client};
   std::string body;
-  std::string err;
-  REQUIRE(curl.method_get("http://x.org", 1, &body, &err) == false);
+  REQUIRE(curl.method_get("http://x.org", 1, &body) == false);
 }
 
 class FailSetoptUrl : public libndt::Curl {
@@ -74,10 +67,10 @@ class FailSetoptUrl : public libndt::Curl {
 };
 
 TEST_CASE("Curl::method_get() deals with Curl::setopt_url() failure") {
-  FailSetoptUrl curl;
+  libndt::Client client;
+  FailSetoptUrl curl{&client};
   std::string body;
-  std::string err;
-  REQUIRE(curl.method_get("http://x.org", 1, &body, &err) == false);
+  REQUIRE(curl.method_get("http://x.org", 1, &body) == false);
 }
 
 class FailSetoptWritefunction : public libndt::Curl {
@@ -91,10 +84,10 @@ class FailSetoptWritefunction : public libndt::Curl {
 
 TEST_CASE(  //
     "Curl::method_get() deals with Curl::setopt_writefunction() failure") {
-  FailSetoptWritefunction curl;
+  libndt::Client client;
+  FailSetoptWritefunction curl{&client};
   std::string body;
-  std::string err;
-  REQUIRE(curl.method_get("http://x.org", 1, &body, &err) == false);
+  REQUIRE(curl.method_get("http://x.org", 1, &body) == false);
 }
 
 class FailSetoptWritedata : public libndt::Curl {
@@ -106,10 +99,10 @@ class FailSetoptWritedata : public libndt::Curl {
 };
 
 TEST_CASE("Curl::method_get() deals with Curl::setopt_writedata() failure") {
-  FailSetoptWritedata curl;
+  libndt::Client client;
+  FailSetoptWritedata curl{&client};
   std::string body;
-  std::string err;
-  REQUIRE(curl.method_get("http://x.org", 1, &body, &err) == false);
+  REQUIRE(curl.method_get("http://x.org", 1, &body) == false);
 }
 
 class FailSetoptTimeout : public libndt::Curl {
@@ -121,10 +114,10 @@ class FailSetoptTimeout : public libndt::Curl {
 };
 
 TEST_CASE("Curl::method_get() deals with Curl::setopt_timeout() failure") {
-  FailSetoptTimeout curl;
+  libndt::Client client;
+  FailSetoptTimeout curl{&client};
   std::string body;
-  std::string err;
-  REQUIRE(curl.method_get("http://x.org", 1, &body, &err) == false);
+  REQUIRE(curl.method_get("http://x.org", 1, &body) == false);
 }
 
 class FailPerform : public libndt::Curl {
@@ -134,10 +127,10 @@ class FailPerform : public libndt::Curl {
 };
 
 TEST_CASE("Curl::method_get() deals with Curl::perform() failure") {
-  FailPerform curl;
+  libndt::Client client;
+  FailPerform curl{&client};
   std::string body;
-  std::string err;
-  REQUIRE(curl.method_get("http://x.org", 1, &body, &err) == false);
+  REQUIRE(curl.method_get("http://x.org", 1, &body) == false);
 }
 
 // Curl::init() tests
@@ -150,12 +143,14 @@ class FailEasyInit : public libndt::Curl {
 };
 
 TEST_CASE("Curl::init() deals with curl_easy_init() failure") {
-  FailEasyInit curl;
+  libndt::Client client;
+  FailEasyInit curl{&client};
   REQUIRE(curl.init() == false);
 }
 
 TEST_CASE("Curl::init() is idempotent") {
-  libndt::Curl curl;
+  libndt::Client client;
+  libndt::Curl curl{&client};
   REQUIRE(curl.init() == true);
   REQUIRE(curl.init() == true);
 }
@@ -164,7 +159,8 @@ TEST_CASE("Curl::init() is idempotent") {
 // --------------------------
 
 TEST_CASE("Curl::setopt_proxy() works") {
-  libndt::Curl curl;
+  libndt::Client client;
+  libndt::Curl curl{&client};
   REQUIRE(curl.init() == true);
   REQUIRE(curl.setopt_proxy("socks5h://127.0.0.1:9050") == CURLE_OK);
 }

@@ -339,6 +339,8 @@ class Client {
 
   // Dependencies (cURL)
 
+  uint64_t get_verbosity() const noexcept;
+
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
 
