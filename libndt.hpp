@@ -32,7 +32,9 @@
 #include <ws2tcpip.h>
 #endif
 
+#ifndef _WIN32
 #include <netdb.h>
+#endif
 #include <stddef.h>
 #include <stdint.h>  // IWYU pragma: export
 
