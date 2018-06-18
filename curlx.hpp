@@ -12,6 +12,8 @@
 
 #include <curl/curl.h>
 
+#include "libndt.hpp"
+
 namespace measurement_kit {
 namespace libndt {
 
@@ -24,14 +26,14 @@ class Curl {
  public:
   // Top-level API
 
-  Curl() noexcept;
+  explicit Curl(Client *client) noexcept;
 
   bool method_get_maybe_socks5(const std::string &proxy_port,
                                const std::string &url, long timeout,
-                               std::string *body, std::string *err) noexcept;
+                               std::string *body) noexcept;
 
-  bool method_get(const std::string &url, long timeout, std::string *body,
-                  std::string *err) noexcept;
+  bool method_get(const std::string &url, long timeout,
+                  std::string *body) noexcept;
 
   // Mid-level API
 
@@ -58,6 +60,7 @@ class Curl {
 
  private:
   std::unique_ptr<CURL, CurlDeleter> handle_;
+  Client *client_ = nullptr;
 };
 
 }  // namespace libndt

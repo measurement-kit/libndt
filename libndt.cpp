@@ -1371,14 +1371,16 @@ bool Client::resolve(const std::string &hostname,
 
 // Dependencies (curl)
 
+uint64_t Client::get_verbosity() const noexcept {
+  return impl->settings.verbosity;
+}
+
 bool Client::query_mlabns_curl(const std::string &url, long timeout,
                                std::string *body) noexcept {
 #ifdef HAVE_CURL
-  std::string err = "";
-  Curl curl;
+  Curl curl{this};
   if (!curl.method_get_maybe_socks5(  //
-          impl->settings.socks5h_port, url, timeout, body, &err)) {
-    EMIT_WARNING("cannot query mlabns: " << err);
+          impl->settings.socks5h_port, url, timeout, body)) {
     return false;
   }
   return true;

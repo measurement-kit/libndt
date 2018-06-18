@@ -34,65 +34,95 @@ static size_t curl_callback(char *ptr, size_t size, size_t nmemb,
 namespace measurement_kit {
 namespace libndt {
 
+#define EMIT_WARNING(client, statements)                 \
+  do {                                                   \
+    if (client->get_verbosity() >= verbosity::warning) { \
+      std::stringstream ss;                              \
+      ss << statements;                                  \
+      client->on_warning(ss.str());                      \
+    }                                                    \
+  } while (0)
+
+#define EMIT_INFO(client, statements)                 \
+  do {                                                \
+    if (client->get_verbosity() >= verbosity::info) { \
+      std::stringstream ss;                           \
+      ss << statements;                               \
+      client->on_info(ss.str());                      \
+    }                                                 \
+  } while (0)
+
+#define EMIT_DEBUG(client, statements)                 \
+  do {                                                 \
+    if (client->get_verbosity() >= verbosity::debug) { \
+      std::stringstream ss;                            \
+      ss << statements;                                \
+      client->on_debug(ss.str());                      \
+    }                                                  \
+  } while (0)
+
 void CurlDeleter::operator()(CURL *handle) noexcept {
   if (handle != nullptr) {
     curl_easy_cleanup(handle);
   }
 }
 
-Curl::Curl() noexcept {}
+Curl::Curl(Client *client) noexcept : client_{client} {
+  assert(client != nullptr);
+}
 
 bool Curl::method_get_maybe_socks5(const std::string &proxy_port,
                                    const std::string &url, long timeout,
-                                   std::string *body,
-                                   std::string *err) noexcept {
+                                   std::string *body) noexcept {
   if (!init()) {
-    *err = "cannot initialize cURL";
+    EMIT_WARNING(client_, "curlx: cannot initialize cURL");
     return false;
   }
   if (!proxy_port.empty()) {
     std::stringstream ss;
     ss << "socks5h://127.0.0.1:" << proxy_port;
     if (setopt_proxy(ss.str()) != CURLE_OK) {
-      *err = "cannot set proxy";
+      EMIT_WARNING(client_, "curlx: cannot configure proxy: " << ss.str());
       return false;
     }
   }
-  return method_get(url, timeout, body, err);
+  return method_get(url, timeout, body);
 }
 
-bool Curl::method_get(const std::string &url, long timeout, std::string *body,
-                      std::string *err) noexcept {
-  if (body == nullptr || err == nullptr) {
+bool Curl::method_get(const std::string &url, long timeout,
+                      std::string *body) noexcept {
+  if (body == nullptr) {
+    EMIT_WARNING(client_, "curlx: passed a nullptr body");
     return false;
   }
   std::stringstream ss;
   if (!init()) {
-    *err = "cannot initialize cURL";
+    EMIT_WARNING(client_, "curlx: cannot initialize cURL");
     return false;
   }
   if (setopt_url(url) != CURLE_OK) {
-    *err = "cannot set URL";
+    EMIT_WARNING(client_, "curlx: cannot set URL: " << url);
     return false;
   }
   if (setopt_writefunction(curl_callback) != CURLE_OK) {
-    *err = "cannot set write callback";
+    EMIT_WARNING(client_, "curlx: cannot set callback function");
     return false;
   }
   if (setopt_writedata(&ss) != CURLE_OK) {
-    *err = "cannot set write callback opaque context";
+    EMIT_WARNING(client_, "curlx: cannot set callback function context");
     return false;
   }
   if (setopt_timeout(timeout) != CURLE_OK) {
-    *err = "cannot set timeout";
+    EMIT_WARNING(client_, "curlx: cannot set timeout");
     return false;
   }
+  EMIT_INFO(client_, "curlx: performing request");
   auto rv = perform();
   if (rv != CURLE_OK) {
-    *err = curl_easy_strerror(rv);
+    EMIT_WARNING(client_, "curlx: cURL failed: " << curl_easy_strerror(rv));
     return false;
   }
-  *err = "";
+  EMIT_INFO(client_, "curlx: request complete");
   *body = ss.str();
   return true;
 }
