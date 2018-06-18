@@ -126,8 +126,8 @@ static std::string represent(std::string message) noexcept {
   ss << "binary([";
   for (auto &c : message) {
     if (c <= ' ' || c > '~') {
-      ss << "<0x" << std::fixed << std::setw(2) << std::setfill('0')
-         << std::hex << (unsigned)(uint8_t)c << ">";
+      ss << "<0x" << std::fixed << std::setw(2) << std::setfill('0') << std::hex
+         << (unsigned)(uint8_t)c << ">";
     } else {
       ss << (char)c;
     }
@@ -288,7 +288,7 @@ bool Client::query_mlabns() noexcept {
   }
   std::string body;
   if (!query_mlabns_curl(  //
-      impl->settings.mlabns_url, impl->settings.curl_timeout, &body)) {
+          impl->settings.mlabns_url, impl->settings.curl_timeout, &body)) {
     return false;
   }
   nlohmann::json json;
@@ -309,8 +309,7 @@ bool Client::query_mlabns() noexcept {
 }
 
 bool Client::connect() noexcept {
-  return connect_tcp_maybe_socks5(impl->settings.hostname,
-                                  impl->settings.port,
+  return connect_tcp_maybe_socks5(impl->settings.hostname, impl->settings.port,
                                   &impl->sock);
 }
 
@@ -320,12 +319,12 @@ bool Client::send_login() noexcept {
 
 bool Client::recv_kickoff() noexcept {
   char buf[msg_kickoff_size];
-  Ssize tot = this->recvn(impl->sock, buf, sizeof (buf));
+  Ssize tot = this->recvn(impl->sock, buf, sizeof(buf));
   if (tot <= 0) {
-    EMIT_WARNING("recv_kickoff: recvn() failed: " << get_last_error());
+    EMIT_WARNING("recv_kickoff: recvn() failed: " << get_last_system_error());
     return false;
   }
-  assert((Size)tot == sizeof (buf));
+  assert((Size)tot == sizeof(buf));
   if (memcmp(buf, msg_kickoff, sizeof(buf)) != 0) {
     EMIT_WARNING("recv_kickoff: invalid kickoff message");
     return false;
@@ -444,7 +443,7 @@ bool Client::wait_close() noexcept {
   // Windows instead the first argment to select() is ignored.
   auto rv = this->select((int)impl->sock + 1, &readset, nullptr, nullptr, &tv);
   if (rv < 0 && !OS_ERROR_IS_EINTR()) {
-    EMIT_WARNING("wait_close(): select() failed: " << get_last_error());
+    EMIT_WARNING("wait_close(): select() failed: " << get_last_system_error());
     return false;
   }
   if (rv <= 0) {
@@ -508,7 +507,8 @@ bool Client::run_download() noexcept {
       // Cast to `int` safe as explained above.
       auto rv = this->select((int)maxsock + 1, &set, nullptr, nullptr, &tv);
       if (rv < 0 && !OS_ERROR_IS_EINTR()) {
-        EMIT_WARNING("run_download: select() failed: " << get_last_error());
+        EMIT_WARNING(
+            "run_download: select() failed: " << get_last_system_error());
         return false;
       }
       if (rv > 0) {
@@ -516,7 +516,8 @@ bool Client::run_download() noexcept {
           if (FD_ISSET(fd, &set)) {
             Ssize n = this->recv(fd, buf, sizeof(buf));
             if (n < 0) {
-              EMIT_WARNING("run_download: recv() failed: " << get_last_error());
+              EMIT_WARNING(
+                  "run_download: recv() failed: " << get_last_system_error());
               done = true;
               break;
             }
@@ -674,7 +675,8 @@ bool Client::run_upload() noexcept {
       // Cast to `int` safe as explained above.
       auto rv = this->select((int)maxsock + 1, nullptr, &set, nullptr, &tv);
       if (rv < 0 && !OS_ERROR_IS_EINTR()) {
-        EMIT_WARNING("run_upload: select() failed: " << get_last_error());
+        EMIT_WARNING(
+            "run_upload: select() failed: " << get_last_system_error());
         return false;
       }
       if (rv > 0) {
@@ -683,7 +685,8 @@ bool Client::run_upload() noexcept {
             Ssize n = this->send(fd, buf, sizeof(buf));
             if (n < 0) {
               if (!OS_ERROR_IS_EPIPE()) {
-                EMIT_WARNING("run_upload: send() failed: " << get_last_error());
+                EMIT_WARNING(
+                    "run_upload: send() failed: " << get_last_system_error());
               }
               done = true;
               break;
@@ -910,7 +913,7 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
           return false;
         }
         assert((Size)rv == sizeof(len));
-        char domain[UINT8_MAX + 1]; // space for final '\0'
+        char domain[UINT8_MAX + 1];  // space for final '\0'
         rv = this->recvn(*sock, domain, len);
         if (rv <= 0) {
           EMIT_WARNING("socks5h: cannot recv domain");
@@ -993,7 +996,7 @@ bool Client::connect_tcp(const std::string &hostname, const std::string &port,
     for (auto aip = rp; (aip); aip = aip->ai_next) {
       *sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
       if (*sock == -1) {
-        EMIT_WARNING("socket() failed: " << get_last_error());
+        EMIT_WARNING("socket() failed: " << get_last_system_error());
         continue;
       }
       // The following two lines ensure that casting `size_t` to
@@ -1005,7 +1008,7 @@ bool Client::connect_tcp(const std::string &hostname, const std::string &port,
         EMIT_DEBUG("connect(): okay");
         break;
       }
-      EMIT_WARNING("connect() failed: " << get_last_error());
+      EMIT_WARNING("connect() failed: " << get_last_system_error());
       this->closesocket(*sock);
       *sock = -1;
     }
@@ -1026,7 +1029,8 @@ bool Client::msg_write_login(const std::string &version) noexcept {
     impl->settings.test_suite &= ~nettest::middlebox;
   }
   if ((impl->settings.test_suite & nettest::simple_firewall)) {
-    EMIT_WARNING("msg_write_login(): nettest::simple_firewall: not implemented");
+    EMIT_WARNING(
+        "msg_write_login(): nettest::simple_firewall: not implemented");
     impl->settings.test_suite &= ~nettest::simple_firewall;
   }
   if ((impl->settings.test_suite & nettest::upload_ext)) {
@@ -1103,12 +1107,13 @@ bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
     EMIT_DEBUG("msg_write_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_write_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
-    Ssize tot = this->sendn(impl->sock, header, sizeof (header));
+    Ssize tot = this->sendn(impl->sock, header, sizeof(header));
     if (tot <= 0) {
-      EMIT_WARNING("msg_write_legacy: sendn() failed: " << get_last_error());
+      EMIT_WARNING(
+          "msg_write_legacy: sendn() failed: " << get_last_system_error());
       return false;
     }
-    assert((Size)tot == sizeof (header));
+    assert((Size)tot == sizeof(header));
     EMIT_DEBUG("msg_write_legacy: sent message header");
   }
   if (msg.size() <= 0) {
@@ -1117,7 +1122,8 @@ bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
   }
   Ssize tot = this->sendn(impl->sock, msg.data(), msg.size());
   if (tot <= 0) {
-    EMIT_WARNING("msg_write_legacy: sendn() failed: " << get_last_error());
+    EMIT_WARNING(
+        "msg_write_legacy: sendn() failed: " << get_last_system_error());
     return false;
   }
   assert((Size)tot == msg.size());
@@ -1240,12 +1246,13 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   uint16_t len = 0;
   {
     char header[3];
-    Ssize tot = this->recvn(impl->sock, header, sizeof (header));
+    Ssize tot = this->recvn(impl->sock, header, sizeof(header));
     if (tot <= 0) {
-      EMIT_WARNING("msg_read_legacy: recvn() failed: " << get_last_error());
+      EMIT_WARNING(
+          "msg_read_legacy: recvn() failed: " << get_last_system_error());
       return false;
     }
-    assert((Size)tot == sizeof (header));
+    assert((Size)tot == sizeof(header));
     EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)header[2]);
@@ -1267,7 +1274,8 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   std::unique_ptr<char[]> buf{new char[len]};
   Ssize tot = this->recvn(impl->sock, buf.get(), len);
   if (tot <= 0) {
-    EMIT_WARNING("msg_read_legacy: recvn() failed: " << get_last_error());
+    EMIT_WARNING(
+        "msg_read_legacy: recvn() failed: " << get_last_system_error());
     return false;
   }
   assert((Size)tot == len);
@@ -1288,34 +1296,34 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
 
 Ssize Client::recvn(Socket fd, void *base, Size count) noexcept {
   if (count > OS_SSIZE_MAX) {
-    set_last_error(OS_EINVAL);
+    set_last_system_error(OS_EINVAL);
     return -1;
   }
   Size off = 0;
   while (off < count) {
     Ssize n = this->recv(fd, ((char *)base) + off, count - off);
     if (n <= 0) {
-      return n; // either return full success or error, ignore partial recv
+      return n;  // either return full success or error, ignore partial recv
     }
     off += (Size)n;
   }
-  return (Ssize)off; // cast okay because of the initial check
+  return (Ssize)off;  // cast okay because of the initial check
 }
 
 Ssize Client::sendn(Socket fd, const void *base, Size count) noexcept {
   if (count > OS_SSIZE_MAX) {
-    set_last_error(OS_EINVAL);
+    set_last_system_error(OS_EINVAL);
     return -1;
   }
   Size off = 0;
   while (off < count) {
     Ssize n = this->send(fd, ((char *)base) + off, count - off);
     if (n <= 0) {
-      return n; // either return full success or error, ignore partial send
+      return n;  // either return full success or error, ignore partial send
     }
     off += (Size)n;
   }
-  return (Ssize)off; // cast okay because of the initial check
+  return (Ssize)off;  // cast okay because of the initial check
 }
 
 bool Client::resolve(const std::string &hostname,
@@ -1393,7 +1401,7 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
 #endif
 
-int Client::get_last_error() noexcept {
+int Client::get_last_system_error() noexcept {
 #ifdef _WIN32
   return GetLastError();
 #else
@@ -1401,7 +1409,7 @@ int Client::get_last_error() noexcept {
 #endif
 }
 
-void Client::set_last_error(int err) noexcept {
+void Client::set_last_system_error(int err) noexcept {
 #ifdef _WIN32
   SetLastError(err);
 #else
@@ -1432,7 +1440,7 @@ int Client::connect(Socket fd, const sockaddr *sa, SockLen len) noexcept {
 
 Ssize Client::recv(Socket fd, void *base, Size count) noexcept {
   if (count > OS_SSIZE_MAX) {
-    set_last_error(OS_EINVAL);
+    set_last_system_error(OS_EINVAL);
     return -1;
   }
   return (Ssize)::recv(AS_OS_SOCKET(fd), AS_OS_BUFFER(base),
@@ -1441,7 +1449,7 @@ Ssize Client::recv(Socket fd, void *base, Size count) noexcept {
 
 Ssize Client::send(Socket fd, const void *base, Size count) noexcept {
   if (count > OS_SSIZE_MAX) {
-    set_last_error(OS_EINVAL);
+    set_last_system_error(OS_EINVAL);
     return -1;
   }
   return (Ssize)::send(AS_OS_SOCKET(fd), AS_OS_BUFFER(base),

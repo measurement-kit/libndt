@@ -334,8 +334,8 @@ class Client {
 
   // Dependencies (libc)
 
-  virtual int get_last_error() noexcept;
-  virtual void set_last_error(int err) noexcept;
+  virtual int get_last_system_error() noexcept;
+  virtual void set_last_system_error(int err) noexcept;
 
   virtual int getaddrinfo(const char *domain, const char *port,
                           const addrinfo *hints, addrinfo **res) noexcept;
