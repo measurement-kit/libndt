@@ -319,8 +319,6 @@ class Client {
 
   // Utilities for low-level
 
-  virtual Ssize recvn(Socket fd, void *base, Size count) noexcept;
-
   virtual Ssize sendn(Socket fd, const void *base, Size count) noexcept;
 
   // Networking layer

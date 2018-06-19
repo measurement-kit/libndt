@@ -319,12 +319,14 @@ bool Client::send_login() noexcept {
 
 bool Client::recv_kickoff() noexcept {
   char buf[msg_kickoff_size];
-  Ssize tot = this->recvn(impl->sock, buf, sizeof(buf));
-  if (tot <= 0) {
-    EMIT_WARNING("recv_kickoff: recvn() failed: " << get_last_system_error());
+  auto err = netx_recvn(impl->sock, buf, sizeof(buf));
+  if (err != Err::none) {
+    // TODO(bassosimone): pretty print `err` not the last system error, because,
+    // when we'll use also SSL, the latter will probably be inaccurate.
+    EMIT_WARNING(
+        "recv_kickoff: netx_recvn() failed: " << get_last_system_error());
     return false;
   }
-  assert((Size)tot == sizeof(buf));
   if (memcmp(buf, msg_kickoff, sizeof(buf)) != 0) {
     EMIT_WARNING("recv_kickoff: invalid kickoff message");
     return false;
@@ -744,9 +746,11 @@ bool Client::connect_maybe_socks5(const std::string &hostname,
   if (impl->settings.socks5h_port.empty()) {
     return netx_connect(hostname, port, sock) == Err::none;
   }
-  auto err = netx_connect("127.0.0.1", impl->settings.socks5h_port, sock);
-  if (err != Err::none) {
-    return false;
+  {
+    auto err = netx_connect("127.0.0.1", impl->settings.socks5h_port, sock);
+    if (err != Err::none) {
+      return false;
+    }
   }
   EMIT_INFO("socks5h: connected to proxy");
   {
@@ -771,14 +775,13 @@ bool Client::connect_maybe_socks5(const std::string &hostname,
         0,  // version
         0   // method
     };
-    auto rv = this->recvn(*sock, auth_response, sizeof(auth_response));
-    if (rv <= 0) {
+    auto err = netx_recvn(*sock, auth_response, sizeof(auth_response));
+    if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot recv auth_response");
       this->closesocket(*sock);
       *sock = -1;
       return false;
     }
-    assert((Size)rv == sizeof(auth_response));
     constexpr uint8_t version = 5;
     if (auth_response[0] != version) {
       EMIT_WARNING("socks5h: received unexpected version number");
@@ -793,11 +796,8 @@ bool Client::connect_maybe_socks5(const std::string &hostname,
       *sock = -1;
       return false;
     }
-    // Make sure that we can cast `rv` to `size_t`
-    static_assert(sizeof(auth_response) < SIZE_MAX, "auth_response too big");
-    assert((Size)rv < SIZE_MAX);
     EMIT_DEBUG("socks5h: authenticated with proxy; response: "
-               << represent(std::string{auth_response, (size_t)rv}));
+               << represent(std::string{auth_response, sizeof(auth_response)}));
   }
   {
     std::string connect_request;
@@ -849,21 +849,16 @@ bool Client::connect_maybe_socks5(const std::string &hostname,
         0,  // reserved
         0   // type
     };
-    auto rv = this->recvn(  //
+    auto err = netx_recvn(  //
         *sock, connect_response_hdr, sizeof(connect_response_hdr));
-    if (rv <= 0) {
+    if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot recv connect_response_hdr");
       this->closesocket(*sock);
       *sock = -1;
       return false;
     }
-    assert((Size)rv == sizeof(connect_response_hdr));
-    // Make sure that we can cast `rv` to `size_t`
-    static_assert(sizeof(connect_response_hdr) < SIZE_MAX,
-                  "connect_response_hdr too big");
-    assert((Size)rv < SIZE_MAX);
-    EMIT_DEBUG("socks5h: connect_response_hdr: "
-               << represent(std::string{connect_response_hdr, (size_t)rv}));
+    EMIT_DEBUG("socks5h: connect_response_hdr: " << represent(std::string{
+                   connect_response_hdr, sizeof(connect_response_hdr)}));
     constexpr uint8_t version = 5;
     if (connect_response_hdr[0] != version) {
       EMIT_WARNING("socks5h: invalid message version");
@@ -891,14 +886,13 @@ bool Client::connect_maybe_socks5(const std::string &hostname,
       {
         constexpr Size expected = 4;  // ipv4
         char buf[expected];
-        auto rv = this->recvn(*sock, buf, sizeof(buf));
-        if (rv <= 0) {
+        auto err = netx_recvn(*sock, buf, sizeof(buf));
+        if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv ipv4 address");
           this->closesocket(*sock);
           *sock = -1;
           return false;
         }
-        assert((Size)rv == sizeof(buf));
         // TODO(bassosimone): log the ipv4 address. However tor returns a zero
         // ipv4 and so there is little added value in logging.
         break;
@@ -906,23 +900,21 @@ bool Client::connect_maybe_socks5(const std::string &hostname,
       case 3:  // domain
       {
         uint8_t len = 0;
-        auto rv = this->recvn(*sock, &len, sizeof(len));
-        if (rv <= 0) {
+        auto err = netx_recvn(*sock, &len, sizeof(len));
+        if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv domain length");
           this->closesocket(*sock);
           *sock = -1;
           return false;
         }
-        assert((Size)rv == sizeof(len));
         char domain[UINT8_MAX + 1];  // space for final '\0'
-        rv = this->recvn(*sock, domain, len);
-        if (rv <= 0) {
+        err = netx_recvn(*sock, domain, len);
+        if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv domain");
           this->closesocket(*sock);
           *sock = -1;
           return false;
         }
-        assert((Size)rv == len);
         domain[len] = 0;
         EMIT_DEBUG("socks5h: domain: " << domain);
         break;
@@ -931,14 +923,13 @@ bool Client::connect_maybe_socks5(const std::string &hostname,
       {
         constexpr Size expected = 16;  // ipv6
         char buf[expected];
-        auto rv = this->recvn(*sock, buf, sizeof(buf));
-        if (rv <= 0) {
+        auto err = netx_recvn(*sock, buf, sizeof(buf));
+        if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv ipv6 address");
           this->closesocket(*sock);
           *sock = -1;
           return false;
         }
-        assert((Size)rv == sizeof(buf));
         // TODO(bassosimone): log the ipv6 address. However tor returns a zero
         // ipv6 and so there is little added value in logging.
         break;
@@ -952,14 +943,13 @@ bool Client::connect_maybe_socks5(const std::string &hostname,
     // receive the port
     {
       uint16_t port = 0;
-      rv = this->recvn(*sock, &port, sizeof(port));
-      if (rv <= 0) {
+      auto err = netx_recvn(*sock, &port, sizeof(port));
+      if (err != Err::none) {
         EMIT_WARNING("socks5h: cannot recv port");
         this->closesocket(*sock);
         *sock = -1;
         return false;
       }
-      assert((Size)rv == sizeof(port));
       port = ntohs(port);
       EMIT_DEBUG("socks5h: port number: " << port);
     }
@@ -1194,13 +1184,14 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   uint16_t len = 0;
   {
     char header[3];
-    Ssize tot = this->recvn(impl->sock, header, sizeof(header));
-    if (tot <= 0) {
-      EMIT_WARNING(
-          "msg_read_legacy: recvn() failed: " << get_last_system_error());
-      return false;
+    {
+      auto err = netx_recvn(impl->sock, header, sizeof(header));
+      if (err != Err::none) {
+        EMIT_WARNING(
+            "msg_read_legacy: recvn() failed: " << get_last_system_error());
+        return false;
+      }
     }
-    assert((Size)tot == sizeof(header));
     EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)header[2]);
@@ -1220,13 +1211,14 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   // for efficiency but NDT messages are generally small, and the performance
   // critical path is certainly not the one with control messages.
   std::unique_ptr<char[]> buf{new char[len]};
-  Ssize tot = this->recvn(impl->sock, buf.get(), len);
-  if (tot <= 0) {
-    EMIT_WARNING(
-        "msg_read_legacy: recvn() failed: " << get_last_system_error());
-    return false;
+  {
+    auto err = netx_recvn(impl->sock, buf.get(), len);
+    if (err != Err::none) {
+      EMIT_WARNING(
+          "msg_read_legacy: recvn() failed: " << get_last_system_error());
+      return false;
+    }
   }
-  assert((Size)tot == len);
   *msg = std::string{buf.get(), len};
   EMIT_DEBUG("msg_read_legacy: raw message: " << represent(*msg));
   return true;
@@ -1234,15 +1226,6 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
 
 // Utilities for low-level
 // TODO(bassosimone): remove this section
-
-Ssize Client::recvn(Socket fd, void *base, Size count) noexcept {
-  // TODO(bassosimone): remove
-  Err err = netx_recvn(fd, base, count);
-  if (err == Err::eof) {
-    return 0;  // Be compatible with previous expectations
-  }
-  return (err == Err::none) ? (Ssize)count : -1;
-}
 
 Ssize Client::sendn(Socket fd, const void *base, Size count) noexcept {
   // TODO(bassosimone): remove

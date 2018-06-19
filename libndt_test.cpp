@@ -23,8 +23,10 @@
 
 #ifdef _WIN32
 #define OS_EINVAL WSAEINVAL
+#define OS_EWOULDBLOCK WSAEWOULDBLOCK
 #else
 #define OS_EINVAL EINVAL
+#define OS_EWOULDBLOCK EWOULDBLOCK
 #endif
 
 // Unit tests
@@ -275,48 +277,50 @@ TEST_CASE("Client::query_mlabns() deals with incomplete JSON") {
 // Client::recv_kickoff() tests
 // ----------------------------
 
-class FailRecvn : public libndt::Client {
+class FailNetxRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recvn(libndt::Socket, void *, libndt::Size) noexcept override {
-    return -1;
+  libndt::Err netx_recvn(libndt::Socket, void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::io_error;
   }
 };
 
 TEST_CASE("Client::recv_kickoff() deals with Client::recvn() failure") {
-  FailRecvn client;
+  FailNetxRecvn client;
   REQUIRE(client.recv_kickoff() == false);
 }
 
-class RecvnEof : public libndt::Client {
+class NetxRecvnEof : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recvn(libndt::Socket, void *, libndt::Size) noexcept override {
-    return 0;
+  libndt::Err netx_recvn(libndt::Socket, void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::eof;
   }
 };
 
 TEST_CASE("Client::recv_kickoff() deals with Client::recvn() EOF") {
-  RecvnEof client;
+  NetxRecvnEof client;
   REQUIRE(client.recv_kickoff() == false);
 }
 
-class RecvnInvalidKickoff : public libndt::Client {
+class NetxRecvnInvalidKickoff : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recvn(  //
+  libndt::Err netx_recvn(  //
       libndt::Socket, void *buf, libndt::Size siz) noexcept override {
     REQUIRE(buf != nullptr);
     REQUIRE(siz >= 1);
     for (libndt::Size i = 0; i < siz; ++i) {
       ((char *)buf)[i] = 'x';
     }
-    return siz;
+    return libndt::Err::none;
   }
 };
 
 TEST_CASE("Client::recv_kickoff() deals with invalid kickoff") {
-  RecvnInvalidKickoff client;
+  NetxRecvnInvalidKickoff client;
   REQUIRE(client.recv_kickoff() == false);
 }
 
@@ -594,7 +598,7 @@ class FailMsgExpectEmpty : public libndt::Client {
     return true;
   }
   bool connect_maybe_socks5(const std::string &, const std::string &,
-                                libndt::Socket *sock) noexcept override {
+                            libndt::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
     return true;
   }
@@ -1157,7 +1161,7 @@ TEST_CASE(
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "80", &sock));
 }
 
-class ConnectMaybeSocks5FailFirstRecvn : public libndt::Client {
+class ConnectMaybeSocks5FailFirstNetxRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_connect(const std::string &, const std::string &,
@@ -1169,8 +1173,9 @@ class ConnectMaybeSocks5FailFirstRecvn : public libndt::Client {
                       libndt::Size size) noexcept override {
     return (libndt::Ssize)size;
   }
-  libndt::Ssize recvn(libndt::Socket, void *, libndt::Size) noexcept override {
-    return -1;
+  libndt::Err netx_recvn(libndt::Socket, void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::io_error;
   }
 };
 
@@ -1179,7 +1184,7 @@ TEST_CASE(
     "failure when receiving auth_response") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
-  ConnectMaybeSocks5FailFirstRecvn client{settings};
+  ConnectMaybeSocks5FailFirstNetxRecvn client{settings};
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "80", &sock));
 }
@@ -1196,12 +1201,12 @@ class ConnectMaybeSocks5InvalidAuthResponseVersion : public libndt::Client {
                       libndt::Size size) noexcept override {
     return (libndt::Ssize)size;
   }
-  libndt::Ssize recvn(libndt::Socket, void *buf,
-                      libndt::Size size) noexcept override {
+  libndt::Err netx_recvn(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     assert(size == 2);
     ((char *)buf)[0] = 4;  // unexpected
     ((char *)buf)[1] = 0;
-    return (libndt::Size)size;
+    return libndt::Err::none;
   }
 };
 
@@ -1227,12 +1232,12 @@ class ConnectMaybeSocks5InvalidAuthResponseMethod : public libndt::Client {
                       libndt::Size size) noexcept override {
     return (libndt::Ssize)size;
   }
-  libndt::Ssize recvn(libndt::Socket, void *buf,
-                      libndt::Size size) noexcept override {
+  libndt::Err netx_recvn(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     assert(size == 2);
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 1;
-    return (libndt::Size)size;
+    return libndt::Err::none;
   }
 };
 
@@ -1258,12 +1263,12 @@ class ConnectMaybeSocks5InitialHandshakeOkay : public libndt::Client {
                       libndt::Size size) noexcept override {
     return (libndt::Ssize)size;
   }
-  libndt::Ssize recvn(libndt::Socket, void *buf,
-                      libndt::Size size) noexcept override {
+  libndt::Err netx_recvn(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     assert(size == 2);
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 0;
-    return (libndt::Size)size;
+    return libndt::Err::none;
   }
 };
 
@@ -1299,12 +1304,12 @@ class ConnectMaybeSocks5FailSecondSendn : public libndt::Client {
                       libndt::Size size) noexcept override {
     return size == 3 ? (libndt::Ssize)size : -1;
   }
-  libndt::Ssize recvn(libndt::Socket, void *buf,
-                      libndt::Size size) noexcept override {
+  libndt::Err netx_recvn(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     assert(size == 2);
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 0;
-    return (libndt::Size)size;
+    return libndt::Err::none;
   }
 };
 
@@ -1318,7 +1323,7 @@ TEST_CASE(
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "80", &sock));
 }
 
-class ConnectMaybeSocks5FailSecondRecvn : public libndt::Client {
+class ConnectMaybeSocks5FailSecondNetxRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_connect(const std::string &, const std::string &,
@@ -1330,14 +1335,14 @@ class ConnectMaybeSocks5FailSecondRecvn : public libndt::Client {
                       libndt::Size size) noexcept override {
     return (libndt::Ssize)size;
   }
-  libndt::Ssize recvn(libndt::Socket, void *buf,
-                      libndt::Size size) noexcept override {
+  libndt::Err netx_recvn(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return (libndt::Size)size;
+      return libndt::Err::none;
     }
-    return -1;
+    return libndt::Err::io_error;
   }
 };
 
@@ -1346,7 +1351,7 @@ TEST_CASE(
     "error while receiving connect_response_hdr") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
-  ConnectMaybeSocks5FailSecondRecvn client{settings};
+  ConnectMaybeSocks5FailSecondNetxRecvn client{settings};
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "80", &sock));
 }
@@ -1363,19 +1368,19 @@ class ConnectMaybeSocks5InvalidSecondVersion : public libndt::Client {
                       libndt::Size size) noexcept override {
     return (libndt::Ssize)size;
   }
-  libndt::Ssize recvn(libndt::Socket, void *buf,
-                      libndt::Size size) noexcept override {
+  libndt::Err netx_recvn(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return (libndt::Size)size;
+      return libndt::Err::none;
     }
     if (size == 4) {
       ((char *)buf)[0] = 4;  // unexpected
       ((char *)buf)[1] = 0;
-      return (libndt::Size)size;
+      return libndt::Err::none;
     }
-    return -1;
+    return libndt::Err::io_error;
   }
 };
 
@@ -1401,19 +1406,19 @@ class ConnectMaybeSocks5ErrorResult : public libndt::Client {
                       libndt::Size size) noexcept override {
     return (libndt::Ssize)size;
   }
-  libndt::Ssize recvn(libndt::Socket, void *buf,
-                      libndt::Size size) noexcept override {
+  libndt::Err netx_recvn(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return (libndt::Size)size;
+      return libndt::Err::none;
     }
     if (size == 4) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 1;  // error occurred
-      return (libndt::Size)size;
+      return libndt::Err::none;
     }
-    return -1;
+    return libndt::Err::io_error;
   }
 };
 
@@ -1439,20 +1444,20 @@ class ConnectMaybeSocks5InvalidReserved : public libndt::Client {
                       libndt::Size size) noexcept override {
     return (libndt::Ssize)size;
   }
-  libndt::Ssize recvn(libndt::Socket, void *buf,
-                      libndt::Size size) noexcept override {
+  libndt::Err netx_recvn(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return (libndt::Size)size;
+      return libndt::Err::none;
     }
     if (size == 4) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
       ((char *)buf)[2] = 1;  // should instead be zero
-      return (libndt::Size)size;
+      return libndt::Err::none;
     }
-    return -1;
+    return libndt::Err::io_error;
   }
 };
 
@@ -1466,7 +1471,7 @@ TEST_CASE(
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "80", &sock));
 }
 
-class ConnectMaybeSocks5FailAddressRecvn : public libndt::Client {
+class ConnectMaybeSocks5FailAddressNetxRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_connect(const std::string &, const std::string &,
@@ -1480,12 +1485,12 @@ class ConnectMaybeSocks5FailAddressRecvn : public libndt::Client {
   }
   uint8_t type = 0;
   bool seen = false;
-  libndt::Ssize recvn(libndt::Socket, void *buf,
-                      libndt::Size size) noexcept override {
+  libndt::Err netx_recvn(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return (libndt::Size)size;
+      return libndt::Err::none;
     }
     if (size == 4 && !seen) {
       seen = true;  // use flag because IPv4 is also 4 bytes
@@ -1494,10 +1499,10 @@ class ConnectMaybeSocks5FailAddressRecvn : public libndt::Client {
       ((char *)buf)[1] = 0;
       ((char *)buf)[2] = 0;
       ((char *)buf)[3] = type;
-      return (libndt::Size)size;
+      return libndt::Err::none;
     }
     // the subsequent recvn() will fail
-    return -1;
+    return libndt::Err::io_error;
   }
 };
 
@@ -1506,7 +1511,7 @@ TEST_CASE(
     "error when reading a IPv4") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
-  ConnectMaybeSocks5FailAddressRecvn client{settings};
+  ConnectMaybeSocks5FailAddressNetxRecvn client{settings};
   client.type = 1;
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "80", &sock));
@@ -1517,7 +1522,7 @@ TEST_CASE(
     "error when reading a IPv6") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
-  ConnectMaybeSocks5FailAddressRecvn client{settings};
+  ConnectMaybeSocks5FailAddressNetxRecvn client{settings};
   client.type = 4;
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "80", &sock));
@@ -1528,7 +1533,7 @@ TEST_CASE(
     "error when reading a invalid address type") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
-  ConnectMaybeSocks5FailAddressRecvn client{settings};
+  ConnectMaybeSocks5FailAddressNetxRecvn client{settings};
   client.type = 7;
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "80", &sock));
@@ -1547,16 +1552,16 @@ class ConnectMaybeSocks5WithArray : public libndt::Client {
     return (libndt::Ssize)size;
   }
   std::deque<std::string> array;
-  libndt::Ssize recvn(libndt::Socket, void *buf,
-                      libndt::Size size) noexcept override {
+  libndt::Err netx_recvn(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     if (!array.empty() && size == array[0].size()) {
       for (size_t idx = 0; idx < array[0].size(); ++idx) {
         ((char *)buf)[idx] = array[0][idx];
       }
       array.pop_front();
-      return (libndt::Ssize)size;
+      return libndt::Err::none;
     }
-    return -1;
+    return libndt::Err::io_error;
   }
 };
 
@@ -1959,40 +1964,40 @@ TEST_CASE("Client::msg_read() deals with unknown protocol") {
 TEST_CASE(
     "Client::msg_read_legacy() deals with Client::recv() failure when reading "
     "header") {
-  FailRecvn client;
+  FailNetxRecvn client;
   client.set_last_system_error(0);
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
 }
 
-class FailLargeRecvn : public libndt::Client {
+class FailLargeNetxRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recvn(libndt::Socket, void *p,
-                      libndt::Size siz) noexcept override {
+  libndt::Err netx_recvn(libndt::Socket, void *p,
+                         libndt::Size siz) noexcept override {
     if (siz == 3) {
       char *usablep = (char *)p;
       usablep[0] = libndt::msg_login;
       uint16_t len = htons(155);
       memcpy(&usablep[1], &len, 2);
-      return 3;
+      return libndt::Err::none;
     }
-    return -1;
+    return libndt::Err::io_error;
   }
 };
 
 TEST_CASE(
     "Client::msg_read_legacy() deals with Client::recvn() failure when reading "
     "message") {
-  FailLargeRecvn client;
+  FailLargeNetxRecvn client;
   client.set_last_system_error(0);
   uint8_t code = 0;
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
 }
 
-// Client::recvn() tests
+// Client::sendn() tests
 // ---------------------
 
 #ifdef _WIN32
@@ -2000,110 +2005,6 @@ TEST_CASE(
 #else
 #define OS_SSIZE_MAX SSIZE_MAX
 #endif
-
-TEST_CASE("Client::recvn() deals with too-large buffer") {
-  libndt::Client client;
-  REQUIRE(client.recvn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
-}
-
-class FailRecv : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
-    set_last_system_error(OS_EINVAL);
-    return -1;
-  }
-};
-
-TEST_CASE("Client::recvn() deals with Client::recv() failure") {
-  char buf[1024];
-  FailRecv client;
-  REQUIRE(client.recvn(0, buf, sizeof(buf)) == -1);
-}
-
-class RecvEof : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
-    return 0;
-  }
-};
-
-TEST_CASE("Client::recvn() deals with Client::recv() EOF") {
-  char buf[1024];
-  RecvEof client;
-  REQUIRE(client.recvn(0, buf, sizeof(buf)) == 0);
-}
-
-class PartialRecvAndThenError : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  static constexpr libndt::Size amount = 11;
-  static constexpr libndt::Size good_amount = 3;
-  libndt::Ssize recv(libndt::Socket, void *buf,
-                     libndt::Size size) noexcept override {
-    if (size == amount) {
-      assert(size >= good_amount);
-      for (size_t i = 0; i < good_amount; ++i) {
-        ((char *)buf)[i] = 'A';
-      }
-      return good_amount;
-    }
-    set_last_system_error(OS_EINVAL);
-    return -1;
-  }
-};
-
-TEST_CASE("Client::recvn() deals with partial Client::recv() and then error") {
-  char buf[PartialRecvAndThenError::amount] = {};
-  PartialRecvAndThenError client;
-  REQUIRE(client.recvn(0, buf, sizeof(buf)) == -1);
-  // Just to make sure the code path was entered correctly. We still think that
-  // the right behaviour here is to return -1, not a short read.
-  for (size_t i = 0; i < sizeof(buf); ++i) {
-    if (i < PartialRecvAndThenError::good_amount) {
-      REQUIRE(buf[i] == 'A');
-    } else {
-      REQUIRE(buf[i] == '\0');
-    }
-  }
-}
-
-class PartialRecvAndThenEof : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  static constexpr libndt::Size amount = 7;
-  static constexpr libndt::Size good_amount = 5;
-  libndt::Ssize recv(libndt::Socket, void *buf,
-                     libndt::Size size) noexcept override {
-    if (size == amount) {
-      assert(size >= good_amount);
-      for (size_t i = 0; i < good_amount; ++i) {
-        ((char *)buf)[i] = 'B';
-      }
-      return good_amount;
-    }
-    return 0;
-  }
-};
-
-TEST_CASE("Client::recvn() deals with partial Client::recv() and then EOF") {
-  char buf[PartialRecvAndThenEof::amount] = {};
-  PartialRecvAndThenEof client;
-  REQUIRE(client.recvn(0, buf, sizeof(buf)) == 0);
-  // Just to make sure the code path was entered correctly. We still think that
-  // the right behaviour here is to return zero, not a short read.
-  for (size_t i = 0; i < sizeof(buf); ++i) {
-    if (i < PartialRecvAndThenEof::good_amount) {
-      REQUIRE(buf[i] == 'B');
-    } else {
-      REQUIRE(buf[i] == '\0');
-    }
-  }
-}
-
-// Client::sendn() tests
-// ---------------------
 
 TEST_CASE("Client::sendn() deals with too-large buffer") {
   libndt::Client client;
@@ -2277,6 +2178,115 @@ TEST_CASE("Client::netx_connect() deals with Client::connect() failure") {
   FailSocketConnect client{};
   libndt::Socket sock = -1;
   REQUIRE(client.netx_connect("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+}
+
+// Client::netx_recvn() tests
+// --------------------------
+
+TEST_CASE("Client::netx_recvn() deals with too-large buffer") {
+  libndt::Client client;
+  REQUIRE(client.netx_recvn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) ==
+          libndt::Err::invalid_argument);
+}
+
+class FailRecv : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    set_last_system_error(OS_EWOULDBLOCK);
+    return -1;
+  }
+};
+
+TEST_CASE("Client::netx_recvn() deals with Client::recv() failure") {
+  char buf[1024];
+  FailRecv client;
+  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
+          libndt::Err::operation_would_block);
+}
+
+class RecvEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    return 0;
+  }
+};
+
+TEST_CASE("Client::netx_recvn() deals with Client::recv() EOF") {
+  char buf[1024];
+  RecvEof client;
+  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == libndt::Err::eof);
+}
+
+class PartialRecvAndThenError : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 11;
+  static constexpr libndt::Size good_amount = 3;
+  libndt::Ssize recv(libndt::Socket, void *buf,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      for (size_t i = 0; i < good_amount; ++i) {
+        ((char *)buf)[i] = 'A';
+      }
+      return good_amount;
+    }
+    set_last_system_error(OS_EWOULDBLOCK);
+    return -1;
+  }
+};
+
+TEST_CASE(
+    "Client::netx_recvn() deals with partial Client::recv() and then error") {
+  char buf[PartialRecvAndThenError::amount] = {};
+  PartialRecvAndThenError client;
+  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
+          libndt::Err::operation_would_block);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return -1, not a short read.
+  for (size_t i = 0; i < sizeof(buf); ++i) {
+    if (i < PartialRecvAndThenError::good_amount) {
+      REQUIRE(buf[i] == 'A');
+    } else {
+      REQUIRE(buf[i] == '\0');
+    }
+  }
+}
+
+class PartialRecvAndThenEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 7;
+  static constexpr libndt::Size good_amount = 5;
+  libndt::Ssize recv(libndt::Socket, void *buf,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      for (size_t i = 0; i < good_amount; ++i) {
+        ((char *)buf)[i] = 'B';
+      }
+      return good_amount;
+    }
+    return 0;
+  }
+};
+
+TEST_CASE(
+    "Client::netx_recvn() deals with partial Client::recv() and then EOF") {
+  char buf[PartialRecvAndThenEof::amount] = {};
+  PartialRecvAndThenEof client;
+  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == libndt::Err::eof);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return zero, not a short read.
+  for (size_t i = 0; i < sizeof(buf); ++i) {
+    if (i < PartialRecvAndThenEof::good_amount) {
+      REQUIRE(buf[i] == 'B');
+    } else {
+      REQUIRE(buf[i] == '\0');
+    }
+  }
 }
 
 // Client::netx_resolve() tests
