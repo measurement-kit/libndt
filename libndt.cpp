@@ -1516,16 +1516,20 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 
 #ifdef _WIN32
 #define AS_OS_SOCKLEN(n) ((int)n)
+#define AS_OS_SOCKLEN_STAR(n) ((int *)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((int)n)
 #define OS_SSIZE_MAX INT_MAX
 #define OS_EINVAL WSAEINVAL
+#define AS_OS_OPTION_VALUE(x) ((char *)x)
 #else
 #define AS_OS_SOCKLEN(n) ((socklen_t)n)
+#define AS_OS_SOCKLEN_STAR(n) ((socklen_t *)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
 #define OS_SSIZE_MAX SSIZE_MAX
 #define OS_EINVAL EINVAL
+#define AS_OS_OPTION_VALUE(x) ((void *)x)
 #endif
 
 int Client::get_last_system_error() noexcept {
@@ -1617,6 +1621,13 @@ int Client::fcntl3i(Socket s, int cmd, int arg) noexcept {
   return ::fcntl(AS_OS_SOCKET(s), cmd, arg);
 }
 #endif
+
+int Client::getsockopt(int socket, int level, int name, void *value,
+                       SockLen *len) noexcept {
+  static_assert(sizeof(*len) == sizeof(int), "invalid SockLen size");
+  return ::getsockopt(socket, level, name, AS_OS_OPTION_VALUE(value),
+                      AS_OS_SOCKLEN_STAR(len));
+}
 
 }  // namespace libndt
 }  // namespace measurement_kit
