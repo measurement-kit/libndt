@@ -2078,6 +2078,15 @@ TEST_CASE("Client::netx_connect() deals with Client::connect() failure") {
   REQUIRE(client.netx_connect("1.2.3.4", "33", &sock) == libndt::Err::io_error);
 }
 
+// Client::netx_recv() tests
+// -------------------------
+
+TEST_CASE("Client::netx_recv() deals with zero recv correctly") {
+  libndt::Client client;
+  libndt::Size n = 0;
+  REQUIRE(client.netx_recv(0, nullptr, 0, &n) == libndt::Err::invalid_argument);
+}
+
 // Client::netx_recvn() tests
 // --------------------------
 
@@ -2191,6 +2200,15 @@ TEST_CASE(
       REQUIRE(buf[i] == '\0');
     }
   }
+}
+
+// Client::netx_send() tests
+// -------------------------
+
+TEST_CASE("Client::netx_send() deals with zero send correctly") {
+  libndt::Client client;
+  libndt::Size n = 0;
+  REQUIRE(client.netx_send(0, nullptr, 0, &n) == libndt::Err::invalid_argument);
 }
 
 // Client::netx_sendn() tests

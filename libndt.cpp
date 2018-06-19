@@ -1341,6 +1341,11 @@ Err Client::netx_connect(const std::string &hostname, const std::string &port,
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
+  if (count <= 0) {
+    EMIT_WARNING("netx_recv: explicitly disallowing zero read; use select() "
+                 "to check the state of a socket");
+    return Err::invalid_argument;
+  }
   set_last_system_error(0);
   auto rv = this->recv(fd, base, count);
   if (rv < 0) {
@@ -1348,7 +1353,8 @@ Err Client::netx_recv(Socket fd, void *base, Size count,
     *actual = 0;
     return map_errno(get_last_system_error());
   }
-  if (rv == 0 && count > 0) {
+  if (rv == 0) {
+    assert(count > 0); // guaranteed by the above check
     *actual = 0;
     return Err::eof;
   }
@@ -1371,6 +1377,11 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
+  if (count <= 0) {
+    EMIT_WARNING("netx_send: explicitly disallowing zero send; use select() "
+                 "to check the state of a socket");
+    return Err::invalid_argument;
+  }
   set_last_system_error(0);
   auto rv = this->send(fd, base, count);
   if (rv < 0) {
@@ -1378,8 +1389,10 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
     *actual = 0;
     return map_errno(get_last_system_error());
   }
-  // Send() should not return zero unless count is zero
-  if (rv == 0 && count > 0) {
+  // Send() should not return zero unless count is zero. So consider a zero
+  // return value as an I/O error rather than EOF.
+  if (rv == 0) {
+    assert(count > 0); // guaranteed by the above check
     *actual = 0;
     return Err::io_error;
   }
