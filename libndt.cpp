@@ -479,6 +479,7 @@ bool Client::run_download() noexcept {
   if (!msg_expect_test_prepare(&port, &nflows)) {
     return false;
   }
+  EMIT_DEBUG("run_download: got TEST_PREPARE message");
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
@@ -492,10 +493,12 @@ bool Client::run_download() noexcept {
     EMIT_WARNING("run_download: not all connect succeeded");
     return false;
   }
+  EMIT_DEBUG("run_download: all connections established");
 
   if (!msg_expect_empty(msg_test_start)) {
     return false;
   }
+  EMIT_DEBUG("run_download: got TEST_START message");
 
   double client_side_speed = 0.0;
   {
@@ -504,6 +507,7 @@ bool Client::run_download() noexcept {
     auto begin = std::chrono::steady_clock::now();
     auto prev = begin;
     char buf[64000];
+    EMIT_DEBUG("run_download: starting download test");
     for (auto done = false; !done;) {
       Socket maxsock = -1;
       fd_set set;
@@ -519,13 +523,14 @@ bool Client::run_download() noexcept {
       assert(maxsock < INT_MAX);
       auto err = netx_select((int)maxsock + 1, &set, nullptr, nullptr, &tv);
       if (err != Err::none && err != Err::timed_out) {
+        // TODO(bassosimone): should we just leave the loop here?
         EMIT_WARNING(
             "run_download: netx_select() failed: " << get_last_system_error());
         return false;
       }
       if (err == Err::none) {
         for (auto &fd : dload_socks.sockets) {
-          if (FD_ISSET(fd, &set)) {
+          if (FD_ISSET(AS_OS_SOCKET(fd), &set)) {
             Size n = 0;
             // Note: select() has just tell us that the socket is readable, so
             // for now we will not be concered with checking for EAGAIN.
@@ -562,6 +567,7 @@ bool Client::run_download() noexcept {
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
     client_side_speed = compute_speed(total_data, elapsed.count());
+    EMIT_DEBUG("run_download: ending download test");
   }
 
   {
@@ -594,6 +600,7 @@ bool Client::run_download() noexcept {
       return false;
     }
     if (code == msg_test_finalize) {
+      EMIT_DEBUG("run_download: finished");
       return true;
     }
     if (!emit_result(this, "web100", std::move(message))) {
@@ -748,6 +755,7 @@ bool Client::run_upload() noexcept {
     return false;
   }
 
+  EMIT_DEBUG("run_upload: complete");
   return true;
 }
 
@@ -1418,7 +1426,9 @@ Err Client::netx_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept {
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
-  assert(fd >= 0 && base != nullptr && count > 0 && actual != nullptr);
+  if (fd < 0) {
+    return Err::invalid_argument;
+  }
   fd_set set;
   FD_ZERO(&set);
   FD_SET(fd, &set);
@@ -1472,7 +1482,9 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
-  assert(fd >= 0 && base != nullptr && count > 0 && actual != nullptr);
+  if (fd < 0) {
+    return Err::invalid_argument;
+  }
   fd_set set;
   FD_ZERO(&set);
   FD_SET(fd, &set);

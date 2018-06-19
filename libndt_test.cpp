@@ -566,9 +566,82 @@ TEST_CASE(
 // Client::run_download() tests
 // ----------------------------
 
-class FailMsgExpectTestPrepare : public libndt::Client {
+class RunDownloadModel : public libndt::Client {
  public:
   using libndt::Client::Client;
+
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+
+  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     libndt::Socket *sock) noexcept override {
+    *sock = next_sock_++ /* Something "valid" */;
+    return libndt::Err::none;
+  }
+
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    // Note: returning success without changing the readset implies that the
+    // caller will believe that the socket is readable.
+    return libndt::Err::none;
+  }
+
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *base,
+                                    libndt::Size total,
+                                    libndt::Size *nread) noexcept override {
+    // Note: this spins but it's an unfortunate fact of life. Some tests
+    // will take some CPU while they are running. Not a big deal.
+    for (libndt::Size i = 0; i < total; ++i) {
+      ((char *)base)[i] = 'A';
+    }
+    *nread = total;
+    return libndt::Err::none;
+  }
+
+  bool msg_read_legacy(uint8_t *code, std::string *message) noexcept override {
+    *code = libndt::msg_test_msg;
+    *message = "7928 119520 9928704";
+    return true;
+  }
+
+  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
+
+  bool msg_read(uint8_t *code, std::string *msg) noexcept override {
+    if (!final_msgs_.empty()) {
+      *code = final_msgs_.front();
+      final_msgs_.pop_front();
+      if (*code == libndt::msg_test_msg) {
+        *msg = "foo: bar\n";
+      } else {
+        *msg = "";
+      }
+      return true;
+    }
+    return false;
+  }
+
+ private:
+  libndt::Socket next_sock_ = 0;
+  std::deque<uint8_t> final_msgs_{
+    libndt::msg_test_msg,
+    libndt::msg_test_finalize
+  };
+};
+
+TEST_CASE("Client::run_download() works in the common case") {
+  libndt::Settings settings;
+  settings.max_runtime = 1;  // Short to avoid spinning too much
+  //settings.verbosity = libndt::verbosity::debug;
+  RunDownloadModel client{settings};
+  REQUIRE(client.run_download() == true);
+}
+
+class RunDownloadFailMsgExpectTestPrepare : public RunDownloadModel {
+ public:
+  using RunDownloadModel::RunDownloadModel;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return false;
   }
@@ -577,16 +650,15 @@ class FailMsgExpectTestPrepare : public libndt::Client {
 TEST_CASE(
     "Client::run_download() deals with Client::msg_expect_test_prepare() "
     "failure") {
-  FailMsgExpectTestPrepare client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;  // Short to avoid spinning too much
+  RunDownloadFailMsgExpectTestPrepare client{settings};
   REQUIRE(client.run_download() == false);
 }
 
-class FailNetxMaybesocks5hConnect : public libndt::Client {
+class RunDownloadFailNextMaybesocks5hDial : public RunDownloadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
+  using RunDownloadModel::RunDownloadModel;
   libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      libndt::Socket *) noexcept override {
     return libndt::Err::io_error;
@@ -596,42 +668,29 @@ class FailNetxMaybesocks5hConnect : public libndt::Client {
 TEST_CASE(
     "Client::run_download() deals with Client::netx_maybesocks5h_dial() "
     "failure") {
-  FailNetxMaybesocks5hConnect client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;  // Short to avoid spinning too much
+  RunDownloadFailNextMaybesocks5hDial client{settings};
   REQUIRE(client.run_download() == false);
 }
 
-class FailMsgExpectEmpty : public libndt::Client {
+class RunDownloadFailMsgExpectEmpty : public RunDownloadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
+  using RunDownloadModel::RunDownloadModel;
   bool msg_expect_empty(uint8_t) noexcept override { return false; }
 };
 
 TEST_CASE(
     "Client::run_download() deals with Client::msg_expect_empty() failure") {
-  FailMsgExpectEmpty client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;  // Short to avoid spinning too much
+  RunDownloadFailMsgExpectEmpty client{settings};
   REQUIRE(client.run_download() == false);
 }
 
-class FailNetxSelectDuringDownload : public libndt::Client {
+class RunDownloadFailNetxSelect : public RunDownloadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  using RunDownloadModel::RunDownloadModel;
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::io_error;
@@ -639,86 +698,31 @@ class FailNetxSelectDuringDownload : public libndt::Client {
 };
 
 TEST_CASE("Client::run_download() deals with Client::netx_select() failure") {
-  FailNetxSelectDuringDownload client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;  // Short to avoid spinning too much
+  RunDownloadFailNetxSelect client{settings};
   REQUIRE(client.run_download() == false);
 }
 
-class FailRecvDuringDownload : public libndt::Client {
+class RunDownloadFailNetxRecvNonblocking : public RunDownloadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
-                          timeval *) noexcept override {
-    return libndt::Err::none;
-  }
+  using RunDownloadModel::RunDownloadModel;
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
                                     libndt::Size *) noexcept override {
-    return libndt::Err::invalid_argument;
+    return libndt::Err::connection_reset;
   }
 };
 
 TEST_CASE("Client::run_download() deals with Client::recv() failure") {
-  FailRecvDuringDownload client;
-  REQUIRE(client.run_download() == false);
-}
-
-class RecvEofDuringDownload : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
-                          timeval *) noexcept override {
-    return libndt::Err::none;
-  }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
-    return libndt::Err::eof;
-  }
-};
-
-TEST_CASE("Client::run_download() honours max_runtime") {
   libndt::Settings settings;
-  settings.max_runtime = 0;
-  RecvEofDuringDownload client{settings};
-  REQUIRE(client.run_download() == false);
+  settings.max_runtime = 1;  // Short to avoid spinning too much
+  RunDownloadFailNetxRecvNonblocking client{settings};
+  REQUIRE(client.run_download() == true);
 }
 
-class FailMsgReadLegacyDuringDownload : public libndt::Client {
+class RunDownloadFailMsgReadLegacy : public RunDownloadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
-                          timeval *) noexcept override {
-    return libndt::Err::none;
-  }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
-    return libndt::Err::eof;
-  }
+  using RunDownloadModel::RunDownloadModel;
   bool msg_read_legacy(uint8_t *, std::string *) noexcept override {
     return false;
   }
@@ -726,131 +730,57 @@ class FailMsgReadLegacyDuringDownload : public libndt::Client {
 
 TEST_CASE(
     "Client::run_download() deals with Client::msg_read_legacy_failure()") {
-  FailMsgReadLegacyDuringDownload client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunDownloadFailMsgReadLegacy client{settings};
   REQUIRE(client.run_download() == false);
 }
 
-class RecvNonTestMsgDuringDownload : public libndt::Client {
+class RunDownloadInvalidLegacyMessage : public RunDownloadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
-                          timeval *) noexcept override {
-    return libndt::Err::none;
-  }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
-    return libndt::Err::eof;
-  }
+  using RunDownloadModel::RunDownloadModel;
   bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
-    *code = libndt::msg_logout;
+    *code = libndt::msg_comm_failure;
     return true;
   }
 };
 
 TEST_CASE("Client::run_download() deals with non-msg_test_msg receipt") {
-  RecvNonTestMsgDuringDownload client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunDownloadInvalidLegacyMessage client{settings};
   REQUIRE(client.run_download() == false);
 }
 
-class FailMsgWriteDuringDownload : public libndt::Client {
+class RunDownloadFailMsgWrite : public RunDownloadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
-                          timeval *) noexcept override {
-    return libndt::Err::none;
-  }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
-    return libndt::Err::eof;
-  }
-  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
-    *code = libndt::msg_test_msg;
-    return true;
-  }
+  using RunDownloadModel::RunDownloadModel;
   bool msg_write(uint8_t, std::string &&) noexcept override { return false; }
 };
 
 TEST_CASE("Client::run_download() deals with Client::msg_write() failure") {
-  FailMsgWriteDuringDownload client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunDownloadFailMsgWrite client{settings};
   REQUIRE(client.run_download() == false);
 }
 
-class FailMsgReadDuringDownload : public libndt::Client {
+class RunDownloadFailMsgRead : public RunDownloadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
-                          timeval *) noexcept override {
-    return libndt::Err::none;
-  }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
-    return libndt::Err::eof;
-  }
-  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
-    *code = libndt::msg_test_msg;
-    return true;
-  }
-  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
+  using RunDownloadModel::RunDownloadModel;
   bool msg_read(uint8_t *, std::string *) noexcept override { return false; }
 };
 
 TEST_CASE("Client::run_download() deals with Client::msg_read() failure") {
-  FailMsgReadDuringDownload client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunDownloadFailMsgRead client{settings};
   REQUIRE(client.run_download() == false);
 }
 
-class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
+class RunDownloadRecvNonTestOrLogout : public RunDownloadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
-                          timeval *) noexcept override {
-    return libndt::Err::none;
-  }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
-    return libndt::Err::eof;
-  }
-  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
-    *code = libndt::msg_test_msg;
-    return true;
-  }
-  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
+  using RunDownloadModel::RunDownloadModel;
   bool msg_read(uint8_t *code, std::string *) noexcept override {
     *code = libndt::msg_login;
     return true;
@@ -858,35 +788,15 @@ class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
 };
 
 TEST_CASE("Client::run_download() deals with non-logout-or-test msg") {
-  RecvNonTestOrLogoutMsgDuringDownload client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunDownloadRecvNonTestOrLogout client{settings};
   REQUIRE(client.run_download() == false);
 }
 
-class FailEmitResultDuringDownload : public libndt::Client {
+class RunDownloadFailEmitResult : public RunDownloadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
-                          timeval *) noexcept override {
-    return libndt::Err::none;
-  }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
-    return libndt::Err::eof;
-  }
-  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
-    *code = libndt::msg_test_msg;
-    return true;
-  }
-  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
+  using RunDownloadModel::RunDownloadModel;
   bool msg_read(uint8_t *code, std::string *s) noexcept override {
     *code = libndt::msg_test_msg;
     *s = "antani-antani";  // Causes emit_result() to fail
@@ -895,35 +805,15 @@ class FailEmitResultDuringDownload : public libndt::Client {
 };
 
 TEST_CASE("Client::run_download() deals with emit_result() failure") {
-  FailEmitResultDuringDownload client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunDownloadFailEmitResult client{settings};
   REQUIRE(client.run_download() == false);
 }
 
-class TooManyTestMsgsDuringDownload : public libndt::Client {
+class RunDownloadTooManyTestMsgs : public RunDownloadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
-                          timeval *) noexcept override {
-    return libndt::Err::none;
-  }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
-    return libndt::Err::eof;
-  }
-  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
-    *code = libndt::msg_test_msg;
-    return true;
-  }
-  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
+  using RunDownloadModel::RunDownloadModel;
   bool msg_read(uint8_t *code, std::string *s) noexcept override {
     *code = libndt::msg_test_msg;
     *s = "antani:antani";  // Accepted by emit_result()
@@ -932,7 +822,9 @@ class TooManyTestMsgsDuringDownload : public libndt::Client {
 };
 
 TEST_CASE("Client::run_download() deals with too many results messages") {
-  TooManyTestMsgsDuringDownload client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunDownloadTooManyTestMsgs client{settings};
   REQUIRE(client.run_download() == false);
 }
 
@@ -1007,62 +899,139 @@ TEST_CASE(
 // Client::run_upload() tests
 // --------------------------
 
+class RunUploadModel : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return true;
+  }
+
+  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     libndt::Socket *sock) noexcept override {
+    *sock = next_sock_++ /* Something "valid" */;
+    return libndt::Err::none;
+  }
+
+  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    // Note: returning success without changing the readset implies that the
+    // caller will believe that the socket is readable.
+    return libndt::Err::none;
+  }
+
+  libndt::Err netx_send_nonblocking(libndt::Socket, const void *,
+                                    libndt::Size total,
+                                    libndt::Size *nread) noexcept override {
+    // Note: this spins but it's an unfortunate fact of life. Some tests
+    // will take some CPU while they are running. Not a big deal.
+    *nread = total;
+    return libndt::Err::none;
+  }
+
+  bool msg_expect(uint8_t, std::string *) noexcept override { return true; }
+
+ private:
+  libndt::Socket next_sock_ = 0;
+};
+
+TEST_CASE("Client::run_upload() works in the common case") {
+  libndt::Settings settings;
+  settings.max_runtime = 1;  // Short to avoid spinning too much
+  //settings.verbosity = libndt::verbosity::debug;
+  RunUploadModel client{settings};
+  REQUIRE(client.run_upload() == true);
+}
+
+class RunUploadFailMsgExpectTestPrepare : public RunUploadModel {
+ public:
+  using RunUploadModel::RunUploadModel;
+  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
+    return false;
+  }
+};
+
 TEST_CASE(
     "Client::run_upload() deals with Client::msg_expect_test_prepare() "
     "failure") {
-  FailMsgExpectTestPrepare client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunUploadFailMsgExpectTestPrepare client{settings};
   REQUIRE(client.run_upload() == false);
 }
 
-class TestPrepareMoreThanOneFlow : public libndt::Client {
+class RunUploadTestPrepareMoreThanOneFlow : public RunUploadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *,
-                               uint8_t *nflows) noexcept override {
+  using RunUploadModel::RunUploadModel;
+  bool msg_expect_test_prepare(  //
+      std::string *, uint8_t *nflows) noexcept override {
     *nflows = 11;
     return true;
   }
 };
 
 TEST_CASE("Client::run_upload() deals with more than one flow") {
-  TestPrepareMoreThanOneFlow client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunUploadTestPrepareMoreThanOneFlow client{settings};
   REQUIRE(client.run_upload() == false);
 }
+
+class RunUploadFailNetxMaybesocks5hDial : public RunUploadModel {
+ public:
+  using RunUploadModel::RunUploadModel;
+  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     libndt::Socket *) noexcept override {
+    return libndt::Err::io_error;
+  }
+};
 
 TEST_CASE(
     "Client::run_upload() deals with Client::netx_maybesocks5h_dial() "
     "failure") {
-  FailNetxMaybesocks5hConnect client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunUploadFailNetxMaybesocks5hDial client{settings};
   REQUIRE(client.run_upload() == false);
 }
+
+class RunUploadFailMsgExpectEmptyMsgTestStart : public RunUploadModel {
+ public:
+  using RunUploadModel::RunUploadModel;
+  bool msg_expect_empty(uint8_t code) noexcept override {
+    return code != libndt::msg_test_start;
+  }
+};
 
 TEST_CASE(
     "Client::run_upload() deals with Client::msg_expect_empty() failure") {
-  FailMsgExpectEmpty client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunUploadFailMsgExpectEmptyMsgTestStart client{settings};
   REQUIRE(client.run_upload() == false);
 }
 
-TEST_CASE("Client::run_upload() deals with Client::netx_select() failure") {
-  FailNetxSelectDuringDownload client;  // Works also for upload phase
-  REQUIRE(client.run_upload() == false);
-}
-
-class FailSendDuringUpload : public libndt::Client {
+class RunUploadFailNetxSelect : public RunUploadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  using RunUploadModel::RunUploadModel;
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
-    return libndt::Err::none;
+    return libndt::Err::io_error;
   }
+};
+
+TEST_CASE("Client::run_upload() deals with Client::netx_select() failure") {
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunUploadFailNetxSelect client{settings};
+  REQUIRE(client.run_upload() == false);
+}
+
+class RunUploadFailNetxSendNonblocking : public RunUploadModel {
+ public:
+  using RunUploadModel::RunUploadModel;
   libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
                                     libndt::Size *) noexcept override {
     return libndt::Err::io_error;
@@ -1070,74 +1039,39 @@ class FailSendDuringUpload : public libndt::Client {
 };
 
 TEST_CASE("Client::run_upload() deals with Client::send() failure") {
-  FailSendDuringUpload client;
-  REQUIRE(client.run_upload() == false);
-}
-
-TEST_CASE("Client::run_upload() honours max_runtime") {
   libndt::Settings settings;
-  settings.max_runtime = 0;
-  FailSendDuringUpload client{settings};
-  REQUIRE(client.run_upload() == false);
+  settings.max_runtime = 1;
+  RunUploadFailNetxSendNonblocking client{settings};
+  REQUIRE(client.run_upload() == true);
 }
 
-class FailMsgExpectDuringUpload : public libndt::Client {
+class RunUploadFailMsgExcept : public RunUploadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
-                          timeval *) noexcept override {
-    return libndt::Err::none;
-  }
-  libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
-    return libndt::Err::io_error;
-  }
+  using RunUploadModel::RunUploadModel;
   bool msg_expect(uint8_t, std::string *) noexcept override { return false; }
 };
 
 TEST_CASE("Client::run_upload() deals with Client::msg_expect() failure") {
-  FailMsgExpectDuringUpload client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunUploadFailMsgExcept client{settings};
   REQUIRE(client.run_upload() == false);
 }
 
-class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
+class RunUploadFailMsgExpectEmptyMsgTestFinalize : public RunUploadModel {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
-    return true;
-  }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
-    *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
-  }
+  using RunUploadModel::RunUploadModel;
   bool msg_expect_empty(uint8_t code) noexcept override {
     return code != libndt::msg_test_finalize;
   }
-  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
-                          timeval *) noexcept override {
-    return libndt::Err::none;
-  }
-  libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
-    return libndt::Err::io_error;
-  }
-  bool msg_expect(uint8_t, std::string *) noexcept override { return true; }
 };
 
 TEST_CASE(
     "Client::run_upload() deals with final Client::msg_expect_empty() "
     "failure") {
-  FailFinalMsgExpectEmptyDuringUpload client;
+  libndt::Settings settings;
+  settings.max_runtime = 1;
+  RunUploadFailMsgExpectEmptyMsgTestFinalize client{settings};
   REQUIRE(client.run_upload() == false);
 }
 
@@ -2181,13 +2115,14 @@ TEST_CASE("Client::netx_dial() deals with Client::connect() failure") {
   REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
 }
 
-// Client::netx_recv() tests
-// -------------------------
+// Client::netx_recv_nonblocking() tests
+// -------------------------------------
 
-TEST_CASE("Client::netx_recv() deals with zero recv correctly") {
+TEST_CASE("Client::netx_recv_nonblocking() deals with zero recv correctly") {
   libndt::Client client;
   libndt::Size n = 0;
-  REQUIRE(client.netx_recv(0, nullptr, 0, &n) == libndt::Err::invalid_argument);
+  REQUIRE(client.netx_recv_nonblocking(0, nullptr, 0, &n) ==
+          libndt::Err::invalid_argument);
 }
 
 // Client::netx_recvn() tests
@@ -2199,15 +2134,26 @@ TEST_CASE("Client::netx_recv() deals with zero recv correctly") {
 #define OS_SSIZE_MAX SSIZE_MAX
 #endif
 
+class NetxRecvnModel : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    // By not modifying the `fd_set`s, and by returning success, we tell the
+    // caller that all the fds are in the desired state(s).
+    return libndt::Err::none;
+  }
+};
+
 TEST_CASE("Client::netx_recvn() deals with too-large buffer") {
-  libndt::Client client;
+  NetxRecvnModel client;
   REQUIRE(client.netx_recvn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) ==
           libndt::Err::invalid_argument);
 }
 
-class FailRecv : public libndt::Client {
+class NetxRecvnFailRecv : public NetxRecvnModel {
  public:
-  using libndt::Client::Client;
+  using NetxRecvnModel::NetxRecvnModel;
   libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
     set_last_system_error(OS_EWOULDBLOCK);
     return -1;
@@ -2216,14 +2162,14 @@ class FailRecv : public libndt::Client {
 
 TEST_CASE("Client::netx_recvn() deals with Client::recv() failure") {
   char buf[1024];
-  FailRecv client;
+  NetxRecvnFailRecv client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
           libndt::Err::operation_would_block);
 }
 
-class RecvEof : public libndt::Client {
+class NetxRecvnRecvEof : public NetxRecvnModel {
  public:
-  using libndt::Client::Client;
+  using NetxRecvnModel::NetxRecvnModel;
   libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
     return 0;
   }
@@ -2231,13 +2177,13 @@ class RecvEof : public libndt::Client {
 
 TEST_CASE("Client::netx_recvn() deals with Client::recv() EOF") {
   char buf[1024];
-  RecvEof client;
+  NetxRecvnRecvEof client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == libndt::Err::eof);
 }
 
-class PartialRecvAndThenError : public libndt::Client {
+class NetxRecvnPartialRecvAndThenError : public NetxRecvnModel {
  public:
-  using libndt::Client::Client;
+  using NetxRecvnModel::NetxRecvnModel;
   static constexpr libndt::Size amount = 11;
   static constexpr libndt::Size good_amount = 3;
   libndt::Ssize recv(libndt::Socket, void *buf,
@@ -2256,14 +2202,14 @@ class PartialRecvAndThenError : public libndt::Client {
 
 TEST_CASE(
     "Client::netx_recvn() deals with partial Client::recv() and then error") {
-  char buf[PartialRecvAndThenError::amount] = {};
-  PartialRecvAndThenError client;
+  char buf[NetxRecvnPartialRecvAndThenError::amount] = {};
+  NetxRecvnPartialRecvAndThenError client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
           libndt::Err::operation_would_block);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return -1, not a short read.
   for (size_t i = 0; i < sizeof(buf); ++i) {
-    if (i < PartialRecvAndThenError::good_amount) {
+    if (i < NetxRecvnPartialRecvAndThenError::good_amount) {
       REQUIRE(buf[i] == 'A');
     } else {
       REQUIRE(buf[i] == '\0');
@@ -2271,9 +2217,9 @@ TEST_CASE(
   }
 }
 
-class PartialRecvAndThenEof : public libndt::Client {
+class NetxRecvnPartialRecvAndThenEof : public NetxRecvnModel {
  public:
-  using libndt::Client::Client;
+  using NetxRecvnModel::NetxRecvnModel;
   static constexpr libndt::Size amount = 7;
   static constexpr libndt::Size good_amount = 5;
   libndt::Ssize recv(libndt::Socket, void *buf,
@@ -2291,13 +2237,13 @@ class PartialRecvAndThenEof : public libndt::Client {
 
 TEST_CASE(
     "Client::netx_recvn() deals with partial Client::recv() and then EOF") {
-  char buf[PartialRecvAndThenEof::amount] = {};
-  PartialRecvAndThenEof client;
+  char buf[NetxRecvnPartialRecvAndThenEof::amount] = {};
+  NetxRecvnPartialRecvAndThenEof client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == libndt::Err::eof);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return zero, not a short read.
   for (size_t i = 0; i < sizeof(buf); ++i) {
-    if (i < PartialRecvAndThenEof::good_amount) {
+    if (i < NetxRecvnPartialRecvAndThenEof::good_amount) {
       REQUIRE(buf[i] == 'B');
     } else {
       REQUIRE(buf[i] == '\0');
@@ -2305,27 +2251,30 @@ TEST_CASE(
   }
 }
 
-// Client::netx_send() tests
-// -------------------------
+// Client::netx_send_nonblocking() tests
+// -------------------------------------
 
-TEST_CASE("Client::netx_send() deals with zero send correctly") {
+TEST_CASE("Client::netx_send_nonblocking() deals with zero send correctly") {
   libndt::Client client;
   libndt::Size n = 0;
-  REQUIRE(client.netx_send(0, nullptr, 0, &n) == libndt::Err::invalid_argument);
+  REQUIRE(client.netx_send_nonblocking(0, nullptr, 0, &n) ==
+          libndt::Err::invalid_argument);
 }
 
 // Client::netx_sendn() tests
 // --------------------------
 
+using NetxSendnModel = NetxRecvnModel;
+
 TEST_CASE("Client::netx_sendn() deals with too-large buffer") {
-  libndt::Client client;
+  NetxSendnModel client;
   REQUIRE(client.netx_sendn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) ==
           libndt::Err::invalid_argument);
 }
 
-class FailSend : public libndt::Client {
+class NetxSendnFailSend : public NetxSendnModel {
  public:
-  using libndt::Client::Client;
+  using NetxSendnModel::NetxSendnModel;
   libndt::Ssize send(libndt::Socket, const void *,
                      libndt::Size) noexcept override {
     set_last_system_error(OS_EWOULDBLOCK);
@@ -2335,15 +2284,15 @@ class FailSend : public libndt::Client {
 
 TEST_CASE("Client::netx_sendn() deals with Client::send() failure") {
   char buf[1024];
-  FailSend client;
+  NetxSendnFailSend client;
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
           libndt::Err::operation_would_block);
 }
 
 // As much as EOF should not appear on a socket when sending, be ready.
-class SendEof : public libndt::Client {
+class NetxSendnSendEof : public NetxSendnModel {
  public:
-  using libndt::Client::Client;
+  using NetxSendnModel::NetxSendnModel;
   libndt::Ssize send(libndt::Socket, const void *,
                      libndt::Size) noexcept override {
     return 0;
@@ -2352,13 +2301,13 @@ class SendEof : public libndt::Client {
 
 TEST_CASE("Client::netx_sendn() deals with Client::send() EOF") {
   char buf[1024];
-  SendEof client;
+  NetxSendnSendEof client;
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == libndt::Err::io_error);
 }
 
-class PartialSendAndThenError : public libndt::Client {
+class NetxSendnPartialSendAndThenError : public NetxSendnModel {
  public:
-  using libndt::Client::Client;
+  using NetxSendnModel::NetxSendnModel;
   static constexpr libndt::Size amount = 11;
   static constexpr libndt::Size good_amount = 3;
   libndt::Size successful = 0;
@@ -2375,22 +2324,22 @@ class PartialSendAndThenError : public libndt::Client {
 };
 
 TEST_CASE("Client::send() deals with partial Client::send() and then error") {
-  char buf[PartialSendAndThenError::amount] = {};
-  PartialSendAndThenError client;
+  char buf[NetxSendnPartialSendAndThenError::amount] = {};
+  NetxSendnPartialSendAndThenError client;
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
           libndt::Err::operation_would_block);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return -1, not a short write.
   //
   // Usage of `exp` is required to make clang compile (unclear to me why).
-  auto exp = PartialSendAndThenError::good_amount;
+  auto exp = NetxSendnPartialSendAndThenError::good_amount;
   REQUIRE(client.successful == exp);
 }
 
 // See above comment regarding likelihood of send returning EOF (i.e. zero)
-class PartialSendAndThenEof : public libndt::Client {
+class NetxSendnPartialSendAndThenEof : public NetxSendnModel {
  public:
-  using libndt::Client::Client;
+  using NetxSendnModel::NetxSendnModel;
   static constexpr libndt::Size amount = 7;
   static constexpr libndt::Size good_amount = 5;
   libndt::Size successful = 0;
@@ -2407,14 +2356,14 @@ class PartialSendAndThenEof : public libndt::Client {
 
 TEST_CASE(
     "Client::netx_sendn() deals with partial Client::send() and then EOF") {
-  char buf[PartialSendAndThenEof::amount] = {};
-  PartialSendAndThenEof client;
+  char buf[NetxSendnPartialSendAndThenEof::amount] = {};
+  NetxSendnPartialSendAndThenEof client;
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == libndt::Err::io_error);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return zero, not a short write.
   //
   // Usage of `exp` is required to make clang compile (unclear to me why).
-  auto exp = PartialSendAndThenEof::good_amount;
+  auto exp = NetxSendnPartialSendAndThenEof::good_amount;
   REQUIRE(client.successful == exp);
 }
 
@@ -2532,7 +2481,7 @@ TEST_CASE(
   }
 }
 
-#endif // _WIN32
+#endif  // _WIN32
 
 // Client::netx_select() tests
 // ---------------------------
@@ -2566,7 +2515,7 @@ TEST_CASE("Client::netx_select() deals with EINTR") {
   REQUIRE(client.count == 2);
 }
 
-#endif // !_WIN32
+#endif  // !_WIN32
 
 class TimeoutSelect : public libndt::Client {
  public:
