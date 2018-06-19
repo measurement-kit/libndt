@@ -1413,7 +1413,7 @@ Err Client::netx_sendn(Socket fd, const void *base, Size count) noexcept {
 Err Client::netx_resolve(const std::string &hostname,
                          std::vector<std::string> *addrs) noexcept {
   assert(addrs != nullptr);
-  EMIT_DEBUG("resolve: " << hostname);
+  EMIT_DEBUG("netx_resolve: " << hostname);
   addrinfo hints{};
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
