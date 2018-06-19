@@ -2566,7 +2566,7 @@ TEST_CASE("Client::netx_select() deals with EINTR") {
   REQUIRE(client.count == 2);
 }
 
-#endif // _WIN32
+#endif // !_WIN32
 
 class TimeoutSelect : public libndt::Client {
  public:
@@ -2581,7 +2581,11 @@ TEST_CASE("Client::netx_select() deals with timeout") {
   TimeoutSelect client;
   fd_set readset;
   FD_ZERO(&readset);
+#ifdef _WIN32
+  FD_SET((SOCKET)maxfd, &readset);
+#else
   FD_SET(maxfd, &readset);
+#endif
   REQUIRE(client.netx_select((int)maxfd + 1, &readset, nullptr, nullptr,
                              nullptr) == libndt::Err::timed_out);
 }
