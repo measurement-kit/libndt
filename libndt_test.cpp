@@ -21,6 +21,12 @@
 #include "catch.hpp"
 #include "json.hpp"
 
+#ifdef _WIN32
+#define OS_EINVAL WSAEINVAL
+#else
+#define OS_EINVAL EINVAL
+#endif
+
 // Unit tests
 // ==========
 //
@@ -640,7 +646,7 @@ class FailRecvDuringDownload : public libndt::Client {
     return 1;
   }
   libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
-    set_last_system_error(0);
+    set_last_system_error(OS_EINVAL);
     return -1;
   }
 };
@@ -1636,17 +1642,17 @@ TEST_CASE("Client::connect_tcp() requires initial socket to be -1") {
   REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
 }
 
-class FailResolve : public libndt::Client {
+class FailNetxResolve : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool resolve(const std::string &,
-               std::vector<std::string> *) noexcept override {
-    return false;
+  libndt::Err netx_resolve(const std::string &,
+                           std::vector<std::string> *) noexcept override {
+    return libndt::Err::io_error;
   }
 };
 
-TEST_CASE("Client::connect_tcp() deals with Client::resolve() failure") {
-  FailResolve client;
+TEST_CASE("Client::connect_tcp() deals with Client::netx_resolve() failure") {
+  FailNetxResolve client;
   libndt::Socket sock = -1;
   REQUIRE(client.connect_tcp("1.2.3.4", "33", &sock) == false);
 }
@@ -1654,11 +1660,11 @@ TEST_CASE("Client::connect_tcp() deals with Client::resolve() failure") {
 class FailGetaddrinfoInConnectTcp : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool resolve(const std::string &str,
-               std::vector<std::string> *addrs) noexcept override {
+  libndt::Err netx_resolve(const std::string &str,
+                           std::vector<std::string> *addrs) noexcept override {
     REQUIRE(str == "1.2.3.4");  // make sure it did not change
     addrs->push_back(str);
-    return true;
+    return libndt::Err::none;
   }
   int getaddrinfo(const char *, const char *, const addrinfo *,
                   addrinfo **) noexcept override {
@@ -2076,6 +2082,7 @@ class FailRecv : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+    set_last_system_error(OS_EINVAL);
     return -1;
   }
 };
@@ -2114,6 +2121,7 @@ class PartialRecvAndThenError : public libndt::Client {
       }
       return good_amount;
     }
+    set_last_system_error(OS_EINVAL);
     return -1;
   }
 };
@@ -2179,6 +2187,7 @@ class FailSend : public libndt::Client {
   using libndt::Client::Client;
   libndt::Ssize send(libndt::Socket, const void *,
                      libndt::Size) noexcept override {
+    set_last_system_error(OS_EINVAL);
     return -1;
   }
 };
@@ -2218,6 +2227,7 @@ class PartialSendAndThenError : public libndt::Client {
       successful += good_amount;
       return good_amount;
     }
+    set_last_system_error(OS_EINVAL);
     return -1;
   }
 };

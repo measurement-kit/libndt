@@ -969,55 +969,8 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
 
 bool Client::connect_tcp(const std::string &hostname, const std::string &port,
                          Socket *sock) noexcept {
-  assert(sock != nullptr);
-  if (*sock != -1) {
-    EMIT_WARNING("socket already connected");
-    return false;
-  }
-  // Implementation note: we could perform getaddrinfo() in one pass but having
-  // a virtual API that resolves a hostname to a vector of IP addresses makes
-  // life easier when you want to override hostname resolution, because you have
-  // to reimplement a simpler method, compared to reimplementing getaddrinfo().
-  std::vector<std::string> addresses;
-  if (!resolve(hostname, &addresses)) {
-    return false;
-  }
-  for (auto &addr : addresses) {
-    addrinfo hints{};
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
-    addrinfo *rp = nullptr;
-    int rv = this->getaddrinfo(addr.data(), port.data(), &hints, &rp);
-    if (rv != 0) {
-      EMIT_WARNING("unexpected getaddrinfo() failure");
-      return false;
-    }
-    assert(rp);
-    for (auto aip = rp; (aip); aip = aip->ai_next) {
-      *sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
-      if (*sock == -1) {
-        EMIT_WARNING("socket() failed: " << get_last_system_error());
-        continue;
-      }
-      // The following two lines ensure that casting `size_t` to
-      // SockLen is safe because SockLen is `int` and the value of
-      // the ai_addrlen field is always small enough.
-      static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
-      assert(aip->ai_addrlen <= INT_MAX);
-      if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
-        EMIT_DEBUG("connect(): okay");
-        break;
-      }
-      EMIT_WARNING("connect() failed: " << get_last_system_error());
-      this->closesocket(*sock);
-      *sock = -1;
-    }
-    this->freeaddrinfo(rp);
-    if (*sock != -1) {
-      break;  // we have a connection!
-    }
-  }
-  return *sock != -1;
+  // TODO(bassosimone): remove
+  return netx_connect(hostname, port, sock) == Err::none;
 }
 
 bool Client::msg_write_login(const std::string &version) noexcept {
@@ -1285,49 +1238,208 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
 }
 
 // Utilities for low-level
-
-#ifdef _WIN32
-#define OS_SSIZE_MAX INT_MAX
-#define OS_EINVAL WSAEINVAL
-#else
-#define OS_SSIZE_MAX SSIZE_MAX
-#define OS_EINVAL EINVAL
-#endif
+// TODO(bassosimone): remove this section
 
 Ssize Client::recvn(Socket fd, void *base, Size count) noexcept {
-  if (count > OS_SSIZE_MAX) {
-    set_last_system_error(OS_EINVAL);
-    return -1;
+  // TODO(bassosimone): remove
+  Err err = netx_recvn(fd, base, count);
+  if (err == Err::eof) {
+    return 0;  // Be compatible with previous expectations
   }
-  Size off = 0;
-  while (off < count) {
-    Ssize n = this->recv(fd, ((char *)base) + off, count - off);
-    if (n <= 0) {
-      return n;  // either return full success or error, ignore partial recv
-    }
-    off += (Size)n;
-  }
-  return (Ssize)off;  // cast okay because of the initial check
+  return (err == Err::none) ? (Ssize)count : -1;
 }
 
 Ssize Client::sendn(Socket fd, const void *base, Size count) noexcept {
-  if (count > OS_SSIZE_MAX) {
-    set_last_system_error(OS_EINVAL);
-    return -1;
+  // TODO(bassosimone): remove
+  Err err = netx_sendn(fd, base, count);
+  if (err == Err::io_error) {
+    return 0;  // XXX Be compatible with previous expectations
   }
-  Size off = 0;
-  while (off < count) {
-    Ssize n = this->send(fd, ((char *)base) + off, count - off);
-    if (n <= 0) {
-      return n;  // either return full success or error, ignore partial send
-    }
-    off += (Size)n;
-  }
-  return (Ssize)off;  // cast okay because of the initial check
+  return (err == Err::none) ? (Ssize)count : -1;
 }
 
 bool Client::resolve(const std::string &hostname,
                      std::vector<std::string> *addrs) noexcept {
+  // TODO(bassosimone): remove
+  return netx_resolve(hostname, addrs) == Err::none;
+}
+
+// Networking layer
+
+#ifdef _WIN32
+#define E(name) WSAE##name
+#else
+#define E(name) E##name
+#endif
+
+/*static*/ Err Client::map_errno(int ec) noexcept {
+  // clang-format off
+  switch (ec) {
+    case 0: {
+      assert(false);  // we don't expect `errno` to be zero
+      return Err::io_error;
+    }
+#ifndef _WIN32
+    case E(PIPE): return Err::broken_pipe;
+#endif
+    case E(CONNABORTED): return Err::connection_aborted;
+    case E(CONNREFUSED): return Err::connection_refused;
+    case E(CONNRESET): return Err::connection_reset;
+    case E(HOSTUNREACH): return Err::host_unreachable;
+    case E(INTR): return Err::interrupted;
+    case E(INVAL): return Err::invalid_argument;
+    case E(IO): return Err::io_error;
+    case E(NETDOWN): return Err::network_down;
+    case E(NETRESET): return Err::network_reset;
+    case E(NETUNREACH): return Err::network_unreachable;
+    case E(INPROGRESS): return Err::operation_in_progress;
+    case E(WOULDBLOCK): return Err::operation_would_block;
+#if !defined _WIN32 && EAGAIN != EWOULDBLOCK
+    case E(AGAIN): return Err::operation_would_block;
+#endif
+    case E(TIMEDOUT): return Err::timed_out;
+  }
+  // clang-format on
+  return Err::io_error;
+}
+
+#undef E  // Tidy up
+
+Err Client::map_addrinfo_error(int ec) noexcept {
+  // clang-format off
+  switch (ec) {
+    case EAI_AGAIN: return Err::ai_again;
+    case EAI_FAIL: return Err::ai_fail;
+    case EAI_NONAME: return Err::ai_noname;
+#ifdef EAI_SYSTEM
+    case EAI_SYSTEM: {
+      return map_errno(get_last_system_error());
+    }
+#endif
+  }
+  // clang-format on
+  return Err::ai_generic;
+}
+
+Err Client::netx_connect(const std::string &hostname, const std::string &port,
+                         Socket *sock) noexcept {
+  assert(sock != nullptr);
+  if (*sock != -1) {
+    EMIT_WARNING("socket already connected");
+    return Err::invalid_argument;
+  }
+  // Implementation note: we could perform getaddrinfo() in one pass but having
+  // a virtual API that resolves a hostname to a vector of IP addresses makes
+  // life easier when you want to override hostname resolution, because you have
+  // to reimplement a simpler method, compared to reimplementing getaddrinfo().
+  std::vector<std::string> addresses;
+  Err err;
+  if ((err = netx_resolve(hostname, &addresses)) != Err::none) {
+    return err;
+  }
+  for (auto &addr : addresses) {
+    addrinfo hints{};
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
+    addrinfo *rp = nullptr;
+    int rv = this->getaddrinfo(addr.data(), port.data(), &hints, &rp);
+    if (rv != 0) {
+      EMIT_WARNING("unexpected getaddrinfo() failure");
+      return map_addrinfo_error(rv);
+    }
+    assert(rp);
+    for (auto aip = rp; (aip); aip = aip->ai_next) {
+      set_last_system_error(0);
+      *sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
+      if (*sock == -1) {
+        EMIT_WARNING("socket() failed: " << get_last_system_error());
+        continue;
+      }
+      // The following two lines ensure that casting `size_t` to
+      // SockLen is safe because SockLen is `int` and the value of
+      // the ai_addrlen field is always small enough.
+      static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
+      assert(aip->ai_addrlen <= INT_MAX);
+      if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
+        EMIT_DEBUG("connect(): okay");
+        break;
+      }
+      EMIT_WARNING("connect() failed: " << get_last_system_error());
+      this->closesocket(*sock);
+      *sock = -1;
+    }
+    this->freeaddrinfo(rp);
+    if (*sock != -1) {
+      break;  // we have a connection!
+    }
+  }
+  // TODO(bassosimone): it's possible to write a better algorithm here
+  return *sock != -1 ? Err::none : Err::io_error;
+}
+
+Err Client::netx_recv(Socket fd, void *base, Size count,
+                      Size *actual) noexcept {
+  set_last_system_error(0);
+  auto rv = this->recv(fd, base, count);
+  if (rv < 0) {
+    assert(rv == -1);
+    *actual = 0;
+    return map_errno(get_last_system_error());
+  }
+  if (rv == 0 && count > 0) {
+    *actual = 0;
+    return Err::eof;
+  }
+  *actual = (Size)rv;
+  return Err::none;
+}
+
+Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
+  Size off = 0;
+  while (off < count) {
+    Size n = 0;
+    Err err = netx_recv(fd, ((char *)base) + off, count - off, &n);
+    if (err != Err::none) {
+      return err;
+    }
+    off += n;
+  }
+  return Err::none;
+}
+
+Err Client::netx_send(Socket fd, const void *base, Size count,
+                      Size *actual) noexcept {
+  set_last_system_error(0);
+  auto rv = this->send(fd, base, count);
+  if (rv < 0) {
+    assert(rv == -1);
+    *actual = 0;
+    return map_errno(get_last_system_error());
+  }
+  // Send() should not return zero unless count is zero
+  if (rv == 0 && count > 0) {
+    *actual = 0;
+    return Err::io_error;
+  }
+  *actual = (Size)rv;
+  return Err::none;
+}
+
+Err Client::netx_sendn(Socket fd, const void *base, Size count) noexcept {
+  Size off = 0;
+  while (off < count) {
+    Size n = 0;
+    Err err = netx_send(fd, ((char *)base) + off, count - off, &n);
+    if (err != Err::none) {
+      return err;
+    }
+    off += n;
+  }
+  return Err::none;
+}
+
+Err Client::netx_resolve(const std::string &hostname,
+                         std::vector<std::string> *addrs) noexcept {
   assert(addrs != nullptr);
   EMIT_DEBUG("resolve: " << hostname);
   addrinfo hints{};
@@ -1341,13 +1453,13 @@ bool Client::resolve(const std::string &hostname,
     rv = this->getaddrinfo(hostname.data(), portno, &hints, &rp);
     if (rv != 0) {
       EMIT_WARNING("getaddrinfo() failed: " << gai_strerror(rv));
-      return false;
+      return map_addrinfo_error(rv);
     }
     // FALLTHROUGH
   }
   assert(rp);
   EMIT_DEBUG("getaddrinfo(): okay");
-  auto result = true;
+  Err result = Err::none;
   for (auto aip = rp; (aip); aip = aip->ai_next) {
     char address[NI_MAXHOST], port[NI_MAXSERV];
     // The following two lines ensure that casting `size_t` to
@@ -1359,7 +1471,7 @@ bool Client::resolve(const std::string &hostname,
                           (SockLen)sizeof(address), port, (SockLen)sizeof(port),
                           NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
       EMIT_WARNING("unexpected getnameinfo() failure");
-      result = false;
+      result = Err::ai_generic;
       break;
     }
     addrs->push_back(address);  // we only care about address
@@ -1397,10 +1509,14 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 #define AS_OS_SOCKLEN(n) ((int)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((int)n)
+#define OS_SSIZE_MAX INT_MAX
+#define OS_EINVAL WSAEINVAL
 #else
 #define AS_OS_SOCKLEN(n) ((socklen_t)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
+#define OS_SSIZE_MAX SSIZE_MAX
+#define OS_EINVAL EINVAL
 #endif
 
 int Client::get_last_system_error() noexcept {
