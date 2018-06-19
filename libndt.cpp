@@ -1496,6 +1496,7 @@ Err Client::netx_select(int numfd, fd_set *readset, fd_set *writeset,
   auto rv = 0;
   auto err = Err::none;
 again:
+  set_last_system_error(0);
   rv = this->select(numfd, readset, writeset, exceptset, tvp);
   if (rv < 0) {
     assert(rv == -1);
