@@ -1603,14 +1603,14 @@ long long Client::strtonum(const char *s, long long minval, long long maxval,
 
 #ifdef _WIN32
 int Client::ioctlsocket(Socket s, long cmd, u_long *argp) noexcept {
-  return ::ioctlsocket(s, cmd, argp);
+  return ::ioctlsocket(AS_OS_SOCKET(s), cmd, argp);
 }
 #else
 int Client::fcntl2(Socket s, int cmd) noexcept {
-  return ::fcntl(s, cmd);
+  return ::fcntl(AS_OS_SOCKET(s), cmd);
 }
 int Client::fcntl3i(Socket s, int cmd, int arg) noexcept {
-  return ::fcntl(s, cmd, arg);
+  return ::fcntl(AS_OS_SOCKET(s), cmd, arg);
 }
 #endif
 
