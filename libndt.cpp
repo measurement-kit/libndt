@@ -1232,7 +1232,7 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
 #define E(name) E##name
 #endif
 
-/*static*/ Err Client::map_errno(int ec) noexcept {
+/*static*/ Err Client::netx_map_errno(int ec) noexcept {
   // clang-format off
   switch (ec) {
     case 0: {
@@ -1267,7 +1267,7 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
 
 #undef E  // Tidy up
 
-Err Client::map_addrinfo_error(int ec) noexcept {
+Err Client::netx_map_eai(int ec) noexcept {
   // clang-format off
   switch (ec) {
     case EAI_AGAIN: return Err::ai_again;
@@ -1275,7 +1275,7 @@ Err Client::map_addrinfo_error(int ec) noexcept {
     case EAI_NONAME: return Err::ai_noname;
 #ifdef EAI_SYSTEM
     case EAI_SYSTEM: {
-      return map_errno(get_last_system_error());
+      return netx_map_errno(get_last_system_error());
     }
 #endif
   }
@@ -1307,7 +1307,7 @@ Err Client::netx_connect(const std::string &hostname, const std::string &port,
     int rv = this->getaddrinfo(addr.data(), port.data(), &hints, &rp);
     if (rv != 0) {
       EMIT_WARNING("unexpected getaddrinfo() failure");
-      return map_addrinfo_error(rv);
+      return netx_map_eai(rv);
     }
     assert(rp);
     for (auto aip = rp; (aip); aip = aip->ai_next) {
@@ -1351,7 +1351,7 @@ Err Client::netx_recv(Socket fd, void *base, Size count,
   if (rv < 0) {
     assert(rv == -1);
     *actual = 0;
-    return map_errno(get_last_system_error());
+    return netx_map_errno(get_last_system_error());
   }
   if (rv == 0) {
     assert(count > 0); // guaranteed by the above check
@@ -1387,7 +1387,7 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
   if (rv < 0) {
     assert(rv == -1);
     *actual = 0;
-    return map_errno(get_last_system_error());
+    return netx_map_errno(get_last_system_error());
   }
   // Send() should not return zero unless count is zero. So consider a zero
   // return value as an I/O error rather than EOF.
@@ -1428,7 +1428,7 @@ Err Client::netx_resolve(const std::string &hostname,
     rv = this->getaddrinfo(hostname.data(), portno, &hints, &rp);
     if (rv != 0) {
       EMIT_WARNING("getaddrinfo() failed: " << gai_strerror(rv));
-      return map_addrinfo_error(rv);
+      return netx_map_eai(rv);
     }
     // FALLTHROUGH
   }

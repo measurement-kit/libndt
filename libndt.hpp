@@ -319,9 +319,9 @@ class Client {
 
   // Networking layer
 
-  static Err map_errno(int ec) noexcept;
+  static Err netx_map_errno(int ec) noexcept;
 
-  Err map_addrinfo_error(int ec) noexcept;
+  Err netx_map_eai(int ec) noexcept;
 
   virtual Err netx_connect(const std::string &hostname, const std::string &port,
                            Socket *sock) noexcept;

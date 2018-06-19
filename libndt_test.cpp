@@ -2001,6 +2001,61 @@ TEST_CASE(
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
 }
 
+// Client::netx_map_errno() tests
+// ------------------------------
+
+#ifdef _WIN32
+#define E(name) WSAE##name
+#else
+#define E(name) E##name
+#endif
+
+TEST_CASE("Client::netx_map_errno() correctly maps all errors") {
+  using namespace libndt;
+#ifndef NDEBUG
+  REQUIRE(Client::netx_map_errno(0) == Err::io_error);
+#endif
+#ifndef _WIN32
+  REQUIRE(Client::netx_map_errno(E(PIPE)) == Err::broken_pipe);
+#endif
+  REQUIRE(Client::netx_map_errno(E(CONNABORTED)) == Err::connection_aborted);
+  REQUIRE(Client::netx_map_errno(E(CONNREFUSED)) == Err::connection_refused);
+  REQUIRE(Client::netx_map_errno(E(CONNRESET)) == Err::connection_reset);
+  REQUIRE(Client::netx_map_errno(E(HOSTUNREACH)) == Err::host_unreachable);
+  REQUIRE(Client::netx_map_errno(E(INTR)) == Err::interrupted);
+  REQUIRE(Client::netx_map_errno(E(INVAL)) == Err::invalid_argument);
+#ifndef _WIN32
+  REQUIRE(Client::netx_map_errno(E(IO)) == Err::io_error);
+#endif
+  REQUIRE(Client::netx_map_errno(E(NETDOWN)) == Err::network_down);
+  REQUIRE(Client::netx_map_errno(E(NETRESET)) == Err::network_reset);
+  REQUIRE(Client::netx_map_errno(E(NETUNREACH)) == Err::network_unreachable);
+  REQUIRE(Client::netx_map_errno(E(INPROGRESS)) == Err::operation_in_progress);
+  REQUIRE(Client::netx_map_errno(E(WOULDBLOCK)) == Err::operation_would_block);
+  REQUIRE(Client::netx_map_errno(E(TIMEDOUT)) == Err::timed_out);
+#if !defined _WIN32 && EAGAIN != EWOULDBLOCK
+  REQUIRE(Client::netx_map_errno(E(AGAIN)) == Err::operation_would_block);
+#endif
+}
+
+// Client::netx_map_eai() tests
+// ----------------------------
+
+TEST_CASE("Client::netx_map_eai() correctly maps all errors") {
+  using namespace libndt;
+  Client client;
+  REQUIRE(client.netx_map_eai(EAI_AGAIN) == Err::ai_again);
+  REQUIRE(client.netx_map_eai(EAI_FAIL) == Err::ai_fail);
+  REQUIRE(client.netx_map_eai(EAI_NONAME) == Err::ai_noname);
+  {
+    client.set_last_system_error(E(WOULDBLOCK));
+    REQUIRE(client.netx_map_eai(EAI_SYSTEM) == Err::operation_would_block);
+    client.set_last_system_error(0);
+  }
+}
+
+#undef E  // Tidy
+
 // Client::netx_connect() tests
 // ----------------------------
 
