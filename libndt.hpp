@@ -315,16 +315,16 @@ class Client {
 
   // Networking layer
 
-  virtual Err netx_maybesocks5h_connect(const std::string &hostname,
-                                        const std::string &port,
-                                        Socket *sock) noexcept;
+  virtual Err netx_maybesocks5h_dial(const std::string &hostname,
+                                     const std::string &port,
+                                     Socket *sock) noexcept;
 
   static Err netx_map_errno(int ec) noexcept;
 
   Err netx_map_eai(int ec) noexcept;
 
-  virtual Err netx_connect(const std::string &hostname, const std::string &port,
-                           Socket *sock) noexcept;
+  virtual Err netx_dial(const std::string &hostname, const std::string &port,
+                        Socket *sock) noexcept;
 
   virtual Err netx_recv(Socket fd, void *base, Size count,
                         Size *actual) noexcept;

@@ -307,8 +307,8 @@ bool Client::query_mlabns() noexcept {
 }
 
 bool Client::connect() noexcept {
-  return netx_maybesocks5h_connect(impl->settings.hostname, impl->settings.port,
-                                   &impl->sock) == Err::none;
+  return netx_maybesocks5h_dial(impl->settings.hostname, impl->settings.port,
+                                &impl->sock) == Err::none;
 }
 
 bool Client::send_login() noexcept {
@@ -479,7 +479,7 @@ bool Client::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
-    Err err = netx_maybesocks5h_connect(impl->settings.hostname, port, &sock);
+    Err err = netx_maybesocks5h_dial(impl->settings.hostname, port, &sock);
     if (err != Err::none) {
       break;
     }
@@ -649,7 +649,7 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = -1;
-    Err err = netx_maybesocks5h_connect(impl->settings.hostname, port, &sock);
+    Err err = netx_maybesocks5h_dial(impl->settings.hostname, port, &sock);
     if (err != Err::none) {
       return false;
     }
@@ -1014,14 +1014,14 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
 
 // Networking layer
 
-Err Client::netx_maybesocks5h_connect(const std::string &hostname,
-                                      const std::string &port,
-                                      Socket *sock) noexcept {
+Err Client::netx_maybesocks5h_dial(const std::string &hostname,
+                                   const std::string &port,
+                                   Socket *sock) noexcept {
   if (impl->settings.socks5h_port.empty()) {
-    return netx_connect(hostname, port, sock);
+    return netx_dial(hostname, port, sock);
   }
   {
-    auto err = netx_connect("127.0.0.1", impl->settings.socks5h_port, sock);
+    auto err = netx_dial("127.0.0.1", impl->settings.socks5h_port, sock);
     if (err != Err::none) {
       return err;
     }
@@ -1287,8 +1287,8 @@ Err Client::netx_map_eai(int ec) noexcept {
   return Err::ai_generic;
 }
 
-Err Client::netx_connect(const std::string &hostname, const std::string &port,
-                         Socket *sock) noexcept {
+Err Client::netx_dial(const std::string &hostname, const std::string &port,
+                      Socket *sock) noexcept {
   assert(sock != nullptr);
   if (*sock != -1) {
     EMIT_WARNING("socket already connected");
