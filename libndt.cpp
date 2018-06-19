@@ -72,12 +72,10 @@ constexpr size_t msg_kickoff_size = sizeof(msg_kickoff) - 1;
   } while (0)
 
 #ifdef _WIN32
-#define OS_ERROR_IS_EPIPE() (false)
 #define OS_ERROR_IS_EINTR() (false)
 #define OS_SHUT_RDWR SD_BOTH
 #define AS_OS_SOCKET(s) ((SOCKET)s)
 #else
-#define OS_ERROR_IS_EPIPE() (errno == EPIPE)
 #define OS_ERROR_IS_EINTR() (errno == EINTR)
 #define OS_SHUT_RDWR SHUT_RDWR
 #define AS_OS_SOCKET(s) ((int)s)
@@ -453,11 +451,18 @@ bool Client::wait_close() noexcept {
     (void)this->shutdown(impl->sock, OS_SHUT_RDWR);
     return true;  // be tolerant
   }
-  char data;
-  auto n = this->recv(impl->sock, &data, sizeof(data));
-  if (n != 0) {
-    EMIT_WARNING("wait_close(): server did not close connection");
-    return false;
+  {
+    char data;
+    Size n = 0;
+    auto err = netx_recv(impl->sock, &data, sizeof(data), &n);
+    if (err == Err::none) {
+      EMIT_WARNING("wait_close(): unexpected data recv'd when waiting for EOF");
+      return false;
+    }
+    if (err != Err::eof) {
+      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF");
+      return false;
+    }
   }
   return true;
 }
@@ -517,15 +522,11 @@ bool Client::run_download() noexcept {
       if (rv > 0) {
         for (auto &fd : dload_socks.sockets) {
           if (FD_ISSET(fd, &set)) {
-            Ssize n = this->recv(fd, buf, sizeof(buf));
-            if (n < 0) {
-              EMIT_WARNING(
-                  "run_download: recv() failed: " << get_last_system_error());
-              done = true;
-              break;
-            }
-            if (n == 0) {
-              EMIT_DEBUG("run_download: recv(): EOF");
+            Size n = 0;
+            auto err = netx_recv(fd, buf, sizeof(buf), &n);
+            if (err != Err::none) {
+              EMIT_WARNING("run_download: next_recv() failed: "
+                           << get_last_system_error());
               done = true;
               break;
             }
@@ -686,11 +687,12 @@ bool Client::run_upload() noexcept {
       if (rv > 0) {
         for (auto &fd : upload_socks.sockets) {
           if (FD_ISSET(fd, &set)) {
-            Ssize n = this->send(fd, buf, sizeof(buf));
-            if (n < 0) {
-              if (!OS_ERROR_IS_EPIPE()) {
-                EMIT_WARNING(
-                    "run_upload: send() failed: " << get_last_system_error());
+            Size n = 0;
+            auto err = netx_send(fd, buf, sizeof(buf), &n);
+            if (err != Err::none) {
+              if (err != Err::broken_pipe) {
+                EMIT_WARNING("run_upload: netx_send() failed: "
+                             << get_last_system_error());
               }
               done = true;
               break;
@@ -1344,8 +1346,9 @@ Err Client::netx_connect(const std::string &hostname, const std::string &port,
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
   if (count <= 0) {
-    EMIT_WARNING("netx_recv: explicitly disallowing zero read; use select() "
-                 "to check the state of a socket");
+    EMIT_WARNING(
+        "netx_recv: explicitly disallowing zero read; use select() "
+        "to check the state of a socket");
     return Err::invalid_argument;
   }
   set_last_system_error(0);
@@ -1356,7 +1359,7 @@ Err Client::netx_recv(Socket fd, void *base, Size count,
     return netx_map_errno(get_last_system_error());
   }
   if (rv == 0) {
-    assert(count > 0); // guaranteed by the above check
+    assert(count > 0);  // guaranteed by the above check
     *actual = 0;
     return Err::eof;
   }
@@ -1380,8 +1383,9 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
   if (count <= 0) {
-    EMIT_WARNING("netx_send: explicitly disallowing zero send; use select() "
-                 "to check the state of a socket");
+    EMIT_WARNING(
+        "netx_send: explicitly disallowing zero send; use select() "
+        "to check the state of a socket");
     return Err::invalid_argument;
   }
   set_last_system_error(0);
@@ -1394,7 +1398,7 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
   // Send() should not return zero unless count is zero. So consider a zero
   // return value as an I/O error rather than EOF.
   if (rv == 0) {
-    assert(count > 0); // guaranteed by the above check
+    assert(count > 0);  // guaranteed by the above check
     *actual = 0;
     return Err::io_error;
   }
