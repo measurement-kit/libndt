@@ -339,7 +339,7 @@ class Client {
   virtual Err netx_resolve(const std::string &hostname,
                            std::vector<std::string> *addrs) noexcept;
 
-  virtual Err netx_setnonblocking(Socket fd) noexcept;
+  virtual Err netx_setnonblocking(Socket fd, bool enable) noexcept;
 
   // Dependencies (cURL)
 

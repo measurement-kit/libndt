@@ -1466,10 +1466,10 @@ Err Client::netx_resolve(const std::string &hostname,
   return result;
 }
 
-Err Client::netx_setnonblocking(Socket fd) noexcept {
+Err Client::netx_setnonblocking(Socket fd, bool enable) noexcept {
 #ifdef _WIN32
-  u_long enable = 1UL;
-  if (this->ioctlsocket(fd, FIONBIO, &enable) != 0) {
+  u_long lv = (enable) ? 1UL : 0UL;
+  if (this->ioctlsocket(fd, FIONBIO, &lv) != 0) {
     return netx_map_errno(get_last_system_error());
   }
 #else
@@ -1478,7 +1478,11 @@ Err Client::netx_setnonblocking(Socket fd) noexcept {
     assert(flags == -1);
     return netx_map_errno(get_last_system_error());
   }
-  flags |= O_NONBLOCK;
+  if (enable) {
+    flags |= O_NONBLOCK;
+  } else {
+    flags &= ~O_NONBLOCK;
+  }
   if (fcntl3i(fd, F_SETFL, flags) != 0) {
     return netx_map_errno(get_last_system_error());
   }
