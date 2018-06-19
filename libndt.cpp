@@ -290,7 +290,7 @@ bool Client::query_mlabns() noexcept {
   }
   std::string body;
   if (!query_mlabns_curl(  //
-          impl->settings.mlabns_url, impl->settings.curl_timeout, &body)) {
+          impl->settings.mlabns_url, impl->settings.timeout, &body)) {
     return false;
   }
   nlohmann::json json;
@@ -1309,13 +1309,14 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
     return err;
   }
   for (auto &addr : addresses) {
+    EMIT_DEBUG("netx_dial: try connecting to: " << addr);
     addrinfo hints{};
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
     addrinfo *rp = nullptr;
     int rv = this->getaddrinfo(addr.data(), port.data(), &hints, &rp);
     if (rv != 0) {
-      EMIT_WARNING("unexpected getaddrinfo() failure");
+      EMIT_WARNING("netx_dial: unexpected getaddrinfo() failure");
       return netx_map_eai(rv);
     }
     assert(rp);
@@ -1323,7 +1324,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       set_last_system_error(0);
       *sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
       if (*sock == -1) {
-        EMIT_WARNING("socket() failed: " << get_last_system_error());
+        EMIT_WARNING("netx_dial: socket() failed: " << get_last_system_error());
         continue;
       }
       // The following two lines ensure that casting `size_t` to
@@ -1331,14 +1332,10 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       // the ai_addrlen field is always small enough.
       static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
       assert(aip->ai_addrlen <= INT_MAX);
-      {
-        auto err = netx_connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen);
-        if (err == Err::none) {
-          EMIT_DEBUG("connect(): okay");
-          break;
-        }
+      auto err = netx_connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen);
+      if (err == Err::none) {
+        break;
       }
-      EMIT_WARNING("connect() failed: " << get_last_system_error());
       this->closesocket(*sock);
       *sock = -1;
     }
@@ -1355,80 +1352,68 @@ Err Client::netx_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept {
   {
     auto err = netx_setnonblocking(fd, true);
     if (err != Err::none) {
-      EMIT_WARNING("netx_connect(): cannot make socket nonblocking");
+      EMIT_WARNING("netx_connect: cannot make socket nonblocking");
       return err;
     }
   }
+  EMIT_DEBUG("netx_connect: made socket nonblocking");
   {
     auto rv = this->connect(fd, sa, n);
     if (rv == 0) {
-      EMIT_DEBUG("netx_connect(): connect completed immediately");
+      EMIT_DEBUG("netx_connect: connect completed immediately");
       return Err::none;
     }
     auto err = netx_map_errno(get_last_system_error());
+    if (
 #ifdef _WIN32
-    constexpr auto expected = Err::operation_would_block;
+        err != Err::operation_would_block
 #else
-    constexpr auto expected = Err::operation_in_progress;
+        err != Err::operation_in_progress
 #endif
-    if (err != expected) {
-      EMIT_WARNING("netx_connect(): connect failed immediately");
+    ) {
+      EMIT_WARNING("netx_connect: connect failed immediately: " << (int)err);
       return err;
     }
   }
+  EMIT_DEBUG("netx_connect: waiting for socket to become writeable");
   {
-    int maxfd = -1;
-#ifndef _WIN32
-    assert(fd < INT_MAX);
-    maxfd = fd + 1;
-#endif
     fd_set set;
     FD_ZERO(&set);
     FD_SET(AS_OS_SOCKET(fd), &set);
-    int rv = 0;
-    Err err = Err::none;
-    timeval tv;
-  again:
-    tv.tv_sec = 5;  // TODO(bassosimone): make this configurable
-    tv.tv_usec = 0;
-    rv = this->select(maxfd, &set, nullptr, nullptr, &tv);
-    if (rv < 0) {
-      assert(rv == -1);
-      err = netx_map_errno(get_last_system_error());
-      if (err == Err::interrupted) {
-        goto again;
-      }
-      EMIT_WARNING("netx_connect(): select() failed");
+    timeval tv{};
+    tv.tv_sec = impl->settings.timeout;
+    assert(fd < INT_MAX);
+    auto err = netx_select(fd + 1, nullptr, &set, nullptr, &tv);
+    if (err != Err::none) {
+      EMIT_WARNING("netx_connect: netx_select() failed");
       return err;
     }
-    if (rv == 0) {
-      EMIT_WARNING("netx_connect(): select() timed out");
-      return Err::timed_out;
-    }
   }
-  // See: https://cr.yp.to/docs/connect.html
+  EMIT_DEBUG("netx_connect: socket is writeable");
+  // See evutil_socket_finished_connecting_()
   {
-    sockaddr_storage ss{};
-    SockLen sslen = sizeof(ss);
-    static_assert(sizeof(SockLen) == sizeof(socklen_t), "Wrong SockLen size");
-    auto rv = this->getpeername(fd, (sockaddr *)&ss, &sslen);
-    if (rv != 0) {
-      EMIT_WARNING("netx_connect(): connection failed");
-      uint8_t data{};
-      auto rv = this->recv(fd, &data, sizeof(data));
-      if (rv >= 0) {
-        EMIT_WARNING("netx_connect(): unexpected recv() result");
-        return Err::io_error;
-      }
+    int ec = 0;
+    SockLen elen = sizeof(ec);
+    if (this->getsockopt(fd, SOL_SOCKET, SO_ERROR, (void *)&ec, &elen) != 0) {
+      EMIT_WARNING("netx_connect: getsockopt() failed");
       return netx_map_errno(get_last_system_error());
     }
+    if (ec != 0) {
+      auto err = netx_map_errno(ec);
+      EMIT_WARNING("netx_connect: connect() failed: " << (int)err);
+      return err;
+    }
   }
+  EMIT_DEBUG("netx_connect: connect completed successfully");
+  // TODO(bassosimone): make other parts of the code nonblocking. For now,
+  // we only implement a nonblocking connect() call.
   {
     auto err = netx_setnonblocking(fd, false);
     if (err != Err::none) {
-      EMIT_WARNING("netx_connect(): cannot make socket blocking");
+      EMIT_WARNING("netx_connect: cannot make socket blocking");
       return err;
     }
+    EMIT_DEBUG("netx_connect: socket made blocking again");
   }
   return Err::none;
 }

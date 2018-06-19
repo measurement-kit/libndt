@@ -153,9 +153,8 @@ class Settings {
   /// hostname, mlab-ns won't be used.
   std::string mlabns_url = "https://mlab-ns.appspot.com/ndt";
 
-  /// cURL timeout used when querying mlab-ns. If you specify an explicit
-  /// hostname, mlab-ns won't be used.
-  long curl_timeout = 3 /* seconds */;
+  /// Timeout used for I/O operations (including cURL operations).
+  long timeout = 3 /* seconds */;
 
   /// Host name of the NDT server to use. If this is left blank (the default),
   /// we will use mlab-ns to discover a nearby server.
