@@ -2012,7 +2012,7 @@ TEST_CASE(
 
 TEST_CASE("Client::netx_map_errno() correctly maps all errors") {
   using namespace libndt;
-#ifndef NDEBUG
+#ifdef NDEBUG  // There is an assertion that would fail in DEBUG mode
   REQUIRE(Client::netx_map_errno(0) == Err::io_error);
 #endif
 #ifndef _WIN32
