@@ -1248,7 +1248,9 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
     case E(HOSTUNREACH): return Err::host_unreachable;
     case E(INTR): return Err::interrupted;
     case E(INVAL): return Err::invalid_argument;
+#ifndef _WIN32
     case E(IO): return Err::io_error;
+#endif
     case E(NETDOWN): return Err::network_down;
     case E(NETRESET): return Err::network_reset;
     case E(NETUNREACH): return Err::network_unreachable;
