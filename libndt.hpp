@@ -341,6 +341,9 @@ class Client {
 
   virtual Err netx_setnonblocking(Socket fd, bool enable) noexcept;
 
+  virtual Err netx_select(int numfd, fd_set *readset, fd_set *writeset,
+                          fd_set *exceptset, timeval *timeout) noexcept;
+
   // Dependencies (cURL)
 
   uint64_t get_verbosity() const noexcept;

@@ -494,58 +494,41 @@ TEST_CASE("Client::recv_results_and_logout() deals with too many results") {
 // Client::wait_close() tests
 // --------------------------
 
-class SelectHardFailure : public libndt::Client {
+class NetxSelectHardFailure : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-#ifdef _WIN32
-    set_last_system_error(WSAEBADF);
-#else
-    set_last_system_error(EBADF);
-#endif
-    return -1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::io_error;
   }
 };
 
-TEST_CASE("Client::wait_close() deals with Client::select() hard failure") {
-  SelectHardFailure client;
+TEST_CASE(
+    "Client::wait_close() deals with Client::netx_select() hard failure") {
+  NetxSelectHardFailure client;
   REQUIRE(client.wait_close() == false);
 }
 
-#ifndef _WIN32
-class SelectEintr : public libndt::Client {
+class NetxSelectTimeout : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    set_last_system_error(EINTR);
-    return -1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::timed_out;
   }
 };
 
-TEST_CASE("Client::wait_close() deals with Client::select() EINTR") {
-  SelectEintr client;
-  REQUIRE(client.wait_close() == true /* Being tolerant */);
-}
-#endif
-
-class SelectTimeout : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 0;
-  }
-};
-
-TEST_CASE("Client::wait_close() deals with Client::select() timeout") {
-  SelectTimeout client;
+TEST_CASE("Client::wait_close() deals with Client::netx_select() timeout") {
+  NetxSelectTimeout client;
   REQUIRE(client.wait_close() == true /* Being tolerant */);
 }
 
-class NotEofAfterGoodSelect : public libndt::Client {
+class NotEofAfterGoodNetxSelect : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -556,15 +539,16 @@ class NotEofAfterGoodSelect : public libndt::Client {
 TEST_CASE(
     "Client::wait_close() deals with Client::recv() failure different from "
     "EOF") {
-  NotEofAfterGoodSelect client;
+  NotEofAfterGoodNetxSelect client;
   REQUIRE(client.wait_close() == false);
 }
 
-class SuccessAfterGoodSelect : public libndt::Client {
+class SuccessAfterGoodNetxSelect : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size size,
                         libndt::Size *tot) noexcept override {
@@ -575,7 +559,7 @@ class SuccessAfterGoodSelect : public libndt::Client {
 
 TEST_CASE(
     "Client::wait_close() deals with Client::recv() success (unexpected)") {
-  SuccessAfterGoodSelect client;
+  SuccessAfterGoodNetxSelect client;
   REQUIRE(client.wait_close() == false);
 }
 
@@ -636,7 +620,7 @@ TEST_CASE(
   REQUIRE(client.run_download() == false);
 }
 
-class FailSelectDuringDownload : public libndt::Client {
+class FailNetxSelectDuringDownload : public libndt::Client {
  public:
   using libndt::Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
@@ -648,14 +632,14 @@ class FailSelectDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    set_last_system_error(0);  // The code checks whether it's EINTR
-    return -1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::io_error;
   }
 };
 
-TEST_CASE("Client::run_download() deals with Client::select() failure") {
-  FailSelectDuringDownload client;
+TEST_CASE("Client::run_download() deals with Client::netx_select() failure") {
+  FailNetxSelectDuringDownload client;
   REQUIRE(client.run_download() == false);
 }
 
@@ -671,8 +655,9 @@ class FailRecvDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -697,8 +682,9 @@ class RecvEofDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -725,8 +711,9 @@ class FailMsgReadLegacyDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -755,8 +742,9 @@ class RecvNonTestMsgDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -785,8 +773,9 @@ class FailMsgWriteDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -816,8 +805,9 @@ class FailMsgReadDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -848,8 +838,9 @@ class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -883,8 +874,9 @@ class FailEmitResultDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -919,8 +911,9 @@ class TooManyTestMsgsDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -1049,8 +1042,8 @@ TEST_CASE(
   REQUIRE(client.run_upload() == false);
 }
 
-TEST_CASE("Client::run_upload() deals with Client::select() failure") {
-  FailSelectDuringDownload client;  // Works also for upload phase
+TEST_CASE("Client::run_upload() deals with Client::netx_select() failure") {
+  FailNetxSelectDuringDownload client;  // Works also for upload phase
   REQUIRE(client.run_upload() == false);
 }
 
@@ -1066,8 +1059,9 @@ class FailSendDuringUpload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_send(libndt::Socket, const void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -1099,8 +1093,9 @@ class FailMsgExpectDuringUpload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_send(libndt::Socket, const void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -1128,8 +1123,9 @@ class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
   bool msg_expect_empty(uint8_t code) noexcept override {
     return code != libndt::msg_test_finalize;
   }
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
-    return 1;
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_send(libndt::Socket, const void *, libndt::Size,
                         libndt::Size *) noexcept override {
@@ -2537,6 +2533,62 @@ TEST_CASE(
 }
 
 #endif // _WIN32
+
+// Client::netx_select() tests
+// ---------------------------
+
+#ifndef _WIN32
+
+class InterruptSelect : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  unsigned int count = 0;
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    if (count++ == 0) {
+      set_last_system_error(EINTR);
+    } else {
+      set_last_system_error(EIO);
+    }
+    return -1;
+  }
+};
+
+TEST_CASE("Client::netx_select() deals with EINTR") {
+  libndt::Socket maxfd = 17;
+  InterruptSelect client;
+  fd_set readset;
+  FD_ZERO(&readset);
+  FD_SET(maxfd, &readset);
+  timeval tv{};
+  REQUIRE(client.netx_select(  //
+              (int)maxfd + 1, &readset, nullptr, nullptr, &tv) ==
+          libndt::Err::io_error);
+  REQUIRE(client.count == 2);
+}
+
+#endif // !_WIN32
+
+class TimeoutSelect : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 0;
+  }
+};
+
+TEST_CASE("Client::netx_select() deals with timeout") {
+  libndt::Socket maxfd = 17;
+  TimeoutSelect client;
+  fd_set readset;
+  FD_ZERO(&readset);
+#ifdef _WIN32
+  FD_SET((SOCKET)maxfd, &readset);
+#else
+  FD_SET(maxfd, &readset);
+#endif
+  REQUIRE(client.netx_select((int)maxfd + 1, &readset, nullptr, nullptr,
+                             nullptr) == libndt::Err::timed_out);
+}
 
 // Client::query_mlabns_curl() tests
 // ---------------------------------
