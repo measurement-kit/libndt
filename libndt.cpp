@@ -437,7 +437,8 @@ bool Client::wait_close() noexcept {
   FD_ZERO(&readset);
   // In wait_close() regress test we call wait_close() with sock
   // equal to -1, which causes a segfault. For testability do not
-  // reject the value but rather just ignore the socket.
+  // reject the value but rather just ignore the socket. We have
+  // an assert() below that catches other negative values.
   if (impl->sock >= 0) {
     FD_SET(AS_OS_SOCKET(impl->sock), &readset);
   }
@@ -445,15 +446,13 @@ bool Client::wait_close() noexcept {
   tv.tv_sec = 1;
   // Note: cast to `int` safe because on Unix sockets are `int`s and on
   // Windows instead the first argment to select() is ignored.
-  auto rv = this->select((int)impl->sock + 1, &readset, nullptr, nullptr, &tv);
-  if (rv < 0 && !OS_ERROR_IS_EINTR()) {
-    EMIT_WARNING("wait_close(): select() failed: " << get_last_system_error());
-    return false;
-  }
-  if (rv <= 0) {
-    EMIT_DEBUG("wait_close(): timeout or EINTR waiting for EOF on connection");
+  assert(impl->sock >= -1 && impl->sock < INT_MAX);
+  auto err = netx_select((int)impl->sock + 1, &readset, nullptr, nullptr, &tv);
+  if (err != Err::none) {
+    EMIT_WARNING(
+        "wait_close(): netx_select() failed: " << get_last_system_error());
     (void)this->shutdown(impl->sock, OS_SHUT_RDWR);
-    return true;  // be tolerant
+    return (err == Err::timed_out);
   }
   {
     char data;
@@ -517,13 +516,14 @@ bool Client::run_download() noexcept {
       timeval tv{};
       tv.tv_usec = 250000;
       // Cast to `int` safe as explained above.
-      auto rv = this->select((int)maxsock + 1, &set, nullptr, nullptr, &tv);
-      if (rv < 0 && !OS_ERROR_IS_EINTR()) {
+      assert(maxsock < INT_MAX);
+      auto err = netx_select((int)maxsock + 1, &set, nullptr, nullptr, &tv);
+      if (err != Err::none && err != Err::timed_out) {
         EMIT_WARNING(
-            "run_download: select() failed: " << get_last_system_error());
+            "run_download: netx_select() failed: " << get_last_system_error());
         return false;
       }
-      if (rv > 0) {
+      if (err == Err::none) {
         for (auto &fd : dload_socks.sockets) {
           if (FD_ISSET(fd, &set)) {
             Size n = 0;
@@ -682,13 +682,14 @@ bool Client::run_upload() noexcept {
       timeval tv{};
       tv.tv_usec = 250000;
       // Cast to `int` safe as explained above.
-      auto rv = this->select((int)maxsock + 1, nullptr, &set, nullptr, &tv);
-      if (rv < 0 && !OS_ERROR_IS_EINTR()) {
+      assert(maxsock < INT_MAX);
+      auto err = netx_select((int)maxsock + 1, nullptr, &set, nullptr, &tv);
+      if (err != Err::none && err != Err::timed_out) {
         EMIT_WARNING(
-            "run_upload: select() failed: " << get_last_system_error());
+            "run_upload: netx_select() failed: " << get_last_system_error());
         return false;
       }
-      if (rv > 0) {
+      if (err == Err::none) {
         for (auto &fd : upload_socks.sockets) {
           if (FD_ISSET(fd, &set)) {
             Size n = 0;
@@ -1351,7 +1352,7 @@ Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
   if (count <= 0) {
     EMIT_WARNING(
-        "netx_recv: explicitly disallowing zero read; use select() "
+        "netx_recv: explicitly disallowing zero read; use netx_select() "
         "to check the state of a socket");
     return Err::invalid_argument;
   }
@@ -1388,7 +1389,7 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
   if (count <= 0) {
     EMIT_WARNING(
-        "netx_send: explicitly disallowing zero send; use select() "
+        "netx_send: explicitly disallowing zero send; use netx_select() "
         "to check the state of a socket");
     return Err::invalid_argument;
   }
@@ -1487,6 +1488,26 @@ Err Client::netx_setnonblocking(Socket fd, bool enable) noexcept {
     return netx_map_errno(get_last_system_error());
   }
 #endif
+  return Err::none;
+}
+
+Err Client::netx_select(int numfd, fd_set *readset, fd_set *writeset,
+                        fd_set *exceptset, timeval *tvp) noexcept {
+  auto rv = 0;
+  auto err = Err::none;
+again:
+  rv = this->select(numfd, readset, writeset, exceptset, tvp);
+  if (rv < 0) {
+    assert(rv == -1);
+    err = netx_map_errno(get_last_system_error());
+    if (err == Err::interrupted) {
+      goto again;
+    }
+    return err;
+  }
+  if (rv == 0) {
+    return Err::timed_out;
+  }
   return Err::none;
 }
 
