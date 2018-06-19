@@ -1330,9 +1330,12 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       // the ai_addrlen field is always small enough.
       static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
       assert(aip->ai_addrlen <= INT_MAX);
-      if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
-        EMIT_DEBUG("connect(): okay");
-        break;
+      {
+        auto err = netx_connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen);
+        if (err == Err::none) {
+          EMIT_DEBUG("connect(): okay");
+          break;
+        }
       }
       EMIT_WARNING("connect() failed: " << get_last_system_error());
       this->closesocket(*sock);
@@ -1345,6 +1348,88 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
   }
   // TODO(bassosimone): it's possible to write a better algorithm here
   return *sock != -1 ? Err::none : Err::io_error;
+}
+
+Err Client::netx_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept {
+  {
+    auto err = netx_setnonblocking(fd, true);
+    if (err != Err::none) {
+      EMIT_WARNING("netx_connect(): cannot make socket nonblocking");
+      return err;
+    }
+  }
+  {
+    auto rv = this->connect(fd, sa, n);
+    if (rv == 0) {
+      EMIT_DEBUG("netx_connect(): connect completed immediately");
+      return Err::none;
+    }
+    auto err = netx_map_errno(get_last_system_error());
+#ifdef _WIN32
+    constexpr auto expected = Err::operation_would_block;
+#else
+    constexpr auto expected = Err::operation_in_progress;
+#endif
+    if (err != expected) {
+      EMIT_WARNING("netx_connect(): connect failed immediately");
+      return err;
+    }
+  }
+  {
+    int maxfd = -1;
+#ifndef _WIN32
+    assert(fd < INT_MAX);
+    maxfd = fd + 1;
+#endif
+    fd_set set;
+    FD_ZERO(&set);
+    FD_SET(AS_OS_SOCKET(fd), &set);
+    int rv = 0;
+    Err err = Err::none;
+    timeval tv;
+  again:
+    tv.tv_sec = 5;  // TODO(bassosimone): make this configurable
+    tv.tv_usec = 0;
+    rv = this->select(maxfd, &set, nullptr, nullptr, &tv);
+    if (rv < 0) {
+      assert(rv == -1);
+      err = netx_map_errno(get_last_system_error());
+      if (err == Err::interrupted) {
+        goto again;
+      }
+      EMIT_WARNING("netx_connect(): select() failed");
+      return err;
+    }
+    if (rv == 0) {
+      EMIT_WARNING("netx_connect(): select() timed out");
+      return Err::timed_out;
+    }
+  }
+  // See: https://cr.yp.to/docs/connect.html
+  {
+    sockaddr_storage ss{};
+    SockLen sslen = sizeof(ss);
+    static_assert(sizeof(SockLen) == sizeof(socklen_t), "Wrong SockLen size");
+    auto rv = this->getpeername(fd, (sockaddr *)&ss, &sslen);
+    if (rv != 0) {
+      EMIT_WARNING("netx_connect(): connection failed");
+      uint8_t data{};
+      auto rv = this->recv(fd, &data, sizeof(data));
+      if (rv >= 0) {
+        EMIT_WARNING("netx_connect(): unexpected recv() result");
+        return Err::io_error;
+      }
+      return netx_map_errno(get_last_system_error());
+    }
+  }
+  {
+    auto err = netx_setnonblocking(fd, false);
+    if (err != Err::none) {
+      EMIT_WARNING("netx_connect(): cannot make socket blocking");
+      return err;
+    }
+  }
+  return Err::none;
 }
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
@@ -1466,10 +1551,10 @@ Err Client::netx_resolve(const std::string &hostname,
   return result;
 }
 
-Err Client::netx_setnonblocking(Socket fd) noexcept {
+Err Client::netx_setnonblocking(Socket fd, bool enable) noexcept {
 #ifdef _WIN32
-  u_long enable = 1UL;
-  if (this->ioctlsocket(fd, FIONBIO, &enable) != 0) {
+  u_long lv = (enable) ? 1UL : 0UL;
+  if (this->ioctlsocket(fd, FIONBIO, &lv) != 0) {
     return netx_map_errno(get_last_system_error());
   }
 #else
@@ -1478,7 +1563,11 @@ Err Client::netx_setnonblocking(Socket fd) noexcept {
     assert(flags == -1);
     return netx_map_errno(get_last_system_error());
   }
-  flags |= O_NONBLOCK;
+  if (enable) {
+    flags |= O_NONBLOCK;
+  } else {
+    flags &= ~O_NONBLOCK;
+  }
   if (fcntl3i(fd, F_SETFL, flags) != 0) {
     return netx_map_errno(get_last_system_error());
   }
@@ -1512,12 +1601,14 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 
 #ifdef _WIN32
 #define AS_OS_SOCKLEN(n) ((int)n)
+#define AS_OS_SOCKLEN_STAR(n) ((int *)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((int)n)
 #define OS_SSIZE_MAX INT_MAX
 #define OS_EINVAL WSAEINVAL
 #else
 #define AS_OS_SOCKLEN(n) ((socklen_t)n)
+#define AS_OS_SOCKLEN_STAR(n) ((socklen_t *)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
 #define OS_SSIZE_MAX SSIZE_MAX
@@ -1613,6 +1704,10 @@ int Client::fcntl3i(Socket s, int cmd, int arg) noexcept {
   return ::fcntl(AS_OS_SOCKET(s), cmd, arg);
 }
 #endif
+
+int Client::getpeername(Socket s, sockaddr *sa, SockLen *n) noexcept {
+  return ::getpeername(AS_OS_SOCKET(s), sa, AS_OS_SOCKLEN_STAR(n));
+}
 
 }  // namespace libndt
 }  // namespace measurement_kit

@@ -2473,7 +2473,8 @@ class FailIoctlsocket : public libndt::Client {
 TEST_CASE(
     "Client::netx_setnonblocking() deals with Client::ioctlsocket() failure") {
   FailIoctlsocket client;
-  REQUIRE(client.netx_setnonblocking(17) == libndt::Err::invalid_argument);
+  REQUIRE(client.netx_setnonblocking(17, true) ==
+          libndt::Err::invalid_argument);
 }
 
 #else
@@ -2488,10 +2489,10 @@ class FailFcntl2 : public libndt::Client {
   }
 };
 
-TEST_CASE(
-    "Client::netx_setnonblocking() deals with Client::fcntl2() failure") {
+TEST_CASE("Client::netx_setnonblocking() deals with Client::fcntl2() failure") {
   FailFcntl2 client;
-  REQUIRE(client.netx_setnonblocking(17) == libndt::Err::invalid_argument);
+  REQUIRE(client.netx_setnonblocking(17, true) ==
+          libndt::Err::invalid_argument);
 }
 
 class FailFcntl3i : public libndt::Client {
@@ -2512,7 +2513,8 @@ class FailFcntl3i : public libndt::Client {
 TEST_CASE(
     "Client::netx_setnonblocking() deals with Client::fcntl3i() failure") {
   FailFcntl3i client;
-  REQUIRE(client.netx_setnonblocking(17) == libndt::Err::invalid_argument);
+  REQUIRE(client.netx_setnonblocking(17, true) ==
+          libndt::Err::invalid_argument);
 }
 
 #endif // _WIN32

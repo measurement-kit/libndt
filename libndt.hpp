@@ -326,6 +326,8 @@ class Client {
   virtual Err netx_dial(const std::string &hostname, const std::string &port,
                         Socket *sock) noexcept;
 
+  virtual Err netx_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept;
+
   virtual Err netx_recv(Socket fd, void *base, Size count,
                         Size *actual) noexcept;
 
@@ -339,7 +341,7 @@ class Client {
   virtual Err netx_resolve(const std::string &hostname,
                            std::vector<std::string> *addrs) noexcept;
 
-  virtual Err netx_setnonblocking(Socket fd) noexcept;
+  virtual Err netx_setnonblocking(Socket fd, bool enable) noexcept;
 
   // Dependencies (cURL)
 
@@ -379,6 +381,8 @@ class Client {
   virtual int fcntl2(Socket s, int cmd) noexcept;
   virtual int fcntl3i(Socket s, int cmd, int arg) noexcept;
 #endif
+
+  virtual int getpeername(Socket s, sockaddr *sa, SockLen *n) noexcept;
 
  private:
   class Impl;
