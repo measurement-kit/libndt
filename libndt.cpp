@@ -309,8 +309,8 @@ bool Client::query_mlabns() noexcept {
 }
 
 bool Client::connect() noexcept {
-  return connect_maybe_socks5(impl->settings.hostname, impl->settings.port,
-                              &impl->sock);
+  return netx_maybesocks5h_connect(impl->settings.hostname, impl->settings.port,
+                                   &impl->sock) == Err::none;
 }
 
 bool Client::send_login() noexcept {
@@ -474,7 +474,8 @@ bool Client::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
-    if (!connect_maybe_socks5(impl->settings.hostname, port, &sock)) {
+    Err err = netx_maybesocks5h_connect(impl->settings.hostname, port, &sock);
+    if (err != Err::none) {
       break;
     }
     dload_socks.sockets.push_back(sock);
@@ -647,7 +648,8 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = -1;
-    if (!connect_maybe_socks5(impl->settings.hostname, port, &sock)) {
+    Err err = netx_maybesocks5h_connect(impl->settings.hostname, port, &sock);
+    if (err != Err::none) {
       return false;
     }
     upload_socks.sockets.push_back(sock);
@@ -739,222 +741,6 @@ bool Client::run_upload() noexcept {
 }
 
 // Low-level API
-
-bool Client::connect_maybe_socks5(const std::string &hostname,
-                                  const std::string &port,
-                                  Socket *sock) noexcept {
-  if (impl->settings.socks5h_port.empty()) {
-    return netx_connect(hostname, port, sock) == Err::none;
-  }
-  {
-    auto err = netx_connect("127.0.0.1", impl->settings.socks5h_port, sock);
-    if (err != Err::none) {
-      return false;
-    }
-  }
-  EMIT_INFO("socks5h: connected to proxy");
-  {
-    char auth_request[] = {
-        5,  // version
-        1,  // number of methods
-        0   // "no auth" method
-    };
-    auto err = netx_sendn(*sock, auth_request, sizeof(auth_request));
-    if (err != Err::none) {
-      EMIT_WARNING("socks5h: cannot send auth_request");
-      this->closesocket(*sock);
-      *sock = -1;
-      return false;
-    }
-    EMIT_DEBUG("socks5h: sent this auth request: "
-               << represent(std::string{auth_request, sizeof(auth_request)}));
-  }
-  {
-    char auth_response[2] = {
-        0,  // version
-        0   // method
-    };
-    auto err = netx_recvn(*sock, auth_response, sizeof(auth_response));
-    if (err != Err::none) {
-      EMIT_WARNING("socks5h: cannot recv auth_response");
-      this->closesocket(*sock);
-      *sock = -1;
-      return false;
-    }
-    constexpr uint8_t version = 5;
-    if (auth_response[0] != version) {
-      EMIT_WARNING("socks5h: received unexpected version number");
-      this->closesocket(*sock);
-      *sock = -1;
-      return false;
-    }
-    constexpr uint8_t auth_method = 0;
-    if (auth_response[1] != auth_method) {
-      EMIT_WARNING("socks5h: received unexpected auth_method");
-      this->closesocket(*sock);
-      *sock = -1;
-      return false;
-    }
-    EMIT_DEBUG("socks5h: authenticated with proxy; response: "
-               << represent(std::string{auth_response, sizeof(auth_response)}));
-  }
-  {
-    std::string connect_request;
-    {
-      std::stringstream ss;
-      ss << (uint8_t)5;  // version
-      ss << (uint8_t)1;  // CMD_CONNECT
-      ss << (uint8_t)0;  // reserved
-      ss << (uint8_t)3;  // ATYPE_DOMAINNAME
-      if (hostname.size() > UINT8_MAX) {
-        EMIT_WARNING("socks5h: hostname is too long");
-        this->closesocket(*sock);
-        *sock = -1;
-        return false;
-      }
-      ss << (uint8_t)hostname.size();
-      ss << hostname;
-      uint16_t portno{};
-      {
-        const char *errstr = nullptr;
-        portno = (uint16_t)this->strtonum(port.c_str(), 0, UINT16_MAX, &errstr);
-        if (errstr != nullptr) {
-          EMIT_WARNING("socks5h: invalid port number: " << errstr);
-          this->closesocket(*sock);
-          *sock = -1;
-          return false;
-        }
-      }
-      portno = htons(portno);
-      ss << (uint8_t)((char *)&portno)[0] << (uint8_t)((char *)&portno)[1];
-      connect_request = ss.str();
-      EMIT_DEBUG("socks5h: connect_request: " << represent(connect_request));
-    }
-    auto err = netx_sendn(  //
-        *sock, connect_request.data(), connect_request.size());
-    if (err != Err::none) {
-      EMIT_WARNING("socks5h: cannot send connect_request");
-      this->closesocket(*sock);
-      *sock = -1;
-      return false;
-    }
-    EMIT_DEBUG("socks5h: sent connect request");
-  }
-  {
-    char connect_response_hdr[] = {
-        0,  // version
-        0,  // error
-        0,  // reserved
-        0   // type
-    };
-    auto err = netx_recvn(  //
-        *sock, connect_response_hdr, sizeof(connect_response_hdr));
-    if (err != Err::none) {
-      EMIT_WARNING("socks5h: cannot recv connect_response_hdr");
-      this->closesocket(*sock);
-      *sock = -1;
-      return false;
-    }
-    EMIT_DEBUG("socks5h: connect_response_hdr: " << represent(std::string{
-                   connect_response_hdr, sizeof(connect_response_hdr)}));
-    constexpr uint8_t version = 5;
-    if (connect_response_hdr[0] != version) {
-      EMIT_WARNING("socks5h: invalid message version");
-      this->closesocket(*sock);
-      *sock = -1;
-      return false;
-    }
-    if (connect_response_hdr[1] != 0) {
-      // TODO(bassosimone): map the socks5 error to a system error
-      EMIT_WARNING("socks5h: connect() failed: "
-                   << (unsigned)(uint8_t)connect_response_hdr[1]);
-      this->closesocket(*sock);
-      *sock = -1;
-      return false;
-    }
-    if (connect_response_hdr[2] != 0) {
-      EMIT_WARNING("socks5h: invalid reserved field");
-      this->closesocket(*sock);
-      *sock = -1;
-      return false;
-    }
-    // receive IP or domain
-    switch (connect_response_hdr[3]) {
-      case 1:  // ipv4
-      {
-        constexpr Size expected = 4;  // ipv4
-        char buf[expected];
-        auto err = netx_recvn(*sock, buf, sizeof(buf));
-        if (err != Err::none) {
-          EMIT_WARNING("socks5h: cannot recv ipv4 address");
-          this->closesocket(*sock);
-          *sock = -1;
-          return false;
-        }
-        // TODO(bassosimone): log the ipv4 address. However tor returns a zero
-        // ipv4 and so there is little added value in logging.
-        break;
-      }
-      case 3:  // domain
-      {
-        uint8_t len = 0;
-        auto err = netx_recvn(*sock, &len, sizeof(len));
-        if (err != Err::none) {
-          EMIT_WARNING("socks5h: cannot recv domain length");
-          this->closesocket(*sock);
-          *sock = -1;
-          return false;
-        }
-        char domain[UINT8_MAX + 1];  // space for final '\0'
-        err = netx_recvn(*sock, domain, len);
-        if (err != Err::none) {
-          EMIT_WARNING("socks5h: cannot recv domain");
-          this->closesocket(*sock);
-          *sock = -1;
-          return false;
-        }
-        domain[len] = 0;
-        EMIT_DEBUG("socks5h: domain: " << domain);
-        break;
-      }
-      case 4:  // ipv6
-      {
-        constexpr Size expected = 16;  // ipv6
-        char buf[expected];
-        auto err = netx_recvn(*sock, buf, sizeof(buf));
-        if (err != Err::none) {
-          EMIT_WARNING("socks5h: cannot recv ipv6 address");
-          this->closesocket(*sock);
-          *sock = -1;
-          return false;
-        }
-        // TODO(bassosimone): log the ipv6 address. However tor returns a zero
-        // ipv6 and so there is little added value in logging.
-        break;
-      }
-      default:
-        EMIT_WARNING("socks5h: invalid address type");
-        this->closesocket(*sock);
-        *sock = -1;
-        return false;
-    }
-    // receive the port
-    {
-      uint16_t port = 0;
-      auto err = netx_recvn(*sock, &port, sizeof(port));
-      if (err != Err::none) {
-        EMIT_WARNING("socks5h: cannot recv port");
-        this->closesocket(*sock);
-        *sock = -1;
-        return false;
-      }
-      port = ntohs(port);
-      EMIT_DEBUG("socks5h: port number: " << port);
-    }
-  }
-  EMIT_INFO("socks5h: the proxy has successfully connected");
-  return true;
-}
 
 bool Client::msg_write_login(const std::string &version) noexcept {
   static_assert(sizeof(impl->settings.test_suite) == 1, "test_suite too large");
@@ -1225,6 +1011,222 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
 }
 
 // Networking layer
+
+Err Client::netx_maybesocks5h_connect(const std::string &hostname,
+                                      const std::string &port,
+                                      Socket *sock) noexcept {
+  if (impl->settings.socks5h_port.empty()) {
+    return netx_connect(hostname, port, sock);
+  }
+  {
+    auto err = netx_connect("127.0.0.1", impl->settings.socks5h_port, sock);
+    if (err != Err::none) {
+      return err;
+    }
+  }
+  EMIT_INFO("socks5h: connected to proxy");
+  {
+    char auth_request[] = {
+        5,  // version
+        1,  // number of methods
+        0   // "no auth" method
+    };
+    auto err = netx_sendn(*sock, auth_request, sizeof(auth_request));
+    if (err != Err::none) {
+      EMIT_WARNING("socks5h: cannot send auth_request");
+      this->closesocket(*sock);
+      *sock = -1;
+      return err;
+    }
+    EMIT_DEBUG("socks5h: sent this auth request: "
+               << represent(std::string{auth_request, sizeof(auth_request)}));
+  }
+  {
+    char auth_response[2] = {
+        0,  // version
+        0   // method
+    };
+    auto err = netx_recvn(*sock, auth_response, sizeof(auth_response));
+    if (err != Err::none) {
+      EMIT_WARNING("socks5h: cannot recv auth_response");
+      this->closesocket(*sock);
+      *sock = -1;
+      return err;
+    }
+    constexpr uint8_t version = 5;
+    if (auth_response[0] != version) {
+      EMIT_WARNING("socks5h: received unexpected version number");
+      this->closesocket(*sock);
+      *sock = -1;
+      return Err::socks5h;
+    }
+    constexpr uint8_t auth_method = 0;
+    if (auth_response[1] != auth_method) {
+      EMIT_WARNING("socks5h: received unexpected auth_method");
+      this->closesocket(*sock);
+      *sock = -1;
+      return Err::socks5h;
+    }
+    EMIT_DEBUG("socks5h: authenticated with proxy; response: "
+               << represent(std::string{auth_response, sizeof(auth_response)}));
+  }
+  {
+    std::string connect_request;
+    {
+      std::stringstream ss;
+      ss << (uint8_t)5;  // version
+      ss << (uint8_t)1;  // CMD_CONNECT
+      ss << (uint8_t)0;  // reserved
+      ss << (uint8_t)3;  // ATYPE_DOMAINNAME
+      if (hostname.size() > UINT8_MAX) {
+        EMIT_WARNING("socks5h: hostname is too long");
+        this->closesocket(*sock);
+        *sock = -1;
+        return Err::invalid_argument;
+      }
+      ss << (uint8_t)hostname.size();
+      ss << hostname;
+      uint16_t portno{};
+      {
+        const char *errstr = nullptr;
+        portno = (uint16_t)this->strtonum(port.c_str(), 0, UINT16_MAX, &errstr);
+        if (errstr != nullptr) {
+          EMIT_WARNING("socks5h: invalid port number: " << errstr);
+          this->closesocket(*sock);
+          *sock = -1;
+          return Err::invalid_argument;
+        }
+      }
+      portno = htons(portno);
+      ss << (uint8_t)((char *)&portno)[0] << (uint8_t)((char *)&portno)[1];
+      connect_request = ss.str();
+      EMIT_DEBUG("socks5h: connect_request: " << represent(connect_request));
+    }
+    auto err = netx_sendn(  //
+        *sock, connect_request.data(), connect_request.size());
+    if (err != Err::none) {
+      EMIT_WARNING("socks5h: cannot send connect_request");
+      this->closesocket(*sock);
+      *sock = -1;
+      return err;
+    }
+    EMIT_DEBUG("socks5h: sent connect request");
+  }
+  {
+    char connect_response_hdr[] = {
+        0,  // version
+        0,  // error
+        0,  // reserved
+        0   // type
+    };
+    auto err = netx_recvn(  //
+        *sock, connect_response_hdr, sizeof(connect_response_hdr));
+    if (err != Err::none) {
+      EMIT_WARNING("socks5h: cannot recv connect_response_hdr");
+      this->closesocket(*sock);
+      *sock = -1;
+      return err;
+    }
+    EMIT_DEBUG("socks5h: connect_response_hdr: " << represent(std::string{
+                   connect_response_hdr, sizeof(connect_response_hdr)}));
+    constexpr uint8_t version = 5;
+    if (connect_response_hdr[0] != version) {
+      EMIT_WARNING("socks5h: invalid message version");
+      this->closesocket(*sock);
+      *sock = -1;
+      return Err::socks5h;
+    }
+    if (connect_response_hdr[1] != 0) {
+      // TODO(bassosimone): map the socks5 error to a system error
+      EMIT_WARNING("socks5h: connect() failed: "
+                   << (unsigned)(uint8_t)connect_response_hdr[1]);
+      this->closesocket(*sock);
+      *sock = -1;
+      return Err::io_error;
+    }
+    if (connect_response_hdr[2] != 0) {
+      EMIT_WARNING("socks5h: invalid reserved field");
+      this->closesocket(*sock);
+      *sock = -1;
+      return Err::socks5h;
+    }
+    // receive IP or domain
+    switch (connect_response_hdr[3]) {
+      case 1:  // ipv4
+      {
+        constexpr Size expected = 4;  // ipv4
+        char buf[expected];
+        auto err = netx_recvn(*sock, buf, sizeof(buf));
+        if (err != Err::none) {
+          EMIT_WARNING("socks5h: cannot recv ipv4 address");
+          this->closesocket(*sock);
+          *sock = -1;
+          return err;
+        }
+        // TODO(bassosimone): log the ipv4 address. However tor returns a zero
+        // ipv4 and so there is little added value in logging.
+        break;
+      }
+      case 3:  // domain
+      {
+        uint8_t len = 0;
+        auto err = netx_recvn(*sock, &len, sizeof(len));
+        if (err != Err::none) {
+          EMIT_WARNING("socks5h: cannot recv domain length");
+          this->closesocket(*sock);
+          *sock = -1;
+          return err;
+        }
+        char domain[UINT8_MAX + 1];  // space for final '\0'
+        err = netx_recvn(*sock, domain, len);
+        if (err != Err::none) {
+          EMIT_WARNING("socks5h: cannot recv domain");
+          this->closesocket(*sock);
+          *sock = -1;
+          return err;
+        }
+        domain[len] = 0;
+        EMIT_DEBUG("socks5h: domain: " << domain);
+        break;
+      }
+      case 4:  // ipv6
+      {
+        constexpr Size expected = 16;  // ipv6
+        char buf[expected];
+        auto err = netx_recvn(*sock, buf, sizeof(buf));
+        if (err != Err::none) {
+          EMIT_WARNING("socks5h: cannot recv ipv6 address");
+          this->closesocket(*sock);
+          *sock = -1;
+          return err;
+        }
+        // TODO(bassosimone): log the ipv6 address. However tor returns a zero
+        // ipv6 and so there is little added value in logging.
+        break;
+      }
+      default:
+        EMIT_WARNING("socks5h: invalid address type");
+        this->closesocket(*sock);
+        *sock = -1;
+        return Err::socks5h;
+    }
+    // receive the port
+    {
+      uint16_t port = 0;
+      auto err = netx_recvn(*sock, &port, sizeof(port));
+      if (err != Err::none) {
+        EMIT_WARNING("socks5h: cannot recv port");
+        this->closesocket(*sock);
+        *sock = -1;
+        return err;
+      }
+      port = ntohs(port);
+      EMIT_DEBUG("socks5h: port number: " << port);
+    }
+  }
+  EMIT_INFO("socks5h: the proxy has successfully connected");
+  return Err::none;
+}
 
 #ifdef _WIN32
 #define E(name) WSAE##name

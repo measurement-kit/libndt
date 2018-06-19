@@ -296,10 +296,6 @@ class Client {
 
   // Low-level API
 
-  virtual bool connect_maybe_socks5(const std::string &hostname,
-                                    const std::string &port,
-                                    Socket *sock) noexcept;
-
   bool msg_write_login(const std::string &version) noexcept;
 
   virtual bool msg_write(uint8_t code, std::string &&msg) noexcept;
@@ -318,6 +314,10 @@ class Client {
   virtual bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
 
   // Networking layer
+
+  virtual Err netx_maybesocks5h_connect(const std::string &hostname,
+                                        const std::string &port,
+                                        Socket *sock) noexcept;
 
   static Err netx_map_errno(int ec) noexcept;
 
@@ -410,6 +410,7 @@ enum class Err {
   ai_again,
   ai_fail,
   ai_noname,
+  socks5h,
 };
 
 }  // namespace libndt
