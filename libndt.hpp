@@ -339,6 +339,8 @@ class Client {
   virtual Err netx_resolve(const std::string &hostname,
                            std::vector<std::string> *addrs) noexcept;
 
+  virtual Err netx_setnonblocking(Socket fd) noexcept;
+
   // Dependencies (cURL)
 
   uint64_t get_verbosity() const noexcept;
@@ -370,6 +372,13 @@ class Client {
 
   virtual long long strtonum(const char *s, long long minval, long long maxval,
                              const char **err) noexcept;
+
+#ifdef _WIN32
+  virtual int ioctlsocket(Socket s, long cmd, u_long *argp) noexcept;
+#else
+  virtual int fcntl2(Socket s, int cmd) noexcept;
+  virtual int fcntl3i(Socket s, int cmd, int arg) noexcept;
+#endif
 
  private:
   class Impl;
