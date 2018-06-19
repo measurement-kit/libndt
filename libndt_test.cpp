@@ -2047,11 +2047,13 @@ TEST_CASE("Client::netx_map_eai() correctly maps all errors") {
   REQUIRE(client.netx_map_eai(EAI_AGAIN) == Err::ai_again);
   REQUIRE(client.netx_map_eai(EAI_FAIL) == Err::ai_fail);
   REQUIRE(client.netx_map_eai(EAI_NONAME) == Err::ai_noname);
+#ifdef EAI_SYSTEM
   {
     client.set_last_system_error(E(WOULDBLOCK));
     REQUIRE(client.netx_map_eai(EAI_SYSTEM) == Err::operation_would_block);
     client.set_last_system_error(0);
   }
+#endif
 }
 
 #undef E  // Tidy
