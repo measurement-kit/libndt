@@ -1310,6 +1310,7 @@ class ConnectMaybeSocks5FailSecondNetxSendn : public libndt::Client {
   libndt::Err netx_recvn(libndt::Socket, void *buf,
                          libndt::Size size) noexcept override {
     assert(size == 2);
+    (void)size;
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 0;
     return libndt::Err::none;
