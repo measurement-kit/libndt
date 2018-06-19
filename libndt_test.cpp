@@ -10,6 +10,9 @@
 #endif
 
 #include <errno.h>
+#ifndef _WIN32
+#include <fcntl.h>
+#endif
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
@@ -2451,6 +2454,68 @@ TEST_CASE("Client::netx_resolve() deals with Client::getnameinfo() failure") {
   std::vector<std::string> addrs;
   REQUIRE(client.netx_resolve("x.org", &addrs) == libndt::Err::ai_generic);
 }
+
+// Client::netx_setnonblocking() tests
+// -----------------------------------
+
+#ifdef _WIN32
+
+class FailIoctlsocket : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int ioctlsocket(libndt::Socket, long cmd, u_long *) noexcept override {
+    REQUIRE(cmd == FIONBIO);
+    ::SetLastError(WSAEINVAL);
+    return -1;
+  }
+};
+
+TEST_CASE(
+    "Client::netx_setnonblocking() deals with Client::ioctlsocket() failure") {
+  FailIoctlsocket client;
+  REQUIRE(client.netx_setnonblocking(17) == libndt::Err::invalid_argument);
+}
+
+#else
+
+class FailFcntl2 : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int fcntl2(libndt::Socket, int cmd) noexcept override {
+    REQUIRE(cmd == F_GETFL);
+    errno = EINVAL;
+    return -1;
+  }
+};
+
+TEST_CASE(
+    "Client::netx_setnonblocking() deals with Client::fcntl2() failure") {
+  FailFcntl2 client;
+  REQUIRE(client.netx_setnonblocking(17) == libndt::Err::invalid_argument);
+}
+
+class FailFcntl3i : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int fcntl2(libndt::Socket, int cmd) noexcept override {
+    REQUIRE(cmd == F_GETFL);
+    return 0;
+  }
+  int fcntl3i(libndt::Socket, int cmd, int flags) noexcept override {
+    REQUIRE(cmd == F_SETFL);
+    REQUIRE((flags & O_NONBLOCK) != 0);
+    errno = EINVAL;
+    return -1;
+  }
+};
+
+TEST_CASE(
+    "Client::netx_setnonblocking() deals with Client::fcntl3i() failure") {
+  FailFcntl3i client;
+  REQUIRE(client.netx_setnonblocking(17) == libndt::Err::invalid_argument);
+}
+
+#endif // _WIN32
 
 // Client::query_mlabns_curl() tests
 // ---------------------------------

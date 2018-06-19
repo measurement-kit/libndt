@@ -8,15 +8,19 @@
 #include <arpa/inet.h>   // IWYU pragma: keep
 #include <sys/select.h>  // IWYU pragma: keep
 #include <sys/socket.h>
-
-#include <errno.h>
-#include <limits.h>
-#include <netdb.h>
-#include <unistd.h>
 #endif
 
 #include <assert.h>
+#ifndef _WIN32
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <netdb.h>
+#endif
 #include <string.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -1462,6 +1466,26 @@ Err Client::netx_resolve(const std::string &hostname,
   return result;
 }
 
+Err Client::netx_setnonblocking(Socket fd) noexcept {
+#ifdef _WIN32
+  u_long enable = 1UL;
+  if (this->ioctlsocket(fd, FIONBIO, &enable) != 0) {
+    return netx_map_errno(get_last_system_error());
+  }
+#else
+  auto flags = fcntl2(fd, F_GETFL);
+  if (flags < 0) {
+    assert(flags == -1);
+    return netx_map_errno(get_last_system_error());
+  }
+  flags |= O_NONBLOCK;
+  if (fcntl3i(fd, F_SETFL, flags) != 0) {
+    return netx_map_errno(get_last_system_error());
+  }
+#endif
+  return Err::none;
+}
+
 // Dependencies (curl)
 
 uint64_t Client::get_verbosity() const noexcept {
@@ -1576,6 +1600,19 @@ long long Client::strtonum(const char *s, long long minval, long long maxval,
                            const char **errp) noexcept {
   return ::strtonum(s, minval, maxval, errp);
 }
+
+#ifdef _WIN32
+int Client::ioctlsocket(Socket s, long cmd, u_long *argp) noexcept {
+  return ::ioctlsocket(AS_OS_SOCKET(s), cmd, argp);
+}
+#else
+int Client::fcntl2(Socket s, int cmd) noexcept {
+  return ::fcntl(AS_OS_SOCKET(s), cmd);
+}
+int Client::fcntl3i(Socket s, int cmd, int arg) noexcept {
+  return ::fcntl(AS_OS_SOCKET(s), cmd, arg);
+}
+#endif
 
 }  // namespace libndt
 }  // namespace measurement_kit
