@@ -536,7 +536,7 @@ bool Client::run_download() noexcept {
             // for now we will not be concered with checking for EAGAIN.
             auto err = netx_recv_nonblocking(fd, buf, sizeof(buf), &n);
             if (err != Err::none) {
-              EMIT_WARNING("run_download: next_recv_nonblocking() failed: "
+              EMIT_WARNING("run_download: netx_recv_nonblocking() failed: "
                            << get_last_system_error());
               done = true;
               break;
@@ -700,7 +700,7 @@ bool Client::run_upload() noexcept {
       }
       if (err == Err::none) {
         for (auto &fd : upload_socks.sockets) {
-          if (FD_ISSET(fd, &set)) {
+          if (FD_ISSET(AS_OS_SOCKET(fd), &set)) {
             Size n = 0;
             // Note: select() has just tell us that the socket is writable, so
             // for now we will not be concered with checking for EAGAIN.
@@ -1395,8 +1395,9 @@ Err Client::netx_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept {
     FD_SET(AS_OS_SOCKET(fd), &set);
     timeval tv{};
     tv.tv_sec = impl->settings.timeout;
+    // As explained elsewhere, cast to `int` is safe here
     assert(fd < INT_MAX);
-    auto err = netx_select(fd + 1, nullptr, &set, nullptr, &tv);
+    auto err = netx_select((int)fd + 1, nullptr, &set, nullptr, &tv);
     if (err != Err::none) {
       EMIT_WARNING("netx_connect: netx_select() failed");
       return err;
@@ -1435,8 +1436,9 @@ Err Client::netx_recv(Socket fd, void *base, Size count,
   timeval tv{};
   // XXX: can timeout be negative?
   tv.tv_sec = impl->settings.timeout;
+  // As explained elsewhere, cast to `int` is safe here
   assert(fd < INT_MAX);
-  auto err = netx_select(fd + 1, &set, nullptr, nullptr, &tv);
+  auto err = netx_select((int)fd + 1, &set, nullptr, nullptr, &tv);
   if (err != Err::none) {
     return err;
   }
@@ -1491,8 +1493,9 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
   timeval tv{};
   // XXX: can timeout be negative?
   tv.tv_sec = impl->settings.timeout;
+  // As explained elsewhere, cast to `int` is safe here
   assert(fd < INT_MAX);
-  auto err = netx_select(fd + 1, nullptr, &set, nullptr, &tv);
+  auto err = netx_select((int)fd + 1, nullptr, &set, nullptr, &tv);
   if (err != Err::none) {
     return err;
   }
@@ -1758,11 +1761,11 @@ int Client::fcntl3i(Socket s, int cmd, int arg) noexcept {
 }
 #endif
 
-int Client::getsockopt(int socket, int level, int name, void *value,
+int Client::getsockopt(Socket socket, int level, int name, void *value,
                        SockLen *len) noexcept {
   static_assert(sizeof(*len) == sizeof(int), "invalid SockLen size");
-  return ::getsockopt(socket, level, name, AS_OS_OPTION_VALUE(value),
-                      AS_OS_SOCKLEN_STAR(len));
+  return ::getsockopt(AS_OS_SOCKET(socket), level, name,
+                      AS_OS_OPTION_VALUE(value), AS_OS_SOCKLEN_STAR(len));
 }
 
 }  // namespace libndt
