@@ -380,6 +380,9 @@ class Client {
   virtual int fcntl3i(Socket s, int cmd, int arg) noexcept;
 #endif
 
+  virtual int getsockopt(int socket, int level, int name, void *value,
+                         SockLen *len) noexcept;
+
  private:
   class Impl;
   std::unique_ptr<Impl> impl;
