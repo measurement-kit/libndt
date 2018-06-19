@@ -455,8 +455,12 @@ bool Client::wait_close() noexcept {
     char data;
     Size n = 0;
     auto err = netx_recv(impl->sock, &data, sizeof(data), &n);
-    if (err != Err::none) {
-      EMIT_WARNING("wait_close(): server did not close connection");
+    if (err == Err::none) {
+      EMIT_WARNING("wait_close(): unexpected data recv'd when waiting for EOF");
+      return false;
+    }
+    if (err != Err::eof) {
+      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF");
       return false;
     }
   }

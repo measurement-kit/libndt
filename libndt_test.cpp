@@ -538,7 +538,7 @@ TEST_CASE("Client::wait_close() deals with Client::select() timeout") {
   REQUIRE(client.wait_close() == true /* Being tolerant */);
 }
 
-class FailRecvAfterGoodSelect : public libndt::Client {
+class NotEofAfterGoodSelect : public libndt::Client {
  public:
   using libndt::Client::Client;
   int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
@@ -550,8 +550,29 @@ class FailRecvAfterGoodSelect : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::wait_close() deals with Client::recv() failure") {
-  FailRecvAfterGoodSelect client;
+TEST_CASE(
+    "Client::wait_close() deals with Client::recv() failure different from "
+    "EOF") {
+  NotEofAfterGoodSelect client;
+  REQUIRE(client.wait_close() == false);
+}
+
+class SuccessAfterGoodSelect : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+    return 1;
+  }
+  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size size,
+                        libndt::Size *tot) noexcept override {
+    *tot = size;
+    return libndt::Err::none;
+  }
+};
+
+TEST_CASE(
+    "Client::wait_close() deals with Client::recv() success (unexpected)") {
+  SuccessAfterGoodSelect client;
   REQUIRE(client.wait_close() == false);
 }
 
