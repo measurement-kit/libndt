@@ -309,8 +309,8 @@ bool Client::query_mlabns() noexcept {
 }
 
 bool Client::connect() noexcept {
-  return connect_tcp_maybe_socks5(impl->settings.hostname, impl->settings.port,
-                                  &impl->sock);
+  return connect_maybe_socks5(impl->settings.hostname, impl->settings.port,
+                              &impl->sock);
 }
 
 bool Client::send_login() noexcept {
@@ -472,7 +472,7 @@ bool Client::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
-    if (!connect_tcp_maybe_socks5(impl->settings.hostname, port, &sock)) {
+    if (!connect_maybe_socks5(impl->settings.hostname, port, &sock)) {
       break;
     }
     dload_socks.sockets.push_back(sock);
@@ -645,7 +645,7 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = -1;
-    if (!connect_tcp_maybe_socks5(impl->settings.hostname, port, &sock)) {
+    if (!connect_maybe_socks5(impl->settings.hostname, port, &sock)) {
       return false;
     }
     upload_socks.sockets.push_back(sock);
@@ -738,13 +738,14 @@ bool Client::run_upload() noexcept {
 
 // Low-level API
 
-bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
-                                      const std::string &port,
-                                      Socket *sock) noexcept {
+bool Client::connect_maybe_socks5(const std::string &hostname,
+                                  const std::string &port,
+                                  Socket *sock) noexcept {
   if (impl->settings.socks5h_port.empty()) {
-    return connect_tcp(hostname, port, sock);
+    return netx_connect(hostname, port, sock) == Err::none;
   }
-  if (!connect_tcp("127.0.0.1", impl->settings.socks5h_port, sock)) {
+  auto err = netx_connect("127.0.0.1", impl->settings.socks5h_port, sock);
+  if (err != Err::none) {
     return false;
   }
   EMIT_INFO("socks5h: connected to proxy");
@@ -965,12 +966,6 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
   }
   EMIT_INFO("socks5h: the proxy has successfully connected");
   return true;
-}
-
-bool Client::connect_tcp(const std::string &hostname, const std::string &port,
-                         Socket *sock) noexcept {
-  // TODO(bassosimone): remove
-  return netx_connect(hostname, port, sock) == Err::none;
 }
 
 bool Client::msg_write_login(const std::string &version) noexcept {

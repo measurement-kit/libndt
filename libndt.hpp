@@ -296,12 +296,9 @@ class Client {
 
   // Low-level API
 
-  virtual bool connect_tcp_maybe_socks5(const std::string &hostname,
-                                        const std::string &port,
-                                        Socket *sock) noexcept;
-
-  virtual bool connect_tcp(const std::string &hostname, const std::string &port,
-                           Socket *sock) noexcept;
+  virtual bool connect_maybe_socks5(const std::string &hostname,
+                                    const std::string &port,
+                                    Socket *sock) noexcept;
 
   bool msg_write_login(const std::string &version) noexcept;
 
