@@ -317,10 +317,6 @@ class Client {
 
   virtual bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
 
-  // Utilities for low-level
-
-  virtual Ssize sendn(Socket fd, const void *base, Size count) noexcept;
-
   // Networking layer
 
   static Err map_errno(int ec) noexcept;

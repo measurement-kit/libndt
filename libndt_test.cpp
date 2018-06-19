@@ -1137,7 +1137,7 @@ TEST_CASE(
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "80", &sock));
 }
 
-class ConnectMaybeSocks5FailFirstSendn : public libndt::Client {
+class ConnectMaybeSocks5FailFirstNetxSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_connect(const std::string &, const std::string &,
@@ -1145,18 +1145,18 @@ class ConnectMaybeSocks5FailFirstSendn : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size) noexcept override {
-    return -1;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::io_error;
   }
 };
 
 TEST_CASE(
-    "Client::connect_maybe_socks5() deals with Client::sendn() "
+    "Client::connect_maybe_socks5() deals with Client::netx_sendn() "
     "failure when sending auth_request") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
-  ConnectMaybeSocks5FailFirstSendn client{settings};
+  ConnectMaybeSocks5FailFirstNetxSendn client{settings};
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "80", &sock));
 }
@@ -1169,9 +1169,9 @@ class ConnectMaybeSocks5FailFirstNetxRecvn : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size size) noexcept override {
-    return (libndt::Ssize)size;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *,
                          libndt::Size) noexcept override {
@@ -1180,7 +1180,7 @@ class ConnectMaybeSocks5FailFirstNetxRecvn : public libndt::Client {
 };
 
 TEST_CASE(
-    "Client::connect_maybe_socks5() deals with Client::sendn() "
+    "Client::connect_maybe_socks5() deals with Client::netx_sendn() "
     "failure when receiving auth_response") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
@@ -1197,13 +1197,14 @@ class ConnectMaybeSocks5InvalidAuthResponseVersion : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size size) noexcept override {
-    return (libndt::Ssize)size;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
                          libndt::Size size) noexcept override {
     assert(size == 2);
+    (void)size;
     ((char *)buf)[0] = 4;  // unexpected
     ((char *)buf)[1] = 0;
     return libndt::Err::none;
@@ -1228,13 +1229,14 @@ class ConnectMaybeSocks5InvalidAuthResponseMethod : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size size) noexcept override {
-    return (libndt::Ssize)size;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
                          libndt::Size size) noexcept override {
     assert(size == 2);
+    (void)size;
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 1;
     return libndt::Err::none;
@@ -1259,13 +1261,14 @@ class ConnectMaybeSocks5InitialHandshakeOkay : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size size) noexcept override {
-    return (libndt::Ssize)size;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                      libndt::Size) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
                          libndt::Size size) noexcept override {
     assert(size == 2);
+    (void)size;
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 0;
     return libndt::Err::none;
@@ -1292,7 +1295,7 @@ TEST_CASE("Client::connect_maybe_socks5() deals with invalid port") {
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "xx", &sock));
 }
 
-class ConnectMaybeSocks5FailSecondSendn : public libndt::Client {
+class ConnectMaybeSocks5FailSecondNetxSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_connect(const std::string &, const std::string &,
@@ -1300,9 +1303,9 @@ class ConnectMaybeSocks5FailSecondSendn : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size size) noexcept override {
-    return size == 3 ? (libndt::Ssize)size : -1;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size size) noexcept override {
+    return size == 3 ? libndt::Err::none : libndt::Err::io_error;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
                          libndt::Size size) noexcept override {
@@ -1314,11 +1317,11 @@ class ConnectMaybeSocks5FailSecondSendn : public libndt::Client {
 };
 
 TEST_CASE(
-    "Client::connect_maybe_socks5() deals with Client::sendn() "
+    "Client::connect_maybe_socks5() deals with Client::netx_sendn() "
     "error while sending connect_request") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
-  ConnectMaybeSocks5FailSecondSendn client{settings};
+  ConnectMaybeSocks5FailSecondNetxSendn client{settings};
   libndt::Socket sock = -1;
   REQUIRE(!client.connect_maybe_socks5("www.google.com", "80", &sock));
 }
@@ -1331,9 +1334,9 @@ class ConnectMaybeSocks5FailSecondNetxRecvn : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size size) noexcept override {
-    return (libndt::Ssize)size;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
                          libndt::Size size) noexcept override {
@@ -1364,9 +1367,9 @@ class ConnectMaybeSocks5InvalidSecondVersion : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size size) noexcept override {
-    return (libndt::Ssize)size;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
                          libndt::Size size) noexcept override {
@@ -1402,9 +1405,9 @@ class ConnectMaybeSocks5ErrorResult : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size size) noexcept override {
-    return (libndt::Ssize)size;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
                          libndt::Size size) noexcept override {
@@ -1440,9 +1443,9 @@ class ConnectMaybeSocks5InvalidReserved : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size size) noexcept override {
-    return (libndt::Ssize)size;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
                          libndt::Size size) noexcept override {
@@ -1479,9 +1482,9 @@ class ConnectMaybeSocks5FailAddressNetxRecvn : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size size) noexcept override {
-    return (libndt::Ssize)size;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::none;
   }
   uint8_t type = 0;
   bool seen = false;
@@ -1547,9 +1550,9 @@ class ConnectMaybeSocks5WithArray : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size size) noexcept override {
-    return (libndt::Ssize)size;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::none;
   }
   std::deque<std::string> array;
   libndt::Err netx_recvn(libndt::Socket, void *buf,
@@ -1753,38 +1756,38 @@ TEST_CASE("Client::msg_write_legacy() deals with too-big messages") {
               libndt::msg_test_start, std::move(m)) == false);
 }
 
-class FailSendn : public libndt::Client {
+class FailNetxSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size) noexcept override {
-    return -1;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    return libndt::Err::io_error;
   }
 };
 
 TEST_CASE(
-    "Client::msg_write_legacy() deals with Client::sendn() failure when "
+    "Client::msg_write_legacy() deals with Client::netx_sendn() failure when "
     "sending header") {
-  FailSendn client;
+  FailNetxSendn client;
   std::string m{"foo"};
   client.set_last_system_error(0);
   REQUIRE(client.msg_write_legacy(  //
               libndt::msg_test_start, std::move(m)) == false);
 }
 
-class FailLargeSendn : public libndt::Client {
+class FailLargeNetxSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize sendn(libndt::Socket, const void *,
-                      libndt::Size siz) noexcept override {
-    return siz == 3 ? 3 : -1;
+  libndt::Err netx_sendn(libndt::Socket, const void *,
+                         libndt::Size siz) noexcept override {
+    return siz == 3 ? libndt::Err::none : libndt::Err::io_error;
   }
 };
 
 TEST_CASE(
-    "Client::msg_write_legacy() deals with Client::sendn() failure when "
+    "Client::msg_write_legacy() deals with Client::netx_sendn() failure when "
     "sending message") {
-  FailLargeSendn client;
+  FailLargeNetxSendn client;
   std::string m{"foobar"};
   client.set_last_system_error(0);
   REQUIRE(client.msg_write_legacy(  //
@@ -1997,112 +2000,6 @@ TEST_CASE(
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
 }
 
-// Client::sendn() tests
-// ---------------------
-
-#ifdef _WIN32
-#define OS_SSIZE_MAX INT_MAX
-#else
-#define OS_SSIZE_MAX SSIZE_MAX
-#endif
-
-TEST_CASE("Client::sendn() deals with too-large buffer") {
-  libndt::Client client;
-  REQUIRE(client.sendn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
-}
-
-class FailSend : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size) noexcept override {
-    set_last_system_error(OS_EINVAL);
-    return -1;
-  }
-};
-
-TEST_CASE("Client::sendn() deals with Client::send() failure") {
-  char buf[1024];
-  FailSend client;
-  REQUIRE(client.sendn(0, buf, sizeof(buf)) == -1);
-}
-
-// As much as EOF should not appear on a socket when sending, be ready.
-class SendEof : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size) noexcept override {
-    return 0;
-  }
-};
-
-TEST_CASE("Client::sendn() deals with Client::send() EOF") {
-  char buf[1024];
-  SendEof client;
-  REQUIRE(client.sendn(0, buf, sizeof(buf)) == 0);
-}
-
-class PartialSendAndThenError : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  static constexpr libndt::Size amount = 11;
-  static constexpr libndt::Size good_amount = 3;
-  libndt::Size successful = 0;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size size) noexcept override {
-    if (size == amount) {
-      assert(size >= good_amount);
-      successful += good_amount;
-      return good_amount;
-    }
-    set_last_system_error(OS_EINVAL);
-    return -1;
-  }
-};
-
-TEST_CASE("Client::send() deals with partial Client::send() and then error") {
-  char buf[PartialSendAndThenError::amount] = {};
-  PartialSendAndThenError client;
-  REQUIRE(client.sendn(0, buf, sizeof(buf)) == -1);
-  // Just to make sure the code path was entered correctly. We still think that
-  // the right behaviour here is to return -1, not a short write.
-  //
-  // Usage of `exp` is required to make clang compile (unclear to me why).
-  auto exp = PartialSendAndThenError::good_amount;
-  REQUIRE(client.successful == exp);
-}
-
-// See above comment regarding likelihood of send returning EOF (i.e. zero)
-class PartialSendAndThenEof : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  static constexpr libndt::Size amount = 7;
-  static constexpr libndt::Size good_amount = 5;
-  libndt::Size successful = 0;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size size) noexcept override {
-    if (size == amount) {
-      assert(size >= good_amount);
-      successful += good_amount;
-      return good_amount;
-    }
-    return 0;
-  }
-};
-
-TEST_CASE("Client::sendn() deals with partial Client::send() and then EOF") {
-  char buf[PartialSendAndThenEof::amount] = {};
-  PartialSendAndThenEof client;
-  REQUIRE(client.sendn(0, buf, sizeof(buf)) == 0);
-  // Just to make sure the code path was entered correctly. We still think that
-  // the right behaviour here is to return zero, not a short write.
-  //
-  // Usage of `exp` is required to make clang compile (unclear to me why).
-  auto exp = PartialSendAndThenEof::good_amount;
-  REQUIRE(client.successful == exp);
-}
-
 // Client::netx_connect() tests
 // ----------------------------
 
@@ -2182,6 +2079,12 @@ TEST_CASE("Client::netx_connect() deals with Client::connect() failure") {
 
 // Client::netx_recvn() tests
 // --------------------------
+
+#ifdef _WIN32
+#define OS_SSIZE_MAX INT_MAX
+#else
+#define OS_SSIZE_MAX SSIZE_MAX
+#endif
 
 TEST_CASE("Client::netx_recvn() deals with too-large buffer") {
   libndt::Client client;
@@ -2287,6 +2190,110 @@ TEST_CASE(
       REQUIRE(buf[i] == '\0');
     }
   }
+}
+
+// Client::netx_sendn() tests
+// --------------------------
+
+TEST_CASE("Client::netx_sendn() deals with too-large buffer") {
+  libndt::Client client;
+  REQUIRE(client.netx_sendn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) ==
+          libndt::Err::invalid_argument);
+}
+
+class FailSend : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size) noexcept override {
+    set_last_system_error(OS_EWOULDBLOCK);
+    return -1;
+  }
+};
+
+TEST_CASE("Client::netx_sendn() deals with Client::send() failure") {
+  char buf[1024];
+  FailSend client;
+  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
+          libndt::Err::operation_would_block);
+}
+
+// As much as EOF should not appear on a socket when sending, be ready.
+class SendEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size) noexcept override {
+    return 0;
+  }
+};
+
+TEST_CASE("Client::netx_sendn() deals with Client::send() EOF") {
+  char buf[1024];
+  SendEof client;
+  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == libndt::Err::io_error);
+}
+
+class PartialSendAndThenError : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 11;
+  static constexpr libndt::Size good_amount = 3;
+  libndt::Size successful = 0;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      successful += good_amount;
+      return good_amount;
+    }
+    set_last_system_error(OS_EWOULDBLOCK);
+    return -1;
+  }
+};
+
+TEST_CASE("Client::send() deals with partial Client::send() and then error") {
+  char buf[PartialSendAndThenError::amount] = {};
+  PartialSendAndThenError client;
+  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
+          libndt::Err::operation_would_block);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return -1, not a short write.
+  //
+  // Usage of `exp` is required to make clang compile (unclear to me why).
+  auto exp = PartialSendAndThenError::good_amount;
+  REQUIRE(client.successful == exp);
+}
+
+// See above comment regarding likelihood of send returning EOF (i.e. zero)
+class PartialSendAndThenEof : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  static constexpr libndt::Size amount = 7;
+  static constexpr libndt::Size good_amount = 5;
+  libndt::Size successful = 0;
+  libndt::Ssize send(libndt::Socket, const void *,
+                     libndt::Size size) noexcept override {
+    if (size == amount) {
+      assert(size >= good_amount);
+      successful += good_amount;
+      return good_amount;
+    }
+    return 0;
+  }
+};
+
+TEST_CASE(
+    "Client::netx_sendn() deals with partial Client::send() and then EOF") {
+  char buf[PartialSendAndThenEof::amount] = {};
+  PartialSendAndThenEof client;
+  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == libndt::Err::io_error);
+  // Just to make sure the code path was entered correctly. We still think that
+  // the right behaviour here is to return zero, not a short write.
+  //
+  // Usage of `exp` is required to make clang compile (unclear to me why).
+  auto exp = PartialSendAndThenEof::good_amount;
+  REQUIRE(client.successful == exp);
 }
 
 // Client::netx_resolve() tests

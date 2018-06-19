@@ -759,14 +759,13 @@ bool Client::connect_maybe_socks5(const std::string &hostname,
         1,  // number of methods
         0   // "no auth" method
     };
-    auto rv = this->sendn(*sock, auth_request, sizeof(auth_request));
-    if (rv <= 0) {
+    auto err = netx_sendn(*sock, auth_request, sizeof(auth_request));
+    if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot send auth_request");
       this->closesocket(*sock);
       *sock = -1;
       return false;
     }
-    assert((Size)rv == sizeof(auth_request));
     EMIT_DEBUG("socks5h: sent this auth request: "
                << represent(std::string{auth_request, sizeof(auth_request)}));
   }
@@ -831,15 +830,14 @@ bool Client::connect_maybe_socks5(const std::string &hostname,
       connect_request = ss.str();
       EMIT_DEBUG("socks5h: connect_request: " << represent(connect_request));
     }
-    auto rv = this->sendn(  //
+    auto err = netx_sendn(  //
         *sock, connect_request.data(), connect_request.size());
-    if (rv <= 0) {
+    if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot send connect_request");
       this->closesocket(*sock);
       *sock = -1;
       return false;
     }
-    assert((Size)rv == connect_request.size());
     EMIT_DEBUG("socks5h: sent connect request");
   }
   {
@@ -1045,26 +1043,28 @@ bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
     EMIT_DEBUG("msg_write_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_write_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
-    Ssize tot = this->sendn(impl->sock, header, sizeof(header));
-    if (tot <= 0) {
-      EMIT_WARNING(
-          "msg_write_legacy: sendn() failed: " << get_last_system_error());
-      return false;
+    {
+      auto err = netx_sendn(impl->sock, header, sizeof(header));
+      if (err != Err::none) {
+        EMIT_WARNING(
+            "msg_write_legacy: sendn() failed: " << get_last_system_error());
+        return false;
+      }
     }
-    assert((Size)tot == sizeof(header));
     EMIT_DEBUG("msg_write_legacy: sent message header");
   }
   if (msg.size() <= 0) {
     EMIT_DEBUG("msg_write_legacy: zero length message");
     return true;
   }
-  Ssize tot = this->sendn(impl->sock, msg.data(), msg.size());
-  if (tot <= 0) {
-    EMIT_WARNING(
-        "msg_write_legacy: sendn() failed: " << get_last_system_error());
-    return false;
+  {
+    auto err = netx_sendn(impl->sock, msg.data(), msg.size());
+    if (err != Err::none) {
+      EMIT_WARNING(
+          "msg_write_legacy: sendn() failed: " << get_last_system_error());
+      return false;
+    }
   }
-  assert((Size)tot == msg.size());
   EMIT_DEBUG("msg_write_legacy: sent message body");
   return true;
 }
@@ -1222,18 +1222,6 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   *msg = std::string{buf.get(), len};
   EMIT_DEBUG("msg_read_legacy: raw message: " << represent(*msg));
   return true;
-}
-
-// Utilities for low-level
-// TODO(bassosimone): remove this section
-
-Ssize Client::sendn(Socket fd, const void *base, Size count) noexcept {
-  // TODO(bassosimone): remove
-  Err err = netx_sendn(fd, base, count);
-  if (err == Err::io_error) {
-    return 0;  // XXX Be compatible with previous expectations
-  }
-  return (err == Err::none) ? (Ssize)count : -1;
 }
 
 // Networking layer
