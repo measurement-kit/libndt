@@ -2561,7 +2561,7 @@ TEST_CASE("Client::netx_select() deals with EINTR") {
   FD_SET(maxfd, &readset);
   timeval tv{};
   REQUIRE(client.netx_select(  //
-              maxfd + 1, &readset, nullptr, nullptr, &tv) ==
+              (int)maxfd + 1, &readset, nullptr, nullptr, &tv) ==
           libndt::Err::io_error);
   REQUIRE(client.count == 2);
 }
@@ -2582,8 +2582,8 @@ TEST_CASE("Client::netx_select() deals with timeout") {
   fd_set readset;
   FD_ZERO(&readset);
   FD_SET(maxfd, &readset);
-  REQUIRE(client.netx_select(maxfd + 1, &readset, nullptr, nullptr, nullptr) ==
-          libndt::Err::timed_out);
+  REQUIRE(client.netx_select((int)maxfd + 1, &readset, nullptr, nullptr,
+                             nullptr) == libndt::Err::timed_out);
 }
 
 // Client::query_mlabns_curl() tests
