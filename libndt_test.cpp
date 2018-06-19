@@ -2274,8 +2274,8 @@ TEST_CASE("Client::sendn() deals with partial Client::send() and then EOF") {
   REQUIRE(client.successful == exp);
 }
 
-// Client::resolve() tests
-// -----------------------
+// Client::netx_resolve() tests
+// ----------------------------
 
 class FailGetaddrinfo : public libndt::Client {
  public:
@@ -2286,10 +2286,10 @@ class FailGetaddrinfo : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::resolve() deals with Client::getaddrinfo() failure") {
+TEST_CASE("Client::netx_resolve() deals with Client::getaddrinfo() failure") {
   FailGetaddrinfo client;
   std::vector<std::string> addrs;
-  REQUIRE(client.resolve("x.org", &addrs) == false);
+  REQUIRE(client.netx_resolve("x.org", &addrs) == libndt::Err::ai_again);
 }
 
 class FailGetnameinfo : public libndt::Client {
@@ -2301,10 +2301,10 @@ class FailGetnameinfo : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::resolve() deals with Client::getnameinfo() failure") {
+TEST_CASE("Client::netx_resolve() deals with Client::getnameinfo() failure") {
   FailGetnameinfo client;
   std::vector<std::string> addrs;
-  REQUIRE(client.resolve("x.org", &addrs) == false);
+  REQUIRE(client.netx_resolve("x.org", &addrs) == libndt::Err::ai_generic);
 }
 
 // Client::query_mlabns_curl() tests

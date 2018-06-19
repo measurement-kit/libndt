@@ -1258,12 +1258,6 @@ Ssize Client::sendn(Socket fd, const void *base, Size count) noexcept {
   return (err == Err::none) ? (Ssize)count : -1;
 }
 
-bool Client::resolve(const std::string &hostname,
-                     std::vector<std::string> *addrs) noexcept {
-  // TODO(bassosimone): remove
-  return netx_resolve(hostname, addrs) == Err::none;
-}
-
 // Networking layer
 
 #ifdef _WIN32

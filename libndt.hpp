@@ -326,9 +326,6 @@ class Client {
 
   virtual Ssize sendn(Socket fd, const void *base, Size count) noexcept;
 
-  virtual bool resolve(const std::string &hostname,
-                       std::vector<std::string> *addrs) noexcept;
-
   // Networking layer
 
   static Err map_errno(int ec) noexcept;
