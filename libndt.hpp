@@ -330,10 +330,16 @@ class Client {
   virtual Err netx_recv(Socket fd, void *base, Size count,
                         Size *actual) noexcept;
 
+  virtual Err netx_recv_nonblocking(Socket fd, void *base, Size count,
+                                    Size *actual) noexcept;
+
   virtual Err netx_recvn(Socket fd, void *base, Size count) noexcept;
 
   virtual Err netx_send(Socket fd, const void *base, Size count,
                         Size *actual) noexcept;
+
+  virtual Err netx_send_nonblocking(Socket fd, const void *base, Size count,
+                                    Size *actual) noexcept;
 
   virtual Err netx_sendn(Socket fd, const void *base, Size count) noexcept;
 

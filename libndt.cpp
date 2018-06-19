@@ -527,9 +527,11 @@ bool Client::run_download() noexcept {
         for (auto &fd : dload_socks.sockets) {
           if (FD_ISSET(fd, &set)) {
             Size n = 0;
-            auto err = netx_recv(fd, buf, sizeof(buf), &n);
+            // Note: select() has just tell us that the socket is readable, so
+            // for now we will not be concered with checking for EAGAIN.
+            auto err = netx_recv_nonblocking(fd, buf, sizeof(buf), &n);
             if (err != Err::none) {
-              EMIT_WARNING("run_download: next_recv() failed: "
+              EMIT_WARNING("run_download: next_recv_nonblocking() failed: "
                            << get_last_system_error());
               done = true;
               break;
@@ -693,10 +695,12 @@ bool Client::run_upload() noexcept {
         for (auto &fd : upload_socks.sockets) {
           if (FD_ISSET(fd, &set)) {
             Size n = 0;
-            auto err = netx_send(fd, buf, sizeof(buf), &n);
+            // Note: select() has just tell us that the socket is writable, so
+            // for now we will not be concered with checking for EAGAIN.
+            auto err = netx_send_nonblocking(fd, buf, sizeof(buf), &n);
             if (err != Err::none) {
               if (err != Err::broken_pipe) {
-                EMIT_WARNING("run_upload: netx_send() failed: "
+                EMIT_WARNING("run_upload: netx_send_nonblocking() failed: "
                              << get_last_system_error());
               }
               done = true;
@@ -1357,6 +1361,7 @@ Err Client::netx_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept {
     }
   }
   EMIT_DEBUG("netx_connect: made socket nonblocking");
+  auto before = std::chrono::steady_clock::now();
   {
     auto rv = this->connect(fd, sa, n);
     if (rv == 0) {
@@ -1390,6 +1395,9 @@ Err Client::netx_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept {
     }
   }
   EMIT_DEBUG("netx_connect: socket is writeable");
+  auto after = std::chrono::steady_clock::now();
+  std::chrono::duration<double> elapsed = after - before;
+  EMIT_DEBUG("netx_connect: connect time: " << elapsed.count());
   // See evutil_socket_finished_connecting_()
   {
     int ec = 0;
@@ -1405,21 +1413,28 @@ Err Client::netx_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept {
     }
   }
   EMIT_DEBUG("netx_connect: connect completed successfully");
-  // TODO(bassosimone): make other parts of the code nonblocking. For now,
-  // we only implement a nonblocking connect() call.
-  {
-    auto err = netx_setnonblocking(fd, false);
-    if (err != Err::none) {
-      EMIT_WARNING("netx_connect: cannot make socket blocking");
-      return err;
-    }
-    EMIT_DEBUG("netx_connect: socket made blocking again");
-  }
   return Err::none;
 }
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
+  assert(fd >= 0 && base != nullptr && count > 0 && actual != nullptr);
+  fd_set set;
+  FD_ZERO(&set);
+  FD_SET(fd, &set);
+  timeval tv{};
+  // XXX: can timeout be negative?
+  tv.tv_sec = impl->settings.timeout;
+  assert(fd < INT_MAX);
+  auto err = netx_select(fd + 1, &set, nullptr, nullptr, &tv);
+  if (err != Err::none) {
+    return err;
+  }
+  return netx_recv_nonblocking(fd, base, count, actual);
+}
+
+Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
+                                  Size *actual) noexcept {
   if (count <= 0) {
     EMIT_WARNING(
         "netx_recv: explicitly disallowing zero read; use netx_select() "
@@ -1457,6 +1472,23 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
+  assert(fd >= 0 && base != nullptr && count > 0 && actual != nullptr);
+  fd_set set;
+  FD_ZERO(&set);
+  FD_SET(fd, &set);
+  timeval tv{};
+  // XXX: can timeout be negative?
+  tv.tv_sec = impl->settings.timeout;
+  assert(fd < INT_MAX);
+  auto err = netx_select(fd + 1, nullptr, &set, nullptr, &tv);
+  if (err != Err::none) {
+    return err;
+  }
+  return netx_send_nonblocking(fd, base, count, actual);
+}
+
+Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
+                                  Size *actual) noexcept {
   if (count <= 0) {
     EMIT_WARNING(
         "netx_send: explicitly disallowing zero send; use netx_select() "
