@@ -63,7 +63,7 @@ constexpr uint64_t api_minor = 23;
 /// Patch API version number of measurement-kit/libndt.
 constexpr uint64_t api_patch = 0;
 
-} // namespace version
+}  // namespace version
 
 /// Contains nettests identifiers. You can run multiple nettests as part of
 /// a single NDT transaction with a NDT server. To specify what nettests you
@@ -90,7 +90,7 @@ constexpr uint8_t upload_ext = 1U << 6;
 /// The multi-stream download net test.
 constexpr uint8_t download_ext = 1U << 7;
 
-} // namespace nettest
+}  // namespace nettest
 
 /// Constants used to control verbosity. You can pass these constants to
 /// Settings::verbosity to control the verbosity level.
@@ -108,7 +108,7 @@ constexpr uint64_t info = 2;
 /// Emit all log messages.
 constexpr uint64_t debug = 3;
 
-} // namespace verbosity
+}  // namespace verbosity
 
 constexpr const char *ndt_version_compat = "v3.7.0";
 
@@ -141,7 +141,9 @@ constexpr uint64_t tls = (1 << 1);
 /// we use the WebSockets framing (as opposed to the original binary framing).
 constexpr uint64_t websockets = (1 << 2);
 
-} // namespace protocol
+}  // namespace protocol
+
+enum class Err;  // Forward declaration (see bottom of this file)
 
 /// NDT client settings. If you do not customize the settings when creating
 /// a Client, the defaults listed below will be used instead.
@@ -294,12 +296,9 @@ class Client {
 
   // Low-level API
 
-  virtual bool connect_tcp_maybe_socks5(const std::string &hostname,
-                                        const std::string &port,
-                                        Socket *sock) noexcept;
-
-  virtual bool connect_tcp(const std::string &hostname, const std::string &port,
-                           Socket *sock) noexcept;
+  virtual bool connect_maybe_socks5(const std::string &hostname,
+                                    const std::string &port,
+                                    Socket *sock) noexcept;
 
   bool msg_write_login(const std::string &version) noexcept;
 
@@ -318,14 +317,27 @@ class Client {
 
   virtual bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
 
-  // Utilities for low-level
+  // Networking layer
 
-  virtual Ssize recvn(Socket fd, void *base, Size count) noexcept;
+  static Err netx_map_errno(int ec) noexcept;
 
-  virtual Ssize sendn(Socket fd, const void *base, Size count) noexcept;
+  Err netx_map_eai(int ec) noexcept;
 
-  virtual bool resolve(const std::string &hostname,
-                       std::vector<std::string> *addrs) noexcept;
+  virtual Err netx_connect(const std::string &hostname, const std::string &port,
+                           Socket *sock) noexcept;
+
+  virtual Err netx_recv(Socket fd, void *base, Size count,
+                        Size *actual) noexcept;
+
+  virtual Err netx_recvn(Socket fd, void *base, Size count) noexcept;
+
+  virtual Err netx_send(Socket fd, const void *base, Size count,
+                        Size *actual) noexcept;
+
+  virtual Err netx_sendn(Socket fd, const void *base, Size count) noexcept;
+
+  virtual Err netx_resolve(const std::string &hostname,
+                           std::vector<std::string> *addrs) noexcept;
 
   // Dependencies (cURL)
 
@@ -376,6 +388,29 @@ constexpr uint8_t msg_results = 8;
 constexpr uint8_t msg_logout = 9;
 constexpr uint8_t msg_waiting = 10;
 constexpr uint8_t msg_extended_login = 11;
+
+enum class Err {
+  none,
+  broken_pipe,
+  connection_aborted,
+  connection_refused,
+  connection_reset,
+  host_unreachable,
+  interrupted,
+  invalid_argument,
+  io_error,
+  network_down,
+  network_reset,
+  network_unreachable,
+  operation_in_progress,
+  operation_would_block,
+  timed_out,
+  eof,
+  ai_generic,
+  ai_again,
+  ai_fail,
+  ai_noname,
+};
 
 }  // namespace libndt
 }  // namespace measurement_kit

@@ -309,8 +309,8 @@ bool Client::query_mlabns() noexcept {
 }
 
 bool Client::connect() noexcept {
-  return connect_tcp_maybe_socks5(impl->settings.hostname, impl->settings.port,
-                                  &impl->sock);
+  return connect_maybe_socks5(impl->settings.hostname, impl->settings.port,
+                              &impl->sock);
 }
 
 bool Client::send_login() noexcept {
@@ -319,12 +319,14 @@ bool Client::send_login() noexcept {
 
 bool Client::recv_kickoff() noexcept {
   char buf[msg_kickoff_size];
-  Ssize tot = this->recvn(impl->sock, buf, sizeof(buf));
-  if (tot <= 0) {
-    EMIT_WARNING("recv_kickoff: recvn() failed: " << get_last_system_error());
+  auto err = netx_recvn(impl->sock, buf, sizeof(buf));
+  if (err != Err::none) {
+    // TODO(bassosimone): pretty print `err` not the last system error, because,
+    // when we'll use also SSL, the latter will probably be inaccurate.
+    EMIT_WARNING(
+        "recv_kickoff: netx_recvn() failed: " << get_last_system_error());
     return false;
   }
-  assert((Size)tot == sizeof(buf));
   if (memcmp(buf, msg_kickoff, sizeof(buf)) != 0) {
     EMIT_WARNING("recv_kickoff: invalid kickoff message");
     return false;
@@ -472,7 +474,7 @@ bool Client::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
-    if (!connect_tcp_maybe_socks5(impl->settings.hostname, port, &sock)) {
+    if (!connect_maybe_socks5(impl->settings.hostname, port, &sock)) {
       break;
     }
     dload_socks.sockets.push_back(sock);
@@ -645,7 +647,7 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = -1;
-    if (!connect_tcp_maybe_socks5(impl->settings.hostname, port, &sock)) {
+    if (!connect_maybe_socks5(impl->settings.hostname, port, &sock)) {
       return false;
     }
     upload_socks.sockets.push_back(sock);
@@ -738,14 +740,17 @@ bool Client::run_upload() noexcept {
 
 // Low-level API
 
-bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
-                                      const std::string &port,
-                                      Socket *sock) noexcept {
+bool Client::connect_maybe_socks5(const std::string &hostname,
+                                  const std::string &port,
+                                  Socket *sock) noexcept {
   if (impl->settings.socks5h_port.empty()) {
-    return connect_tcp(hostname, port, sock);
+    return netx_connect(hostname, port, sock) == Err::none;
   }
-  if (!connect_tcp("127.0.0.1", impl->settings.socks5h_port, sock)) {
-    return false;
+  {
+    auto err = netx_connect("127.0.0.1", impl->settings.socks5h_port, sock);
+    if (err != Err::none) {
+      return false;
+    }
   }
   EMIT_INFO("socks5h: connected to proxy");
   {
@@ -754,14 +759,13 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
         1,  // number of methods
         0   // "no auth" method
     };
-    auto rv = this->sendn(*sock, auth_request, sizeof(auth_request));
-    if (rv <= 0) {
+    auto err = netx_sendn(*sock, auth_request, sizeof(auth_request));
+    if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot send auth_request");
       this->closesocket(*sock);
       *sock = -1;
       return false;
     }
-    assert((Size)rv == sizeof(auth_request));
     EMIT_DEBUG("socks5h: sent this auth request: "
                << represent(std::string{auth_request, sizeof(auth_request)}));
   }
@@ -770,14 +774,13 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
         0,  // version
         0   // method
     };
-    auto rv = this->recvn(*sock, auth_response, sizeof(auth_response));
-    if (rv <= 0) {
+    auto err = netx_recvn(*sock, auth_response, sizeof(auth_response));
+    if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot recv auth_response");
       this->closesocket(*sock);
       *sock = -1;
       return false;
     }
-    assert((Size)rv == sizeof(auth_response));
     constexpr uint8_t version = 5;
     if (auth_response[0] != version) {
       EMIT_WARNING("socks5h: received unexpected version number");
@@ -792,11 +795,8 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       *sock = -1;
       return false;
     }
-    // Make sure that we can cast `rv` to `size_t`
-    static_assert(sizeof(auth_response) < SIZE_MAX, "auth_response too big");
-    assert((Size)rv < SIZE_MAX);
     EMIT_DEBUG("socks5h: authenticated with proxy; response: "
-               << represent(std::string{auth_response, (size_t)rv}));
+               << represent(std::string{auth_response, sizeof(auth_response)}));
   }
   {
     std::string connect_request;
@@ -830,15 +830,14 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       connect_request = ss.str();
       EMIT_DEBUG("socks5h: connect_request: " << represent(connect_request));
     }
-    auto rv = this->sendn(  //
+    auto err = netx_sendn(  //
         *sock, connect_request.data(), connect_request.size());
-    if (rv <= 0) {
+    if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot send connect_request");
       this->closesocket(*sock);
       *sock = -1;
       return false;
     }
-    assert((Size)rv == connect_request.size());
     EMIT_DEBUG("socks5h: sent connect request");
   }
   {
@@ -848,21 +847,16 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
         0,  // reserved
         0   // type
     };
-    auto rv = this->recvn(  //
+    auto err = netx_recvn(  //
         *sock, connect_response_hdr, sizeof(connect_response_hdr));
-    if (rv <= 0) {
+    if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot recv connect_response_hdr");
       this->closesocket(*sock);
       *sock = -1;
       return false;
     }
-    assert((Size)rv == sizeof(connect_response_hdr));
-    // Make sure that we can cast `rv` to `size_t`
-    static_assert(sizeof(connect_response_hdr) < SIZE_MAX,
-                  "connect_response_hdr too big");
-    assert((Size)rv < SIZE_MAX);
-    EMIT_DEBUG("socks5h: connect_response_hdr: "
-               << represent(std::string{connect_response_hdr, (size_t)rv}));
+    EMIT_DEBUG("socks5h: connect_response_hdr: " << represent(std::string{
+                   connect_response_hdr, sizeof(connect_response_hdr)}));
     constexpr uint8_t version = 5;
     if (connect_response_hdr[0] != version) {
       EMIT_WARNING("socks5h: invalid message version");
@@ -890,14 +884,13 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       {
         constexpr Size expected = 4;  // ipv4
         char buf[expected];
-        auto rv = this->recvn(*sock, buf, sizeof(buf));
-        if (rv <= 0) {
+        auto err = netx_recvn(*sock, buf, sizeof(buf));
+        if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv ipv4 address");
           this->closesocket(*sock);
           *sock = -1;
           return false;
         }
-        assert((Size)rv == sizeof(buf));
         // TODO(bassosimone): log the ipv4 address. However tor returns a zero
         // ipv4 and so there is little added value in logging.
         break;
@@ -905,23 +898,21 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       case 3:  // domain
       {
         uint8_t len = 0;
-        auto rv = this->recvn(*sock, &len, sizeof(len));
-        if (rv <= 0) {
+        auto err = netx_recvn(*sock, &len, sizeof(len));
+        if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv domain length");
           this->closesocket(*sock);
           *sock = -1;
           return false;
         }
-        assert((Size)rv == sizeof(len));
         char domain[UINT8_MAX + 1];  // space for final '\0'
-        rv = this->recvn(*sock, domain, len);
-        if (rv <= 0) {
+        err = netx_recvn(*sock, domain, len);
+        if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv domain");
           this->closesocket(*sock);
           *sock = -1;
           return false;
         }
-        assert((Size)rv == len);
         domain[len] = 0;
         EMIT_DEBUG("socks5h: domain: " << domain);
         break;
@@ -930,14 +921,13 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
       {
         constexpr Size expected = 16;  // ipv6
         char buf[expected];
-        auto rv = this->recvn(*sock, buf, sizeof(buf));
-        if (rv <= 0) {
+        auto err = netx_recvn(*sock, buf, sizeof(buf));
+        if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv ipv6 address");
           this->closesocket(*sock);
           *sock = -1;
           return false;
         }
-        assert((Size)rv == sizeof(buf));
         // TODO(bassosimone): log the ipv6 address. However tor returns a zero
         // ipv6 and so there is little added value in logging.
         break;
@@ -951,73 +941,19 @@ bool Client::connect_tcp_maybe_socks5(const std::string &hostname,
     // receive the port
     {
       uint16_t port = 0;
-      rv = this->recvn(*sock, &port, sizeof(port));
-      if (rv <= 0) {
+      auto err = netx_recvn(*sock, &port, sizeof(port));
+      if (err != Err::none) {
         EMIT_WARNING("socks5h: cannot recv port");
         this->closesocket(*sock);
         *sock = -1;
         return false;
       }
-      assert((Size)rv == sizeof(port));
       port = ntohs(port);
       EMIT_DEBUG("socks5h: port number: " << port);
     }
   }
   EMIT_INFO("socks5h: the proxy has successfully connected");
   return true;
-}
-
-bool Client::connect_tcp(const std::string &hostname, const std::string &port,
-                         Socket *sock) noexcept {
-  assert(sock != nullptr);
-  if (*sock != -1) {
-    EMIT_WARNING("socket already connected");
-    return false;
-  }
-  // Implementation note: we could perform getaddrinfo() in one pass but having
-  // a virtual API that resolves a hostname to a vector of IP addresses makes
-  // life easier when you want to override hostname resolution, because you have
-  // to reimplement a simpler method, compared to reimplementing getaddrinfo().
-  std::vector<std::string> addresses;
-  if (!resolve(hostname, &addresses)) {
-    return false;
-  }
-  for (auto &addr : addresses) {
-    addrinfo hints{};
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
-    addrinfo *rp = nullptr;
-    int rv = this->getaddrinfo(addr.data(), port.data(), &hints, &rp);
-    if (rv != 0) {
-      EMIT_WARNING("unexpected getaddrinfo() failure");
-      return false;
-    }
-    assert(rp);
-    for (auto aip = rp; (aip); aip = aip->ai_next) {
-      *sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
-      if (*sock == -1) {
-        EMIT_WARNING("socket() failed: " << get_last_system_error());
-        continue;
-      }
-      // The following two lines ensure that casting `size_t` to
-      // SockLen is safe because SockLen is `int` and the value of
-      // the ai_addrlen field is always small enough.
-      static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
-      assert(aip->ai_addrlen <= INT_MAX);
-      if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
-        EMIT_DEBUG("connect(): okay");
-        break;
-      }
-      EMIT_WARNING("connect() failed: " << get_last_system_error());
-      this->closesocket(*sock);
-      *sock = -1;
-    }
-    this->freeaddrinfo(rp);
-    if (*sock != -1) {
-      break;  // we have a connection!
-    }
-  }
-  return *sock != -1;
 }
 
 bool Client::msg_write_login(const std::string &version) noexcept {
@@ -1107,26 +1043,28 @@ bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
     EMIT_DEBUG("msg_write_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_write_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
-    Ssize tot = this->sendn(impl->sock, header, sizeof(header));
-    if (tot <= 0) {
-      EMIT_WARNING(
-          "msg_write_legacy: sendn() failed: " << get_last_system_error());
-      return false;
+    {
+      auto err = netx_sendn(impl->sock, header, sizeof(header));
+      if (err != Err::none) {
+        EMIT_WARNING(
+            "msg_write_legacy: sendn() failed: " << get_last_system_error());
+        return false;
+      }
     }
-    assert((Size)tot == sizeof(header));
     EMIT_DEBUG("msg_write_legacy: sent message header");
   }
   if (msg.size() <= 0) {
     EMIT_DEBUG("msg_write_legacy: zero length message");
     return true;
   }
-  Ssize tot = this->sendn(impl->sock, msg.data(), msg.size());
-  if (tot <= 0) {
-    EMIT_WARNING(
-        "msg_write_legacy: sendn() failed: " << get_last_system_error());
-    return false;
+  {
+    auto err = netx_sendn(impl->sock, msg.data(), msg.size());
+    if (err != Err::none) {
+      EMIT_WARNING(
+          "msg_write_legacy: sendn() failed: " << get_last_system_error());
+      return false;
+    }
   }
-  assert((Size)tot == msg.size());
   EMIT_DEBUG("msg_write_legacy: sent message body");
   return true;
 }
@@ -1246,13 +1184,14 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   uint16_t len = 0;
   {
     char header[3];
-    Ssize tot = this->recvn(impl->sock, header, sizeof(header));
-    if (tot <= 0) {
-      EMIT_WARNING(
-          "msg_read_legacy: recvn() failed: " << get_last_system_error());
-      return false;
+    {
+      auto err = netx_recvn(impl->sock, header, sizeof(header));
+      if (err != Err::none) {
+        EMIT_WARNING(
+            "msg_read_legacy: recvn() failed: " << get_last_system_error());
+        return false;
+      }
     }
-    assert((Size)tot == sizeof(header));
     EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)header[2]);
@@ -1272,64 +1211,212 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
   // for efficiency but NDT messages are generally small, and the performance
   // critical path is certainly not the one with control messages.
   std::unique_ptr<char[]> buf{new char[len]};
-  Ssize tot = this->recvn(impl->sock, buf.get(), len);
-  if (tot <= 0) {
-    EMIT_WARNING(
-        "msg_read_legacy: recvn() failed: " << get_last_system_error());
-    return false;
+  {
+    auto err = netx_recvn(impl->sock, buf.get(), len);
+    if (err != Err::none) {
+      EMIT_WARNING(
+          "msg_read_legacy: recvn() failed: " << get_last_system_error());
+      return false;
+    }
   }
-  assert((Size)tot == len);
   *msg = std::string{buf.get(), len};
   EMIT_DEBUG("msg_read_legacy: raw message: " << represent(*msg));
   return true;
 }
 
-// Utilities for low-level
+// Networking layer
 
 #ifdef _WIN32
-#define OS_SSIZE_MAX INT_MAX
-#define OS_EINVAL WSAEINVAL
+#define E(name) WSAE##name
 #else
-#define OS_SSIZE_MAX SSIZE_MAX
-#define OS_EINVAL EINVAL
+#define E(name) E##name
 #endif
 
-Ssize Client::recvn(Socket fd, void *base, Size count) noexcept {
-  if (count > OS_SSIZE_MAX) {
-    set_last_system_error(OS_EINVAL);
-    return -1;
-  }
-  Size off = 0;
-  while (off < count) {
-    Ssize n = this->recv(fd, ((char *)base) + off, count - off);
-    if (n <= 0) {
-      return n;  // either return full success or error, ignore partial recv
+/*static*/ Err Client::netx_map_errno(int ec) noexcept {
+  // clang-format off
+  switch (ec) {
+    case 0: {
+      assert(false);  // we don't expect `errno` to be zero
+      return Err::io_error;
     }
-    off += (Size)n;
+#ifndef _WIN32
+    case E(PIPE): return Err::broken_pipe;
+#endif
+    case E(CONNABORTED): return Err::connection_aborted;
+    case E(CONNREFUSED): return Err::connection_refused;
+    case E(CONNRESET): return Err::connection_reset;
+    case E(HOSTUNREACH): return Err::host_unreachable;
+    case E(INTR): return Err::interrupted;
+    case E(INVAL): return Err::invalid_argument;
+#ifndef _WIN32
+    case E(IO): return Err::io_error;
+#endif
+    case E(NETDOWN): return Err::network_down;
+    case E(NETRESET): return Err::network_reset;
+    case E(NETUNREACH): return Err::network_unreachable;
+    case E(INPROGRESS): return Err::operation_in_progress;
+    case E(WOULDBLOCK): return Err::operation_would_block;
+#if !defined _WIN32 && EAGAIN != EWOULDBLOCK
+    case E(AGAIN): return Err::operation_would_block;
+#endif
+    case E(TIMEDOUT): return Err::timed_out;
   }
-  return (Ssize)off;  // cast okay because of the initial check
+  // clang-format on
+  return Err::io_error;
 }
 
-Ssize Client::sendn(Socket fd, const void *base, Size count) noexcept {
-  if (count > OS_SSIZE_MAX) {
-    set_last_system_error(OS_EINVAL);
-    return -1;
-  }
-  Size off = 0;
-  while (off < count) {
-    Ssize n = this->send(fd, ((char *)base) + off, count - off);
-    if (n <= 0) {
-      return n;  // either return full success or error, ignore partial send
+#undef E  // Tidy up
+
+Err Client::netx_map_eai(int ec) noexcept {
+  // clang-format off
+  switch (ec) {
+    case EAI_AGAIN: return Err::ai_again;
+    case EAI_FAIL: return Err::ai_fail;
+    case EAI_NONAME: return Err::ai_noname;
+#ifdef EAI_SYSTEM
+    case EAI_SYSTEM: {
+      return netx_map_errno(get_last_system_error());
     }
-    off += (Size)n;
+#endif
   }
-  return (Ssize)off;  // cast okay because of the initial check
+  // clang-format on
+  return Err::ai_generic;
 }
 
-bool Client::resolve(const std::string &hostname,
-                     std::vector<std::string> *addrs) noexcept {
+Err Client::netx_connect(const std::string &hostname, const std::string &port,
+                         Socket *sock) noexcept {
+  assert(sock != nullptr);
+  if (*sock != -1) {
+    EMIT_WARNING("socket already connected");
+    return Err::invalid_argument;
+  }
+  // Implementation note: we could perform getaddrinfo() in one pass but having
+  // a virtual API that resolves a hostname to a vector of IP addresses makes
+  // life easier when you want to override hostname resolution, because you have
+  // to reimplement a simpler method, compared to reimplementing getaddrinfo().
+  std::vector<std::string> addresses;
+  Err err;
+  if ((err = netx_resolve(hostname, &addresses)) != Err::none) {
+    return err;
+  }
+  for (auto &addr : addresses) {
+    addrinfo hints{};
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
+    addrinfo *rp = nullptr;
+    int rv = this->getaddrinfo(addr.data(), port.data(), &hints, &rp);
+    if (rv != 0) {
+      EMIT_WARNING("unexpected getaddrinfo() failure");
+      return netx_map_eai(rv);
+    }
+    assert(rp);
+    for (auto aip = rp; (aip); aip = aip->ai_next) {
+      set_last_system_error(0);
+      *sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
+      if (*sock == -1) {
+        EMIT_WARNING("socket() failed: " << get_last_system_error());
+        continue;
+      }
+      // The following two lines ensure that casting `size_t` to
+      // SockLen is safe because SockLen is `int` and the value of
+      // the ai_addrlen field is always small enough.
+      static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
+      assert(aip->ai_addrlen <= INT_MAX);
+      if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
+        EMIT_DEBUG("connect(): okay");
+        break;
+      }
+      EMIT_WARNING("connect() failed: " << get_last_system_error());
+      this->closesocket(*sock);
+      *sock = -1;
+    }
+    this->freeaddrinfo(rp);
+    if (*sock != -1) {
+      break;  // we have a connection!
+    }
+  }
+  // TODO(bassosimone): it's possible to write a better algorithm here
+  return *sock != -1 ? Err::none : Err::io_error;
+}
+
+Err Client::netx_recv(Socket fd, void *base, Size count,
+                      Size *actual) noexcept {
+  if (count <= 0) {
+    EMIT_WARNING("netx_recv: explicitly disallowing zero read; use select() "
+                 "to check the state of a socket");
+    return Err::invalid_argument;
+  }
+  set_last_system_error(0);
+  auto rv = this->recv(fd, base, count);
+  if (rv < 0) {
+    assert(rv == -1);
+    *actual = 0;
+    return netx_map_errno(get_last_system_error());
+  }
+  if (rv == 0) {
+    assert(count > 0); // guaranteed by the above check
+    *actual = 0;
+    return Err::eof;
+  }
+  *actual = (Size)rv;
+  return Err::none;
+}
+
+Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
+  Size off = 0;
+  while (off < count) {
+    Size n = 0;
+    Err err = netx_recv(fd, ((char *)base) + off, count - off, &n);
+    if (err != Err::none) {
+      return err;
+    }
+    off += n;
+  }
+  return Err::none;
+}
+
+Err Client::netx_send(Socket fd, const void *base, Size count,
+                      Size *actual) noexcept {
+  if (count <= 0) {
+    EMIT_WARNING("netx_send: explicitly disallowing zero send; use select() "
+                 "to check the state of a socket");
+    return Err::invalid_argument;
+  }
+  set_last_system_error(0);
+  auto rv = this->send(fd, base, count);
+  if (rv < 0) {
+    assert(rv == -1);
+    *actual = 0;
+    return netx_map_errno(get_last_system_error());
+  }
+  // Send() should not return zero unless count is zero. So consider a zero
+  // return value as an I/O error rather than EOF.
+  if (rv == 0) {
+    assert(count > 0); // guaranteed by the above check
+    *actual = 0;
+    return Err::io_error;
+  }
+  *actual = (Size)rv;
+  return Err::none;
+}
+
+Err Client::netx_sendn(Socket fd, const void *base, Size count) noexcept {
+  Size off = 0;
+  while (off < count) {
+    Size n = 0;
+    Err err = netx_send(fd, ((char *)base) + off, count - off, &n);
+    if (err != Err::none) {
+      return err;
+    }
+    off += n;
+  }
+  return Err::none;
+}
+
+Err Client::netx_resolve(const std::string &hostname,
+                         std::vector<std::string> *addrs) noexcept {
   assert(addrs != nullptr);
-  EMIT_DEBUG("resolve: " << hostname);
+  EMIT_DEBUG("netx_resolve: " << hostname);
   addrinfo hints{};
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
@@ -1341,13 +1428,13 @@ bool Client::resolve(const std::string &hostname,
     rv = this->getaddrinfo(hostname.data(), portno, &hints, &rp);
     if (rv != 0) {
       EMIT_WARNING("getaddrinfo() failed: " << gai_strerror(rv));
-      return false;
+      return netx_map_eai(rv);
     }
     // FALLTHROUGH
   }
   assert(rp);
   EMIT_DEBUG("getaddrinfo(): okay");
-  auto result = true;
+  Err result = Err::none;
   for (auto aip = rp; (aip); aip = aip->ai_next) {
     char address[NI_MAXHOST], port[NI_MAXSERV];
     // The following two lines ensure that casting `size_t` to
@@ -1359,7 +1446,7 @@ bool Client::resolve(const std::string &hostname,
                           (SockLen)sizeof(address), port, (SockLen)sizeof(port),
                           NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
       EMIT_WARNING("unexpected getnameinfo() failure");
-      result = false;
+      result = Err::ai_generic;
       break;
     }
     addrs->push_back(address);  // we only care about address
@@ -1397,10 +1484,14 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 #define AS_OS_SOCKLEN(n) ((int)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((int)n)
+#define OS_SSIZE_MAX INT_MAX
+#define OS_EINVAL WSAEINVAL
 #else
 #define AS_OS_SOCKLEN(n) ((socklen_t)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
+#define OS_SSIZE_MAX SSIZE_MAX
+#define OS_EINVAL EINVAL
 #endif
 
 int Client::get_last_system_error() noexcept {
