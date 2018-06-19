@@ -1606,6 +1606,7 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 #define AS_OS_BUFFER_LEN(n) ((int)n)
 #define OS_SSIZE_MAX INT_MAX
 #define OS_EINVAL WSAEINVAL
+#define AS_OS_OPTION_VALUE(x) ((char *)x)
 #else
 #define AS_OS_SOCKLEN(n) ((socklen_t)n)
 #define AS_OS_SOCKLEN_STAR(n) ((socklen_t *)n)
@@ -1613,6 +1614,7 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
 #define OS_SSIZE_MAX SSIZE_MAX
 #define OS_EINVAL EINVAL
+#define AS_OS_OPTION_VALUE(x) ((void *)x)
 #endif
 
 int Client::get_last_system_error() noexcept {
@@ -1705,8 +1707,11 @@ int Client::fcntl3i(Socket s, int cmd, int arg) noexcept {
 }
 #endif
 
-int Client::getpeername(Socket s, sockaddr *sa, SockLen *n) noexcept {
-  return ::getpeername(AS_OS_SOCKET(s), sa, AS_OS_SOCKLEN_STAR(n));
+int Client::getsockopt(int socket, int level, int name, void *value,
+                       SockLen *len) noexcept {
+  static_assert(sizeof(*len) == sizeof(int), "invalid SockLen size");
+  return ::getsockopt(socket, level, name, AS_OS_OPTION_VALUE(value),
+                      AS_OS_SOCKLEN_STAR(len));
 }
 
 }  // namespace libndt

@@ -2463,8 +2463,10 @@ TEST_CASE("Client::netx_resolve() deals with Client::getnameinfo() failure") {
 class FailIoctlsocket : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int ioctlsocket(libndt::Socket, long cmd, u_long *) noexcept override {
+  long expect = 2UL;  // value that should not be used
+  int ioctlsocket(libndt::Socket, long cmd, u_long *value) noexcept override {
     REQUIRE(cmd == FIONBIO);
+    REQUIRE(*value == expect);
     ::SetLastError(WSAEINVAL);
     return -1;
   }
@@ -2473,8 +2475,16 @@ class FailIoctlsocket : public libndt::Client {
 TEST_CASE(
     "Client::netx_setnonblocking() deals with Client::ioctlsocket() failure") {
   FailIoctlsocket client;
-  REQUIRE(client.netx_setnonblocking(17, true) ==
-          libndt::Err::invalid_argument);
+  {
+    client.expect = 1UL;
+    REQUIRE(client.netx_setnonblocking(17, true) ==
+            libndt::Err::invalid_argument);
+  }
+  {
+    client.expect = 0UL;
+    REQUIRE(client.netx_setnonblocking(17, false) ==
+            libndt::Err::invalid_argument);
+  }
 }
 
 #else
@@ -2502,9 +2512,10 @@ class FailFcntl3i : public libndt::Client {
     REQUIRE(cmd == F_GETFL);
     return 0;
   }
+  int expect = ~0;  // value that should never appear
   int fcntl3i(libndt::Socket, int cmd, int flags) noexcept override {
     REQUIRE(cmd == F_SETFL);
-    REQUIRE((flags & O_NONBLOCK) != 0);
+    REQUIRE(flags == expect);
     errno = EINVAL;
     return -1;
   }
@@ -2513,8 +2524,16 @@ class FailFcntl3i : public libndt::Client {
 TEST_CASE(
     "Client::netx_setnonblocking() deals with Client::fcntl3i() failure") {
   FailFcntl3i client;
-  REQUIRE(client.netx_setnonblocking(17, true) ==
-          libndt::Err::invalid_argument);
+  {
+    client.expect = O_NONBLOCK;
+    REQUIRE(client.netx_setnonblocking(17, true) ==
+            libndt::Err::invalid_argument);
+  }
+  {
+    client.expect = 0;
+    REQUIRE(client.netx_setnonblocking(17, false) ==
+            libndt::Err::invalid_argument);
+  }
 }
 
 #endif // _WIN32

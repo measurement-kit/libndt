@@ -382,7 +382,8 @@ class Client {
   virtual int fcntl3i(Socket s, int cmd, int arg) noexcept;
 #endif
 
-  virtual int getpeername(Socket s, sockaddr *sa, SockLen *n) noexcept;
+  virtual int getsockopt(int socket, int level, int name, void *value,
+                         SockLen *len) noexcept;
 
  private:
   class Impl;
