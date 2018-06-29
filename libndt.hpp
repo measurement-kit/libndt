@@ -55,21 +55,21 @@ namespace libndt {
 namespace version {
 
 /// Major API version number of measurement-kit/libndt.
-constexpr uint64_t api_major = 0;
+constexpr uint64_t major = 0;
 
 /// Minor API version number of measurement-kit/libndt.
-constexpr uint64_t api_minor = 23;
+constexpr uint64_t minor = 23;
 
 /// Patch API version number of measurement-kit/libndt.
-constexpr uint64_t api_patch = 0;
+constexpr uint64_t patch = 0;
 
 }  // namespace version
 
-/// Contains nettests identifiers. You can run multiple nettests as part of
+/// Contains nettests flags. You can run multiple nettests as part of
 /// a single NDT transaction with a NDT server. To specify what nettests you
-/// want to run, modify Settings::test_suite accordingly, by using the
-/// constants contained inside of this namespace.
-namespace nettest {
+/// want to run, modify Settings::nettest_flags accordingly, by using the
+/// constants flags defined inside of this namespace.
+namespace nettest_flag {
 
 constexpr uint8_t middlebox = 1U << 0;
 
@@ -112,22 +112,21 @@ constexpr uint64_t debug = 3;
 
 constexpr const char *ndt_version_compat = "v3.7.0";
 
-/// Type containing the size of something.
 using Size = uint64_t;
 
-/// Type containing the signed size of something.
 using Ssize = int64_t;
 
-/// Type wide enough to contain a socket.
 using Socket = int64_t;
 
-/// Type wide enough to contain `socklen_t`.
 using SockLen = int;
 
 /// Contains flags definiting what protocol to use. Historically NDT used a
 /// binary, cleartext protocol for communicating with the server. Historically
 /// messages were raw strings framed using the binary framing.
-namespace protocol {
+namespace protocol_flag {
+
+/// Indicates that no protocol flags have been set.
+constexpr uint64_t none = 0;
 
 /// When this flag is set we use JSON messages. This specifically means that
 /// we send and receive JSON messages (as opposed to raw strings).
@@ -153,8 +152,8 @@ class Settings {
   /// hostname, mlab-ns won't be used.
   std::string mlabns_url = "https://mlab-ns.appspot.com/ndt";
 
-  /// Timeout used for I/O operations (including cURL operations).
-  long timeout = 3 /* seconds */;
+  /// Timeout used for I/O operations.
+  uint16_t timeout = 3 /* seconds */;
 
   /// Host name of the NDT server to use. If this is left blank (the default),
   /// we will use mlab-ns to discover a nearby server.
@@ -164,7 +163,7 @@ class Settings {
   std::string port = "3001";
 
   /// The tests you want to run with the NDT server.
-  uint8_t test_suite = nettest::download;
+  uint8_t nettest_flags = nettest_flag::download;
 
   /// Verbosity of the client. By default no message is emitted. Set to other
   /// values to get more messages (useful when debugging).
@@ -180,13 +179,13 @@ class Settings {
   /// Type of NDT protocol that you want to use. Depending on the requested
   /// protocol, you may need to change also the port. By default, NDT listens
   /// on port 3001 for in-clear communications and port 3010 for TLS ones.
-  uint64_t proto = 0;
+  uint64_t protocol_flags = protocol_flag::none;
 
   /// Maximum time for which a nettest (i.e. download) is allowed to run. After
   /// this time has elapsed, the code will stop downloading (or uploading). It
   /// is meant as a safeguard to prevent the test for running for much more time
   /// than anticipated, due to buffering and/or changing network conditions.
-  double max_runtime = 14 /* seconds */;
+  uint16_t max_runtime = 14 /* seconds */;
 
   /// SOCKSv5h port to use for tunnelling traffic using, e.g., Tor. If non
   /// empty, all DNS and TCP traffic should be tunnelled over such port.

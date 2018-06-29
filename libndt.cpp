@@ -383,20 +383,20 @@ bool Client::recv_tests_ids() noexcept {
 bool Client::run_tests() noexcept {
   for (auto &tid : impl->granted_suite) {
     switch (tid) {
-      case nettest::upload:
+      case nettest_flag::upload:
         EMIT_INFO("running upload test");
         if (!run_upload()) {
           return false;
         }
         break;
-      case nettest::meta:
+      case nettest_flag::meta:
         EMIT_DEBUG("running meta test");  // don't annoy the user with this
         if (!run_meta()) {
           return false;
         }
         break;
-      case nettest::download:
-      case nettest::download_ext:
+      case nettest_flag::download:
+      case nettest_flag::download_ext:
         EMIT_INFO("running download test");
         if (!run_download()) {
           return false;
@@ -550,7 +550,7 @@ bool Client::run_download() noexcept {
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       if (measurement_interval.count() > 0.25) {
-        on_performance(nettest::download, nflows, recent_data,
+        on_performance(nettest_flag::download, nflows, recent_data,
                        measurement_interval.count(), elapsed.count(),
                        impl->settings.max_runtime);
         recent_data = 0;
@@ -722,7 +722,7 @@ bool Client::run_upload() noexcept {
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       if (measurement_interval.count() > 0.25) {
-        on_performance(nettest::upload, nflows, recent_data,
+        on_performance(nettest_flag::upload, nflows, recent_data,
                        measurement_interval.count(), elapsed.count(),
                        impl->settings.max_runtime);
         recent_data = 0;
@@ -762,32 +762,34 @@ bool Client::run_upload() noexcept {
 // Low-level API
 
 bool Client::msg_write_login(const std::string &version) noexcept {
-  static_assert(sizeof(impl->settings.test_suite) == 1, "test_suite too large");
+  static_assert(sizeof(impl->settings.nettest_flags) == 1,
+                "nettest_flags too large");
   uint8_t code = 0;
-  impl->settings.test_suite |= nettest::status | nettest::meta;
-  if ((impl->settings.test_suite & nettest::middlebox)) {
-    EMIT_WARNING("msg_write_login(): nettest::middlebox: not implemented");
-    impl->settings.test_suite &= ~nettest::middlebox;
+  impl->settings.nettest_flags |= nettest_flag::status | nettest_flag::meta;
+  if ((impl->settings.nettest_flags & nettest_flag::middlebox)) {
+    EMIT_WARNING("msg_write_login(): nettest_flag::middlebox: not implemented");
+    impl->settings.nettest_flags &= ~nettest_flag::middlebox;
   }
-  if ((impl->settings.test_suite & nettest::simple_firewall)) {
+  if ((impl->settings.nettest_flags & nettest_flag::simple_firewall)) {
     EMIT_WARNING(
-        "msg_write_login(): nettest::simple_firewall: not implemented");
-    impl->settings.test_suite &= ~nettest::simple_firewall;
+        "msg_write_login(): nettest_flag::simple_firewall: not implemented");
+    impl->settings.nettest_flags &= ~nettest_flag::simple_firewall;
   }
-  if ((impl->settings.test_suite & nettest::upload_ext)) {
-    EMIT_WARNING("msg_write_login(): nettest::upload_ext: not implemented");
-    impl->settings.test_suite &= ~nettest::upload_ext;
+  if ((impl->settings.nettest_flags & nettest_flag::upload_ext)) {
+    EMIT_WARNING(
+        "msg_write_login(): nettest_flag::upload_ext: not implemented");
+    impl->settings.nettest_flags &= ~nettest_flag::upload_ext;
   }
   std::string serio;
-  if ((impl->settings.proto & protocol::json) == 0) {
-    serio = std::string{(char *)&impl->settings.test_suite,
-                        sizeof(impl->settings.test_suite)};
+  if ((impl->settings.protocol_flags & protocol_flag::json) == 0) {
+    serio = std::string{(char *)&impl->settings.nettest_flags,
+                        sizeof(impl->settings.nettest_flags)};
     code = msg_login;
   } else {
     code = msg_extended_login;
     nlohmann::json msg{
         {"msg", version},
-        {"tests", std::to_string((unsigned)impl->settings.test_suite)},
+        {"tests", std::to_string((unsigned)impl->settings.nettest_flags)},
     };
     try {
       serio = msg.dump();
@@ -797,7 +799,7 @@ bool Client::msg_write_login(const std::string &version) noexcept {
     }
   }
   assert(code != 0);
-  if ((impl->settings.proto & protocol::websockets) != 0) {
+  if ((impl->settings.protocol_flags & protocol_flag::websockets) != 0) {
     EMIT_WARNING("msg_write_login: websockets not supported");
     return false;
   }
@@ -812,7 +814,7 @@ bool Client::msg_write_login(const std::string &version) noexcept {
 // a different implementation depending on the actual protocol.
 bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
   EMIT_DEBUG("msg_write: message to send: " << represent(msg));
-  if ((impl->settings.proto & protocol::json) != 0) {
+  if ((impl->settings.protocol_flags & protocol_flag::json) != 0) {
     nlohmann::json json;
     json["msg"] = msg;
     try {
@@ -822,7 +824,7 @@ bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
       return false;
     }
   }
-  if ((impl->settings.proto & protocol::websockets) != 0) {
+  if ((impl->settings.protocol_flags & protocol_flag::websockets) != 0) {
     EMIT_WARNING("msg_write: websockets not supported");
     return false;
   }
@@ -956,14 +958,14 @@ bool Client::msg_expect(uint8_t expected_code, std::string *s) noexcept {
 bool Client::msg_read(uint8_t *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   std::string s;
-  if ((impl->settings.proto & protocol::websockets) != 0) {
+  if ((impl->settings.protocol_flags & protocol_flag::websockets) != 0) {
     EMIT_WARNING("msg_read: websockets not supported");
     return false;
   }
   if (!msg_read_legacy(code, &s)) {
     return false;
   }
-  if ((impl->settings.proto & protocol::json) == 0) {
+  if ((impl->settings.protocol_flags & protocol_flag::json) == 0) {
     std::swap(s, *msg);
   } else {
     nlohmann::json json;
