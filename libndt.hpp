@@ -152,8 +152,7 @@ class Settings {
   /// hostname, mlab-ns won't be used.
   std::string mlabns_url = "https://mlab-ns.appspot.com/ndt";
 
-  /// Timeout used for I/O operations. \bug in v0.23.0 this timeout is only
-  /// used for cURL operations, but this will be fixed in v0.24.0.
+  /// Timeout used for I/O operations.
   uint16_t timeout = 3 /* seconds */;
 
   /// Host name of the NDT server to use. If this is left blank (the default),
@@ -325,13 +324,21 @@ class Client {
   virtual Err netx_dial(const std::string &hostname, const std::string &port,
                         Socket *sock) noexcept;
 
+  virtual Err netx_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept;
+
   virtual Err netx_recv(Socket fd, void *base, Size count,
                         Size *actual) noexcept;
+
+  virtual Err netx_recv_nonblocking(Socket fd, void *base, Size count,
+                                    Size *actual) noexcept;
 
   virtual Err netx_recvn(Socket fd, void *base, Size count) noexcept;
 
   virtual Err netx_send(Socket fd, const void *base, Size count,
                         Size *actual) noexcept;
+
+  virtual Err netx_send_nonblocking(Socket fd, const void *base, Size count,
+                                    Size *actual) noexcept;
 
   virtual Err netx_sendn(Socket fd, const void *base, Size count) noexcept;
 
@@ -382,7 +389,7 @@ class Client {
   virtual int fcntl3i(Socket s, int cmd, int arg) noexcept;
 #endif
 
-  virtual int getsockopt(int socket, int level, int name, void *value,
+  virtual int getsockopt(Socket socket, int level, int name, void *value,
                          SockLen *len) noexcept;
 
  private:
