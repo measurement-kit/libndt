@@ -33,7 +33,7 @@ int main(int, char **argv) {
   using namespace measurement_kit;
   libndt::Settings settings;
   settings.verbosity = libndt::verbosity::quiet;
-  settings.test_suite = 0;  // you need to enable tests explicitly
+  settings.nettest_flags = 0;  // you need to enable tests explicitly
 
   {
     argh::parser cmdline;
@@ -42,16 +42,16 @@ int main(int, char **argv) {
     cmdline.parse(argv);
     for (auto &flag : cmdline.flags()) {
       if (flag == "download") {
-        settings.test_suite |= libndt::nettest::download;
+        settings.nettest_flags |= libndt::nettest_flag::download;
         std::clog << "will run download" << std::endl;
       } else if (flag == "download-ext") {
-        settings.test_suite |= libndt::nettest::download_ext;
+        settings.nettest_flags |= libndt::nettest_flag::download_ext;
         std::clog << "will run download-ext" << std::endl;
       } else if (flag == "json") {
-        settings.proto = libndt::protocol::json;
+        settings.protocol_flags = libndt::protocol_flag::json;
         std::clog << "will use json" << std::endl;
       } else if (flag == "upload") {
-        settings.test_suite |= libndt::nettest::upload;
+        settings.nettest_flags |= libndt::nettest_flag::upload;
         std::clog << "will run upload" << std::endl;
       } else if (flag == "verbose") {
         settings.verbosity = libndt::verbosity::debug;
