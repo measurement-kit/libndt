@@ -1434,7 +1434,7 @@ Err Client::netx_recv(Socket fd, void *base, Size count,
   }
   fd_set set;
   FD_ZERO(&set);
-  FD_SET(fd, &set);
+  FD_SET(AS_OS_SOCKET(fd), &set);
   timeval tv{};
   // XXX: can timeout be negative?
   tv.tv_sec = impl->settings.timeout;
@@ -1491,7 +1491,7 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
   }
   fd_set set;
   FD_ZERO(&set);
-  FD_SET(fd, &set);
+  FD_SET(AS_OS_SOCKET(fd), &set);
   timeval tv{};
   // XXX: can timeout be negative?
   tv.tv_sec = impl->settings.timeout;
