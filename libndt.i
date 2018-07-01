@@ -2,9 +2,8 @@
    Measurement Kit is free software under the BSD license. See AUTHORS
    and LICENSE for more information on the copying conditions. */
 
-/*
- * SWIG interface file for libndt.
- */
+/* SWIG interface file for libndt
+   ============================== */
 
 %module(directors="1") libndt
 
@@ -25,13 +24,19 @@
 
 /*%rename("%(regex:/^get(.*)/$ignore/)s") "";*/
 
+/* Ignored symbols
+   --------------- */
+
 %ignore Err;
+
 %ignore nettest_flag_middlebox;
 %ignore nettest_flag_simple_firewall;
 %ignore nettest_flag_status;
 %ignore nettest_flag_meta;
 %ignore nettest_flag_upload_ext;
+
 %ignore ndt_version_compat;
+
 %ignore msg_comm_failure;
 %ignore msg_srv_queue;
 %ignore msg_login;
@@ -44,5 +49,19 @@
 %ignore msg_logout;
 %ignore msg_waiting;
 %ignore msg_extended_login;
+
+%ignore measurement_kit::libndt::Settings::metadata;
+
+/* API extension
+   ------------- */
+
+%extend measurement_kit::libndt::Settings {
+  void add_metadata(std::string k, std::string v) {
+    std::swap(metadata[k], v);
+  }
+}
+
+/* SWIG-process the API header
+   --------------------------- */
 
 %include "libndt.hpp"
