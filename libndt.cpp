@@ -109,7 +109,7 @@ static void random_printable_fill(char *buffer, size_t length) noexcept {
   }
 }
 
-static double compute_speed(uint64_t data, double elapsed) noexcept {
+static double compute_speed(double data, double elapsed) noexcept {
   return (elapsed > 0.0) ? ((data * 8.0) / 1000.0 / elapsed) : 0.0;
 }
 
@@ -540,7 +540,8 @@ bool Client::run_download() noexcept {
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       if (measurement_interval.count() > 0.25) {
-        on_performance(nettest_flag_download, nflows, recent_data,
+        on_performance(nettest_flag_download, nflows,
+                       static_cast<double>(recent_data),
                        measurement_interval.count(), elapsed.count(),
                        impl->settings.max_runtime);
         recent_data = 0;
@@ -708,7 +709,8 @@ bool Client::run_upload() noexcept {
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       if (measurement_interval.count() > 0.25) {
-        on_performance(nettest_flag_upload, nflows, recent_data,
+        on_performance(nettest_flag_upload, nflows,
+                       static_cast<double>(recent_data),
                        measurement_interval.count(), elapsed.count(),
                        impl->settings.max_runtime);
         recent_data = 0;
