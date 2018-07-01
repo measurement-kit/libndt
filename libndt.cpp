@@ -48,31 +48,31 @@ constexpr size_t msg_kickoff_size = sizeof(msg_kickoff) - 1;
 
 // Private utils
 
-#define EMIT_WARNING(statements)                          \
-  do {                                                    \
-    if (impl->settings.verbosity >= verbosity::warning) { \
-      std::stringstream ss;                               \
-      ss << statements;                                   \
-      on_warning(ss.str());                               \
-    }                                                     \
+#define EMIT_WARNING(statements)                         \
+  do {                                                   \
+    if (impl->settings.verbosity >= verbosity_warning) { \
+      std::stringstream ss;                              \
+      ss << statements;                                  \
+      on_warning(ss.str());                              \
+    }                                                    \
   } while (0)
 
-#define EMIT_INFO(statements)                          \
+#define EMIT_INFO(statements)                         \
+  do {                                                \
+    if (impl->settings.verbosity >= verbosity_info) { \
+      std::stringstream ss;                           \
+      ss << statements;                               \
+      on_info(ss.str());                              \
+    }                                                 \
+  } while (0)
+
+#define EMIT_DEBUG(statements)                         \
   do {                                                 \
-    if (impl->settings.verbosity >= verbosity::info) { \
+    if (impl->settings.verbosity >= verbosity_debug) { \
       std::stringstream ss;                            \
       ss << statements;                                \
-      on_info(ss.str());                               \
+      on_debug(ss.str());                              \
     }                                                  \
-  } while (0)
-
-#define EMIT_DEBUG(statements)                          \
-  do {                                                  \
-    if (impl->settings.verbosity >= verbosity::debug) { \
-      std::stringstream ss;                             \
-      ss << statements;                                 \
-      on_debug(ss.str());                               \
-    }                                                   \
   } while (0)
 
 #ifdef _WIN32
@@ -247,21 +247,19 @@ bool Client::run() noexcept {
   return true;
 }
 
-void Client::on_warning(const std::string &msg) noexcept {
+void Client::on_warning(const std::string &msg) {
   std::clog << "[!] " << msg << std::endl;
 }
 
-void Client::on_info(const std::string &msg) noexcept {
-  std::clog << msg << std::endl;
-}
+void Client::on_info(const std::string &msg) { std::clog << msg << std::endl; }
 
-void Client::on_debug(const std::string &msg) noexcept {
+void Client::on_debug(const std::string &msg) {
   std::clog << "[D] " << msg << std::endl;
 }
 
-void Client::on_performance(uint8_t tid, uint8_t nflows,
-                            uint64_t measured_bytes, double measured_interval,
-                            double elapsed_time, double max_runtime) noexcept {
+void Client::on_performance(uint8_t tid, uint8_t nflows, double measured_bytes,
+                            double measured_interval, double elapsed_time,
+                            double max_runtime) {
   auto speed = compute_speed(measured_bytes, measured_interval);
   EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
                   << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
@@ -272,12 +270,11 @@ void Client::on_performance(uint8_t tid, uint8_t nflows,
                   << std::right << speed << " kbit/s");
 }
 
-void Client::on_result(std::string scope, std::string name,
-                       std::string value) noexcept {
+void Client::on_result(std::string scope, std::string name, std::string value) {
   EMIT_INFO("  - [" << scope << "] " << name << ": " << value);
 }
 
-void Client::on_server_busy(std::string msg) noexcept {
+void Client::on_server_busy(std::string msg) {
   EMIT_WARNING("server is busy: " << msg);
 }
 
@@ -383,20 +380,20 @@ bool Client::recv_tests_ids() noexcept {
 bool Client::run_tests() noexcept {
   for (auto &tid : impl->granted_suite) {
     switch (tid) {
-      case nettest_flag::upload:
+      case nettest_flag_upload:
         EMIT_INFO("running upload test");
         if (!run_upload()) {
           return false;
         }
         break;
-      case nettest_flag::meta:
+      case nettest_flag_meta:
         EMIT_DEBUG("running meta test");  // don't annoy the user with this
         if (!run_meta()) {
           return false;
         }
         break;
-      case nettest_flag::download:
-      case nettest_flag::download_ext:
+      case nettest_flag_download:
+      case nettest_flag_download_ext:
         EMIT_INFO("running download test");
         if (!run_download()) {
           return false;
@@ -543,7 +540,7 @@ bool Client::run_download() noexcept {
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       if (measurement_interval.count() > 0.25) {
-        on_performance(nettest_flag::download, nflows, recent_data,
+        on_performance(nettest_flag_download, nflows, recent_data,
                        measurement_interval.count(), elapsed.count(),
                        impl->settings.max_runtime);
         recent_data = 0;
@@ -711,7 +708,7 @@ bool Client::run_upload() noexcept {
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       if (measurement_interval.count() > 0.25) {
-        on_performance(nettest_flag::upload, nflows, recent_data,
+        on_performance(nettest_flag_upload, nflows, recent_data,
                        measurement_interval.count(), elapsed.count(),
                        impl->settings.max_runtime);
         recent_data = 0;
@@ -753,23 +750,22 @@ bool Client::msg_write_login(const std::string &version) noexcept {
   static_assert(sizeof(impl->settings.nettest_flags) == 1,
                 "nettest_flags too large");
   uint8_t code = 0;
-  impl->settings.nettest_flags |= nettest_flag::status | nettest_flag::meta;
-  if ((impl->settings.nettest_flags & nettest_flag::middlebox)) {
-    EMIT_WARNING("msg_write_login(): nettest_flag::middlebox: not implemented");
-    impl->settings.nettest_flags &= ~nettest_flag::middlebox;
+  impl->settings.nettest_flags |= nettest_flag_status | nettest_flag_meta;
+  if ((impl->settings.nettest_flags & nettest_flag_middlebox)) {
+    EMIT_WARNING("msg_write_login(): nettest_flag_middlebox: not implemented");
+    impl->settings.nettest_flags &= ~nettest_flag_middlebox;
   }
-  if ((impl->settings.nettest_flags & nettest_flag::simple_firewall)) {
+  if ((impl->settings.nettest_flags & nettest_flag_simple_firewall)) {
     EMIT_WARNING(
-        "msg_write_login(): nettest_flag::simple_firewall: not implemented");
-    impl->settings.nettest_flags &= ~nettest_flag::simple_firewall;
+        "msg_write_login(): nettest_flag_simple_firewall: not implemented");
+    impl->settings.nettest_flags &= ~nettest_flag_simple_firewall;
   }
-  if ((impl->settings.nettest_flags & nettest_flag::upload_ext)) {
-    EMIT_WARNING(
-        "msg_write_login(): nettest_flag::upload_ext: not implemented");
-    impl->settings.nettest_flags &= ~nettest_flag::upload_ext;
+  if ((impl->settings.nettest_flags & nettest_flag_upload_ext)) {
+    EMIT_WARNING("msg_write_login(): nettest_flag_upload_ext: not implemented");
+    impl->settings.nettest_flags &= ~nettest_flag_upload_ext;
   }
   std::string serio;
-  if ((impl->settings.protocol_flags & protocol_flag::json) == 0) {
+  if ((impl->settings.protocol_flags & protocol_flag_json) == 0) {
     serio = std::string{(char *)&impl->settings.nettest_flags,
                         sizeof(impl->settings.nettest_flags)};
     code = msg_login;
@@ -787,7 +783,7 @@ bool Client::msg_write_login(const std::string &version) noexcept {
     }
   }
   assert(code != 0);
-  if ((impl->settings.protocol_flags & protocol_flag::websockets) != 0) {
+  if ((impl->settings.protocol_flags & protocol_flag_websockets) != 0) {
     EMIT_WARNING("msg_write_login: websockets not supported");
     return false;
   }
@@ -802,7 +798,7 @@ bool Client::msg_write_login(const std::string &version) noexcept {
 // a different implementation depending on the actual protocol.
 bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
   EMIT_DEBUG("msg_write: message to send: " << represent(msg));
-  if ((impl->settings.protocol_flags & protocol_flag::json) != 0) {
+  if ((impl->settings.protocol_flags & protocol_flag_json) != 0) {
     nlohmann::json json;
     json["msg"] = msg;
     try {
@@ -812,7 +808,7 @@ bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
       return false;
     }
   }
-  if ((impl->settings.protocol_flags & protocol_flag::websockets) != 0) {
+  if ((impl->settings.protocol_flags & protocol_flag_websockets) != 0) {
     EMIT_WARNING("msg_write: websockets not supported");
     return false;
   }
@@ -946,14 +942,14 @@ bool Client::msg_expect(uint8_t expected_code, std::string *s) noexcept {
 bool Client::msg_read(uint8_t *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   std::string s;
-  if ((impl->settings.protocol_flags & protocol_flag::websockets) != 0) {
+  if ((impl->settings.protocol_flags & protocol_flag_websockets) != 0) {
     EMIT_WARNING("msg_read: websockets not supported");
     return false;
   }
   if (!msg_read_legacy(code, &s)) {
     return false;
   }
-  if ((impl->settings.protocol_flags & protocol_flag::json) == 0) {
+  if ((impl->settings.protocol_flags & protocol_flag_json) == 0) {
     std::swap(s, *msg);
   } else {
     nlohmann::json json;
@@ -1516,7 +1512,7 @@ again:
 
 // Dependencies (curl)
 
-uint64_t Client::get_verbosity() const noexcept {
+uint32_t Client::get_verbosity() const noexcept {
   return impl->settings.verbosity;
 }
 

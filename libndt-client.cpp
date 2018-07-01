@@ -32,7 +32,7 @@ static void usage() {
 int main(int, char **argv) {
   using namespace measurement_kit;
   libndt::Settings settings;
-  settings.verbosity = libndt::verbosity::quiet;
+  settings.verbosity = libndt::verbosity_quiet;
   settings.nettest_flags = 0;  // you need to enable tests explicitly
 
   {
@@ -42,19 +42,19 @@ int main(int, char **argv) {
     cmdline.parse(argv);
     for (auto &flag : cmdline.flags()) {
       if (flag == "download") {
-        settings.nettest_flags |= libndt::nettest_flag::download;
+        settings.nettest_flags |= libndt::nettest_flag_download;
         std::clog << "will run download" << std::endl;
       } else if (flag == "download-ext") {
-        settings.nettest_flags |= libndt::nettest_flag::download_ext;
+        settings.nettest_flags |= libndt::nettest_flag_download_ext;
         std::clog << "will run download-ext" << std::endl;
       } else if (flag == "json") {
-        settings.protocol_flags = libndt::protocol_flag::json;
+        settings.protocol_flags = libndt::protocol_flag_json;
         std::clog << "will use json" << std::endl;
       } else if (flag == "upload") {
-        settings.nettest_flags |= libndt::nettest_flag::upload;
+        settings.nettest_flags |= libndt::nettest_flag_upload;
         std::clog << "will run upload" << std::endl;
       } else if (flag == "verbose") {
-        settings.verbosity = libndt::verbosity::debug;
+        settings.verbosity = libndt::verbosity_debug;
         std::clog << "will be verbose" << std::endl;
       } else {
         std::clog << "fatal: unrecognized flag: " << flag << std::endl;
