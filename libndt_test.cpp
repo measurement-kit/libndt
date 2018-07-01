@@ -38,8 +38,6 @@
 // Speaking of coverage, if specific code is already tested by running the
 // example client, we don't need to write also a test for it here.
 
-using namespace measurement_kit;
-
 // Client::run() tests
 // -------------------
 

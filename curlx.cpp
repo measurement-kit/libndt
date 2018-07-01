@@ -31,7 +31,6 @@ static size_t curl_callback(char *ptr, size_t size, size_t nmemb,
 
 }  // extern "C"
 
-namespace measurement_kit {
 namespace libndt {
 
 #define EMIT_WARNING(client, statements)                \
@@ -175,5 +174,4 @@ Curl::~Curl() noexcept {}
 CURL *Curl::easy_init() noexcept { return ::curl_easy_init(); }
 
 }  // namespace libndt
-}  // namespace measurement_kit
 #endif  // HAVE_CURL

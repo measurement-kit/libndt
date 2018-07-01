@@ -14,7 +14,6 @@
 
 #include "libndt.hpp"
 
-namespace measurement_kit {
 namespace libndt {
 
 class CurlDeleter {
@@ -64,6 +63,5 @@ class Curl {
 };
 
 }  // namespace libndt
-}  // namespace measurement_kit
 #endif  // HAVE_CURL
 #endif  // MEASUREMENT_KIT_LIBNDT_CURLX_HPP

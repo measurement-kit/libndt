@@ -43,9 +43,6 @@
 #include <string>
 #include <vector>
 
-/// Contains measurement-kit code.
-namespace measurement_kit {
-
 /// Contains measurement-kit/libndt code.
 namespace libndt {
 
@@ -406,5 +403,4 @@ enum class Err {
 };
 
 }  // namespace libndt
-}  // namespace measurement_kit
 #endif

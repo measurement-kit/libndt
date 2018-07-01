@@ -7,8 +7,6 @@
 
 #include "catch.hpp"
 
-using namespace measurement_kit;
-
 // Curl::method_get_maybe_socks5() tests
 // -------------------------------------
 

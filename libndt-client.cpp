@@ -30,7 +30,6 @@ static void usage() {
 }
 
 int main(int, char **argv) {
-  using namespace measurement_kit;
   libndt::Settings settings;
   settings.verbosity = libndt::verbosity_quiet;
   settings.nettest_flags = 0;  // you need to enable tests explicitly

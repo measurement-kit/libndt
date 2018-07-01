@@ -36,7 +36,6 @@
 #include "json.hpp"
 #include "strtonum.h"
 
-namespace measurement_kit {
 namespace libndt {
 
 // Private constants
@@ -1654,4 +1653,3 @@ int Client::getsockopt(int socket, int level, int name, void *value,
 }
 
 }  // namespace libndt
-}  // namespace measurement_kit
