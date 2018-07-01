@@ -77,20 +77,17 @@ constexpr uint8_t nettest_flag_upload_ext = 1U << 6;
 /// The multi-stream download net test.
 constexpr uint8_t nettest_flag_download_ext = 1U << 7;
 
-/// Desired verbosity of a test.
-enum class Verbosity {
-  /// Do not emit any log message.
-  quiet = 0,
+/// Do not emit any log message.
+constexpr uint32_t verbosity_quiet = 0;
 
-  /// Emit only warning messages.
-  warning = 1,
+/// Emit only warning messages.
+constexpr uint32_t verbosity_warning = 1;
 
-  /// Emit warning and informational messages.
-  info = 2,
+/// Emit warning and informational messages.
+constexpr uint32_t verbosity_info = 2;
 
-  /// Emit all log messages.
-  debug = 3,
-};
+/// Emit all log messages.
+constexpr uint32_t verbosity_debug = 3;
 
 constexpr const char *ndt_version_compat = "v3.7.0";
 
@@ -140,7 +137,7 @@ class Settings {
 
   /// Verbosity of the client. By default no message is emitted. Set to other
   /// values to get more messages (useful when debugging).
-  Verbosity verbosity = Verbosity::quiet;
+  uint32_t verbosity = verbosity_quiet;
 
   /// Metadata to include in the server side logs. By default we just identify
   /// the NDT version and the application.
@@ -371,7 +368,6 @@ class Client {
   std::unique_ptr<Impl> impl;
 };
 
-#ifndef SWIG
 constexpr uint8_t msg_comm_failure = 0;
 constexpr uint8_t msg_srv_queue = 1;
 constexpr uint8_t msg_login = 2;
@@ -408,7 +404,6 @@ enum class Err {
   ai_noname,
   socks5h,
 };
-#endif  // !SWIG
 
 }  // namespace libndt
 }  // namespace measurement_kit
