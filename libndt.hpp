@@ -50,7 +50,7 @@ namespace libndt {
 constexpr uint32_t version_major = 0;
 
 /// Minor API version number of measurement-kit/libndt.
-constexpr uint32_t version_minor = 23;
+constexpr uint32_t version_minor = 24;
 
 /// Patch API version number of measurement-kit/libndt.
 constexpr uint32_t version_patch = 0;
