@@ -49,66 +49,45 @@ namespace measurement_kit {
 /// Contains measurement-kit/libndt code.
 namespace libndt {
 
-/// Contains version constants. You can use the constants defined in this
-/// namespace at compile time to check whether the version of libndt you
-/// are compiling against matches your expectations.
-namespace version {
-
 /// Major API version number of measurement-kit/libndt.
-constexpr uint64_t major = 0;
+constexpr uint32_t version_major = 0;
 
 /// Minor API version number of measurement-kit/libndt.
-constexpr uint64_t minor = 23;
+constexpr uint32_t version_minor = 23;
 
 /// Patch API version number of measurement-kit/libndt.
-constexpr uint64_t patch = 0;
+constexpr uint32_t version_patch = 0;
 
-}  // namespace version
-
-/// Contains nettests flags. You can run multiple nettests as part of
-/// a single NDT transaction with a NDT server. To specify what nettests you
-/// want to run, modify Settings::nettest_flags accordingly, by using the
-/// constants flags defined inside of this namespace.
-namespace nettest_flag {
-
-constexpr uint8_t middlebox = 1U << 0;
+constexpr uint8_t nettest_flag_middlebox = 1U << 0;
 
 /// The upload net test.
-constexpr uint8_t upload = 1U << 1;
+constexpr uint8_t nettest_flag_upload = 1U << 1;
 
 /// The download net test.
-constexpr uint8_t download = 1U << 2;
+constexpr uint8_t nettest_flag_download = 1U << 2;
 
-constexpr uint8_t simple_firewall = 1U << 3;
+constexpr uint8_t nettest_flag_simple_firewall = 1U << 3;
 
-constexpr uint8_t status = 1U << 4;
+constexpr uint8_t nettest_flag_status = 1U << 4;
 
-constexpr uint8_t meta = 1U << 5;
+constexpr uint8_t nettest_flag_meta = 1U << 5;
 
-constexpr uint8_t upload_ext = 1U << 6;
+constexpr uint8_t nettest_flag_upload_ext = 1U << 6;
 
 /// The multi-stream download net test.
-constexpr uint8_t download_ext = 1U << 7;
-
-}  // namespace nettest
-
-/// Constants used to control verbosity. You can pass these constants to
-/// Settings::verbosity to control the verbosity level.
-namespace verbosity {
+constexpr uint8_t nettest_flag_download_ext = 1U << 7;
 
 /// Do not emit any log message.
-constexpr uint64_t quiet = 0;
+constexpr uint32_t verbosity_quiet = 0;
 
 /// Emit only warning messages.
-constexpr uint64_t warning = 1;
+constexpr uint32_t verbosity_warning = 1;
 
 /// Emit warning and informational messages.
-constexpr uint64_t info = 2;
+constexpr uint32_t verbosity_info = 2;
 
 /// Emit all log messages.
-constexpr uint64_t debug = 3;
-
-}  // namespace verbosity
+constexpr uint32_t verbosity_debug = 3;
 
 constexpr const char *ndt_version_compat = "v3.7.0";
 
@@ -120,27 +99,17 @@ using Socket = int64_t;
 
 using SockLen = int;
 
-/// Contains flags definiting what protocol to use. Historically NDT used a
-/// binary, cleartext protocol for communicating with the server. Historically
-/// messages were raw strings framed using the binary framing.
-namespace protocol_flag {
-
-/// Indicates that no protocol flags have been set.
-constexpr uint64_t none = 0;
-
 /// When this flag is set we use JSON messages. This specifically means that
 /// we send and receive JSON messages (as opposed to raw strings).
-constexpr uint64_t json = (1 << 0);
+constexpr uint32_t protocol_flag_json = (1 << 0);
 
 /// When this flag is set we use TLS. This specifically means that we will
 /// use TLS channels for the control and the measurement connections.
-constexpr uint64_t tls = (1 << 1);
+constexpr uint32_t protocol_flag_tls = (1 << 1);
 
 /// When this flag is set we use WebSockets. This specifically means that
 /// we use the WebSockets framing (as opposed to the original binary framing).
-constexpr uint64_t websockets = (1 << 2);
-
-}  // namespace protocol
+constexpr uint32_t protocol_flag_websockets = (1 << 2);
 
 enum class Err;  // Forward declaration (see bottom of this file)
 
@@ -164,11 +133,11 @@ class Settings {
   std::string port = "3001";
 
   /// The tests you want to run with the NDT server.
-  uint8_t nettest_flags = nettest_flag::download;
+  uint8_t nettest_flags = nettest_flag_download;
 
   /// Verbosity of the client. By default no message is emitted. Set to other
   /// values to get more messages (useful when debugging).
-  uint64_t verbosity = verbosity::quiet;
+  uint32_t verbosity = verbosity_quiet;
 
   /// Metadata to include in the server side logs. By default we just identify
   /// the NDT version and the application.
@@ -180,7 +149,7 @@ class Settings {
   /// Type of NDT protocol that you want to use. Depending on the requested
   /// protocol, you may need to change also the port. By default, NDT listens
   /// on port 3001 for in-clear communications and port 3010 for TLS ones.
-  uint64_t protocol_flags = protocol_flag::none;
+  uint32_t protocol_flags = 0;
 
   /// Maximum time for which a nettest (i.e. download) is allowed to run. After
   /// this time has elapsed, the code will stop downloading (or uploading). It
@@ -219,17 +188,23 @@ class Client {
   /// Runs a NDT test using the configured (or default) settings.
   bool run() noexcept;
 
+  // Implementation note: currently SWIG does not propagate `noexcept` even
+  // though that is implemented in master [1], hence we have removed this
+  // qualifiers from the functions that SWIG needs to wrap.
+  //
+  // .. [1] https://github.com/swig/swig/issues/526
+
   /// Called when a warning message is emitted. The default behavior is to write
   /// the warning onto the `std::clog` standard stream.
-  virtual void on_warning(const std::string &s) noexcept;
+  virtual void on_warning(const std::string &s);
 
   /// Called when an informational message is emitted. The default behavior is
   /// to write the warning onto the `std::clog` standard stream.
-  virtual void on_info(const std::string &s) noexcept;
+  virtual void on_info(const std::string &s);
 
   /// Called when a debug message is emitted. The default behavior is
   /// to write the warning onto the `std::clog` standard stream.
-  virtual void on_debug(const std::string &s) noexcept;
+  virtual void on_debug(const std::string &s);
 
   /// Called to inform you about the measured speed. The default behavior is
   /// to write the provided information as an info message. @param tid is either
@@ -244,9 +219,9 @@ class Client {
   /// provide you with @p tid, so you know whether the nettest is downloading
   /// bytes from the server or uploading bytes to the server.
   virtual void on_performance(uint8_t tid, uint8_t nflows,
-                              uint64_t measured_bytes,
+                              double measured_bytes,
                               double measurement_interval, double elapsed,
-                              double max_runtime) noexcept;
+                              double max_runtime);
 
   /// Called to provide you with NDT results. The default behavior is
   /// to write the provided information as an info message. @param scope is
@@ -255,12 +230,12 @@ class Client {
   /// summary variables. @param name is the name of the variable. @param value
   /// is the variable value (variables are typically int, float, or string).
   virtual void on_result(std::string scope, std::string name,
-                         std::string value) noexcept;
+                         std::string value);
 
   /// Called when the server is busy. The default behavior is to write a
   /// warning message. @param msg is the reason why the server is busy, encoded
   /// according to the NDT protocol.
-  virtual void on_server_busy(std::string msg) noexcept;
+  virtual void on_server_busy(std::string msg);
 
   /*
                _        __             _    _ _                _
@@ -275,6 +250,9 @@ class Client {
   // unless you're looking into heavily customizing this library.
   //
   // High-level API
+#ifdef SWIG
+ private:
+#endif
 
   virtual bool query_mlabns() noexcept;
   virtual bool connect() noexcept;
@@ -345,7 +323,7 @@ class Client {
 
   // Dependencies (cURL)
 
-  uint64_t get_verbosity() const noexcept;
+  uint32_t get_verbosity() const noexcept;
 
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;

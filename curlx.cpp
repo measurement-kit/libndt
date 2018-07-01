@@ -34,31 +34,31 @@ static size_t curl_callback(char *ptr, size_t size, size_t nmemb,
 namespace measurement_kit {
 namespace libndt {
 
-#define EMIT_WARNING(client, statements)                 \
-  do {                                                   \
-    if (client->get_verbosity() >= verbosity::warning) { \
-      std::stringstream ss;                              \
-      ss << statements;                                  \
-      client->on_warning(ss.str());                      \
-    }                                                    \
+#define EMIT_WARNING(client, statements)                \
+  do {                                                  \
+    if (client->get_verbosity() >= verbosity_warning) { \
+      std::stringstream ss;                             \
+      ss << statements;                                 \
+      client->on_warning(ss.str());                     \
+    }                                                   \
   } while (0)
 
-#define EMIT_INFO(client, statements)                 \
+#define EMIT_INFO(client, statements)                \
+  do {                                               \
+    if (client->get_verbosity() >= verbosity_info) { \
+      std::stringstream ss;                          \
+      ss << statements;                              \
+      client->on_info(ss.str());                     \
+    }                                                \
+  } while (0)
+
+#define EMIT_DEBUG(client, statements)                \
   do {                                                \
-    if (client->get_verbosity() >= verbosity::info) { \
+    if (client->get_verbosity() >= verbosity_debug) { \
       std::stringstream ss;                           \
       ss << statements;                               \
-      client->on_info(ss.str());                      \
+      client->on_debug(ss.str());                     \
     }                                                 \
-  } while (0)
-
-#define EMIT_DEBUG(client, statements)                 \
-  do {                                                 \
-    if (client->get_verbosity() >= verbosity::debug) { \
-      std::stringstream ss;                            \
-      ss << statements;                                \
-      client->on_debug(ss.str());                      \
-    }                                                  \
   } while (0)
 
 void CurlDeleter::operator()(CURL *handle) noexcept {
@@ -129,7 +129,7 @@ bool Curl::method_get(const std::string &url, long timeout,
 
 bool Curl::init() noexcept {
   if (!!handle_) {
-    return true; // make the method idempotent
+    return true;  // make the method idempotent
   }
   auto handle = this->easy_init();
   if (!handle) {
