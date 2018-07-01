@@ -11,9 +11,11 @@
 /catch.hpp
 /cmake_install.cmake
 /html
+/install_manifest.txt
 /json.hpp
 /latex
 /libndt-client
 /libndt.a
+/libndt.dylib
 /rules.ninja
 /tests
