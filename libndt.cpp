@@ -557,7 +557,8 @@ bool Client::run_download() noexcept {
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    client_side_speed = compute_speed(total_data, elapsed.count());
+    client_side_speed = compute_speed(  //
+        static_cast<double>(total_data), elapsed.count());
   }
 
   {
@@ -726,7 +727,8 @@ bool Client::run_upload() noexcept {
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    client_side_speed = compute_speed(total_data, elapsed.count());
+    client_side_speed = compute_speed(  //
+        static_cast<double>(total_data), elapsed.count());
     EMIT_DEBUG("run_upload: client computed speed: " << client_side_speed);
   }
 
