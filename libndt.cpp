@@ -409,7 +409,7 @@ bool Client::run_tests() noexcept {
 bool Client::recv_results_and_logout() noexcept {
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
-    uint8_t code = 0;
+    MsgType code = MsgType{0};
     if (!msg_read(&code, &message)) {
       return false;
     }
@@ -562,7 +562,7 @@ bool Client::run_download() noexcept {
 
   {
     // TODO(bassosimone): emit this information.
-    uint8_t code = 0;
+    MsgType code = MsgType{0};
     std::string message;
     if (!msg_read_legacy(&code, &message)) {  // legacy on purpose!
       return false;
@@ -581,7 +581,7 @@ bool Client::run_download() noexcept {
   EMIT_INFO("reading summary web100 variables");
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
-    uint8_t code = 0;
+    MsgType code = MsgType{0};
     if (!msg_read(&code, &message)) {
       return false;
     }
@@ -752,7 +752,7 @@ bool Client::run_upload() noexcept {
 bool Client::msg_write_login(const std::string &version) noexcept {
   static_assert(sizeof(impl->settings.nettest_flags) == 1,
                 "nettest_flags too large");
-  uint8_t code = 0;
+  MsgType code = MsgType{0};
   impl->settings.nettest_flags |= nettest_flag_status | nettest_flag_meta;
   if ((impl->settings.nettest_flags & nettest_flag_middlebox)) {
     EMIT_WARNING("msg_write_login(): nettest_flag_middlebox: not implemented");
@@ -785,7 +785,7 @@ bool Client::msg_write_login(const std::string &version) noexcept {
       return false;
     }
   }
-  assert(code != 0);
+  assert(code != MsgType{0});
   if ((impl->settings.protocol_flags & protocol_flag_websockets) != 0) {
     EMIT_WARNING("msg_write_login: websockets not supported");
     return false;
@@ -799,7 +799,7 @@ bool Client::msg_write_login(const std::string &version) noexcept {
 // TODO(bassosimone): when we will implement WebSockets here, it may
 // be useful to have an interface for reading/writing data and to use
 // a different implementation depending on the actual protocol.
-bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
+bool Client::msg_write(MsgType code, std::string &&msg) noexcept {
   EMIT_DEBUG("msg_write: message to send: " << represent(msg));
   if ((impl->settings.protocol_flags & protocol_flag_json) != 0) {
     nlohmann::json json;
@@ -821,7 +821,7 @@ bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
   return true;
 }
 
-bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
+bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
   {
     EMIT_DEBUG("msg_write_legacy: raw message: " << represent(msg));
     EMIT_DEBUG("msg_write_legacy: message length: " << msg.size());
@@ -917,7 +917,7 @@ bool Client::msg_expect_test_prepare(std::string *pport,
   return true;
 }
 
-bool Client::msg_expect_empty(uint8_t expected_code) noexcept {
+bool Client::msg_expect_empty(MsgType expected_code) noexcept {
   std::string s;
   if (!msg_expect(expected_code, &s)) {
     return false;
@@ -929,9 +929,9 @@ bool Client::msg_expect_empty(uint8_t expected_code) noexcept {
   return true;
 }
 
-bool Client::msg_expect(uint8_t expected_code, std::string *s) noexcept {
+bool Client::msg_expect(MsgType expected_code, std::string *s) noexcept {
   assert(s != nullptr);
-  uint8_t code = 0;
+  MsgType code = MsgType{0};
   if (!msg_read(&code, s)) {
     return false;
   }
@@ -942,7 +942,7 @@ bool Client::msg_expect(uint8_t expected_code, std::string *s) noexcept {
   return true;
 }
 
-bool Client::msg_read(uint8_t *code, std::string *msg) noexcept {
+bool Client::msg_read(MsgType *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   std::string s;
   if ((impl->settings.protocol_flags & protocol_flag_websockets) != 0) {
@@ -973,7 +973,7 @@ bool Client::msg_read(uint8_t *code, std::string *msg) noexcept {
   return true;
 }
 
-bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
+bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   uint16_t len = 0;
   {
@@ -989,7 +989,9 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
     EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)header[2]);
-    *code = header[0];
+    static_assert(sizeof (MsgType) == sizeof (unsigned char),
+                  "Unexpected MsgType size");
+    *code = MsgType{(unsigned char)header[0]};
     memcpy(&len, &header[1], sizeof(len));
     len = ntohs(len);
     EMIT_DEBUG("msg_read_legacy: message length: " << len);

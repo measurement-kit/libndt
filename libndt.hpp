@@ -47,33 +47,6 @@
 /// Contains measurement-kit/libndt code.
 namespace libndt {
 
-#if 0
-class Version {
- public:
-  explicit Version(unsigned int v) noexcept : value_{v} {}
-  bool operator==(const Version &other) const noexcept {
-    return value_ == other.value_;
-  }
-  bool operator!=(const Version &other) const noexcept {
-    return value_ != other.value_;
-  }
-  bool operator<(const Version &other) const noexcept {
-    return value_ < other.value_;
-  }
-  bool operator>=(const Version &other) const noexcept {
-    return value_ >= other.value_;
-  }
-  bool operator&(const Version &other) const noexcept {
-    return value_ & other.value_;
-  }
-  unsigned int as_value() const noexcept { return value_; }
- private:
-  unsigned int value_;
-};
-#define constexpr const
-#undef constexpr
-#endif
-
 /// Type containing a version number.
 using Version = unsigned int;
 
@@ -196,6 +169,36 @@ class Settings {
   std::string socks5h_port;
 };
 
+#if 0
+class MsgType {
+ public:
+  //explicit MsgType(char v) noexcept : value_{(unsigned char)v} {}
+  explicit MsgType(unsigned char v) noexcept : value_{v} {}
+  bool operator==(const MsgType &other) const noexcept {
+    return value_ == other.value_;
+  }
+  bool operator!=(const MsgType &other) const noexcept {
+    return value_ != other.value_;
+  }
+  bool operator<(const MsgType &other) const noexcept {
+    return value_ < other.value_;
+  }
+  bool operator>=(const MsgType &other) const noexcept {
+    return value_ >= other.value_;
+  }
+  bool operator&(const MsgType &other) const noexcept {
+    return value_ & other.value_;
+  }
+  unsigned char as_value() const noexcept { return value_; }
+ private:
+  unsigned char value_;
+};
+#define constexpr const
+#undef constexpr
+#endif
+
+using MsgType = unsigned char;
+
 /// NDT client. In the typical usage, you just need to construct a Client,
 /// optionally providing settings, and to call the run() method. More advanced
 /// usage may require you to override methods in a subclass to customize the
@@ -309,20 +312,20 @@ class Client {
 
   bool msg_write_login(const std::string &version) noexcept;
 
-  virtual bool msg_write(uint8_t code, std::string &&msg) noexcept;
+  virtual bool msg_write(MsgType code, std::string &&msg) noexcept;
 
-  virtual bool msg_write_legacy(uint8_t code, std::string &&msg) noexcept;
+  virtual bool msg_write_legacy(MsgType code, std::string &&msg) noexcept;
 
   virtual bool msg_expect_test_prepare(  //
       std::string *pport, uint8_t *pnflows) noexcept;
 
-  virtual bool msg_expect_empty(uint8_t code) noexcept;
+  virtual bool msg_expect_empty(MsgType code) noexcept;
 
-  virtual bool msg_expect(uint8_t code, std::string *msg) noexcept;
+  virtual bool msg_expect(MsgType code, std::string *msg) noexcept;
 
-  virtual bool msg_read(uint8_t *code, std::string *msg) noexcept;
+  virtual bool msg_read(MsgType *code, std::string *msg) noexcept;
 
-  virtual bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
+  virtual bool msg_read_legacy(MsgType *code, std::string *msg) noexcept;
 
   // Networking layer
 
@@ -402,19 +405,6 @@ class Client {
   std::unique_ptr<Impl> impl;
 };
 
-constexpr uint8_t msg_comm_failure = 0;
-constexpr uint8_t msg_srv_queue = 1;
-constexpr uint8_t msg_login = 2;
-constexpr uint8_t msg_test_prepare = 3;
-constexpr uint8_t msg_test_start = 4;
-constexpr uint8_t msg_test_msg = 5;
-constexpr uint8_t msg_test_finalize = 6;
-constexpr uint8_t msg_error = 7;
-constexpr uint8_t msg_results = 8;
-constexpr uint8_t msg_logout = 9;
-constexpr uint8_t msg_waiting = 10;
-constexpr uint8_t msg_extended_login = 11;
-
 enum class Err {
   none,
   broken_pipe,
@@ -438,6 +428,19 @@ enum class Err {
   ai_noname,
   socks5h,
 };
+
+constexpr MsgType msg_comm_failure = MsgType{0};
+constexpr MsgType msg_srv_queue = MsgType{1};
+constexpr MsgType msg_login = MsgType{2};
+constexpr MsgType msg_test_prepare = MsgType{3};
+constexpr MsgType msg_test_start = MsgType{4};
+constexpr MsgType msg_test_msg = MsgType{5};
+constexpr MsgType msg_test_finalize = MsgType{6};
+constexpr MsgType msg_error = MsgType{7};
+constexpr MsgType msg_results = MsgType{8};
+constexpr MsgType msg_logout = MsgType{9};
+constexpr MsgType msg_waiting = MsgType{10};
+constexpr MsgType msg_extended_login = MsgType{11};
 
 }  // namespace libndt
 #endif

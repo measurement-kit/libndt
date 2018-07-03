@@ -331,7 +331,7 @@ TEST_CASE("Client::recv_kickoff() deals with invalid kickoff") {
 class FailMsgExpect : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect(uint8_t, std::string *) noexcept override { return false; }
+  bool msg_expect(libndt::MsgType, std::string *) noexcept override { return false; }
 };
 
 TEST_CASE("Client::wait_in_queue() deals with Client::msg_expect() failure") {
@@ -342,7 +342,7 @@ TEST_CASE("Client::wait_in_queue() deals with Client::msg_expect() failure") {
 class ServerBusy : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect(uint8_t, std::string *val) noexcept override {
+  bool msg_expect(libndt::MsgType, std::string *val) noexcept override {
     *val = "9999";
     return true;
   }
@@ -372,7 +372,7 @@ TEST_CASE("Client::recv_tests_ids() deals with Client::msg_expect() failure") {
 class InvalidTestsIds : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect(uint8_t, std::string *val) noexcept override {
+  bool msg_expect(libndt::MsgType, std::string *val) noexcept override {
     *val = "777 888 999";
     return true;
   }
@@ -389,7 +389,7 @@ TEST_CASE("Client::recv_tests_ids() fails with invalid tests ids") {
 class RunTestsMock : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect(uint8_t, std::string *val) noexcept override {
+  bool msg_expect(libndt::MsgType, std::string *val) noexcept override {
     *val = tests_ids;
     return true;
   }
@@ -435,7 +435,7 @@ TEST_CASE("Client::run_tests() deals with unexpected test-id") {
 class FailMsgRead : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_read(uint8_t *, std::string *) noexcept override { return false; }
+  bool msg_read(libndt::MsgType *, std::string *) noexcept override { return false; }
 };
 
 TEST_CASE(
@@ -447,7 +447,7 @@ TEST_CASE(
 class NeitherResultsNorLogout : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_read(uint8_t *code, std::string *msg) noexcept override {
+  bool msg_read(libndt::MsgType *code, std::string *msg) noexcept override {
     *code = libndt::msg_comm_failure;
     *msg = "";
     return true;
@@ -462,7 +462,7 @@ TEST_CASE("Client::recv_results_and_logout() deals with unexpected message") {
 class InvalidResults : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_read(uint8_t *code, std::string *msg) noexcept override {
+  bool msg_read(libndt::MsgType *code, std::string *msg) noexcept override {
     *code = libndt::msg_results;
     *msg = "antani-antani";
     return true;
@@ -477,7 +477,7 @@ TEST_CASE("Client::recv_results_and_logout() deals with invalid results") {
 class TooManyResults : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_read(uint8_t *code, std::string *msg) noexcept override {
+  bool msg_read(libndt::MsgType *code, std::string *msg) noexcept override {
     *code = libndt::msg_results;
     *msg = "antani:antani";
     return true;
@@ -609,7 +609,7 @@ class FailMsgExpectEmpty : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return false; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return false; }
 };
 
 TEST_CASE(
@@ -629,7 +629,7 @@ class FailNetxSelectDuringDownload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::io_error;
@@ -652,7 +652,7 @@ class FailRecvDuringDownload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::none;
@@ -679,7 +679,7 @@ class RecvEofDuringDownload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::none;
@@ -708,7 +708,7 @@ class FailMsgReadLegacyDuringDownload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::none;
@@ -717,7 +717,7 @@ class FailMsgReadLegacyDuringDownload : public libndt::Client {
                         libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
-  bool msg_read_legacy(uint8_t *, std::string *) noexcept override {
+  bool msg_read_legacy(libndt::MsgType *, std::string *) noexcept override {
     return false;
   }
 };
@@ -739,7 +739,7 @@ class RecvNonTestMsgDuringDownload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::none;
@@ -748,7 +748,7 @@ class RecvNonTestMsgDuringDownload : public libndt::Client {
                         libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
-  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
     *code = libndt::msg_logout;
     return true;
   }
@@ -770,7 +770,7 @@ class FailMsgWriteDuringDownload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::none;
@@ -779,11 +779,11 @@ class FailMsgWriteDuringDownload : public libndt::Client {
                         libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
-  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(uint8_t, std::string &&) noexcept override { return false; }
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return false; }
 };
 
 TEST_CASE("Client::run_download() deals with Client::msg_write() failure") {
@@ -802,7 +802,7 @@ class FailMsgReadDuringDownload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::none;
@@ -811,12 +811,12 @@ class FailMsgReadDuringDownload : public libndt::Client {
                         libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
-  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
-  bool msg_read(uint8_t *, std::string *) noexcept override { return false; }
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return true; }
+  bool msg_read(libndt::MsgType *, std::string *) noexcept override { return false; }
 };
 
 TEST_CASE("Client::run_download() deals with Client::msg_read() failure") {
@@ -835,7 +835,7 @@ class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::none;
@@ -844,12 +844,12 @@ class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
                         libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
-  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
-  bool msg_read(uint8_t *code, std::string *) noexcept override {
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return true; }
+  bool msg_read(libndt::MsgType *code, std::string *) noexcept override {
     *code = libndt::msg_login;
     return true;
   }
@@ -871,7 +871,7 @@ class FailEmitResultDuringDownload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::none;
@@ -880,12 +880,12 @@ class FailEmitResultDuringDownload : public libndt::Client {
                         libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
-  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
-  bool msg_read(uint8_t *code, std::string *s) noexcept override {
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return true; }
+  bool msg_read(libndt::MsgType *code, std::string *s) noexcept override {
     *code = libndt::msg_test_msg;
     *s = "antani-antani";  // Causes emit_result() to fail
     return true;
@@ -908,7 +908,7 @@ class TooManyTestMsgsDuringDownload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::none;
@@ -917,12 +917,12 @@ class TooManyTestMsgsDuringDownload : public libndt::Client {
                         libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
-  bool msg_read_legacy(uint8_t *code, std::string *) noexcept override {
+  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
-  bool msg_read(uint8_t *code, std::string *s) noexcept override {
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return true; }
+  bool msg_read(libndt::MsgType *code, std::string *s) noexcept override {
     *code = libndt::msg_test_msg;
     *s = "antani:antani";  // Accepted by emit_result()
     return true;
@@ -940,7 +940,7 @@ TEST_CASE("Client::run_download() deals with too many results messages") {
 class FailFirstMsgExpectEmpty : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_empty(uint8_t) noexcept override { return false; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return false; }
 };
 
 TEST_CASE(
@@ -952,7 +952,7 @@ TEST_CASE(
 class FailSecondMsgExpectEmpty : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_empty(uint8_t code) noexcept override {
+  bool msg_expect_empty(libndt::MsgType code) noexcept override {
     return code == libndt::msg_test_prepare;
   }
 };
@@ -966,8 +966,8 @@ TEST_CASE(
 class FailMsgWriteDuringMeta : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  bool msg_write(uint8_t, std::string &&) noexcept override { return false; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return false; }
 };
 
 TEST_CASE("Client::run_meta() deals with Client::msg_write() failure") {
@@ -978,8 +978,8 @@ TEST_CASE("Client::run_meta() deals with Client::msg_write() failure") {
 class FailFinalMsgWriteDuringMeta : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
-  bool msg_write(uint8_t, std::string &&s) noexcept override { return s != ""; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
+  bool msg_write(libndt::MsgType, std::string &&s) noexcept override { return s != ""; }
 };
 
 TEST_CASE("Client::run_meta() deals with final Client::msg_write() failure") {
@@ -990,10 +990,10 @@ TEST_CASE("Client::run_meta() deals with final Client::msg_write() failure") {
 class FailFinalMsgExpectEmptyDuringMeta : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect_empty(uint8_t code) noexcept override {
+  bool msg_expect_empty(libndt::MsgType code) noexcept override {
     return code != libndt::msg_test_finalize;
   }
-  bool msg_write(uint8_t, std::string &&) noexcept override { return true; }
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return true; }
 };
 
 TEST_CASE(
@@ -1056,7 +1056,7 @@ class FailSendDuringUpload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::none;
@@ -1090,7 +1090,7 @@ class FailMsgExpectDuringUpload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t) noexcept override { return true; }
+  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
                           timeval *) noexcept override {
     return libndt::Err::none;
@@ -1099,7 +1099,7 @@ class FailMsgExpectDuringUpload : public libndt::Client {
                         libndt::Size *) noexcept override {
     return libndt::Err::io_error;
   }
-  bool msg_expect(uint8_t, std::string *) noexcept override { return false; }
+  bool msg_expect(libndt::MsgType, std::string *) noexcept override { return false; }
 };
 
 TEST_CASE("Client::run_upload() deals with Client::msg_expect() failure") {
@@ -1118,7 +1118,7 @@ class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
     *sock = 17 /* Something "valid" */;
     return libndt::Err::none;
   }
-  bool msg_expect_empty(uint8_t code) noexcept override {
+  bool msg_expect_empty(libndt::MsgType code) noexcept override {
     return code != libndt::msg_test_finalize;
   }
   libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
@@ -1129,7 +1129,7 @@ class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
                         libndt::Size *) noexcept override {
     return libndt::Err::io_error;
   }
-  bool msg_expect(uint8_t, std::string *) noexcept override { return true; }
+  bool msg_expect(libndt::MsgType, std::string *) noexcept override { return true; }
 };
 
 TEST_CASE(
@@ -1153,7 +1153,7 @@ TEST_CASE("Client::msg_write_login() deals with invalid protocol") {
 class FailMsgWriteLegacy : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_write_legacy(uint8_t, std::string &&) noexcept override {
+  bool msg_write_legacy(libndt::MsgType, std::string &&) noexcept override {
     return false;
   }
 };
@@ -1167,7 +1167,7 @@ TEST_CASE(
 class ValidatingMsgWriteLegacy : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_write_legacy(uint8_t, std::string &&value) noexcept override {
+  bool msg_write_legacy(libndt::MsgType, std::string &&value) noexcept override {
     auto doc = nlohmann::json::parse(value);
     std::string tests_string = doc.at("tests");
     const char *errstr = nullptr;
@@ -1307,7 +1307,7 @@ TEST_CASE(
 class TooShortVector : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect(uint8_t, std::string *) noexcept override { return true; }
+  bool msg_expect(libndt::MsgType, std::string *) noexcept override { return true; }
 };
 
 TEST_CASE("Client::msg_expect_test_prepare() deals with too-short vector") {
@@ -1320,7 +1320,7 @@ TEST_CASE("Client::msg_expect_test_prepare() deals with too-short vector") {
 class InvalidPortVector : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect(uint8_t, std::string *s) noexcept override {
+  bool msg_expect(libndt::MsgType, std::string *s) noexcept override {
     *s = "65536";
     return true;
   }
@@ -1336,7 +1336,7 @@ TEST_CASE("Client::msg_expect_test_prepare() deals with invalid port") {
 class InvalidNumFlowsVector : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect(uint8_t, std::string *s) noexcept override {
+  bool msg_expect(libndt::MsgType, std::string *s) noexcept override {
     *s = "65530 xx xx xx xx 32";
     return true;
   }
@@ -1361,7 +1361,7 @@ TEST_CASE(
 class NonEmptyMessage : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect(uint8_t, std::string *s) noexcept override {
+  bool msg_expect(libndt::MsgType, std::string *s) noexcept override {
     *s = "asd asd asd";
     return true;
   }
@@ -1393,14 +1393,14 @@ TEST_CASE("Client::msg_expect() deals with unexpected message") {
 class FailMsgReadLegacy : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_read_legacy(uint8_t *, std::string *) noexcept override {
+  bool msg_read_legacy(libndt::MsgType *, std::string *) noexcept override {
     return false;
   }
 };
 
 TEST_CASE("Client::msg_read() deals with Client::msg_read_legacy() failure") {
   FailMsgReadLegacy client;
-  uint8_t code = 0;
+  libndt::MsgType code = libndt::MsgType{0};
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
 }
@@ -1408,7 +1408,7 @@ TEST_CASE("Client::msg_read() deals with Client::msg_read_legacy() failure") {
 class ReadInvalidJson : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_read_legacy(uint8_t *, std::string *s) noexcept override {
+  bool msg_read_legacy(libndt::MsgType *, std::string *s) noexcept override {
     *s = "{{{";
     return true;
   }
@@ -1418,7 +1418,7 @@ TEST_CASE("Client::msg_read() deals with invalid JSON") {
   libndt::Settings settings;
   settings.protocol_flags = libndt::protocol_flag_json;
   ReadInvalidJson client{settings};
-  uint8_t code = 0;
+  libndt::MsgType code = libndt::MsgType{0};
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
 }
@@ -1426,7 +1426,7 @@ TEST_CASE("Client::msg_read() deals with invalid JSON") {
 class ReadIncompleteJson : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_read_legacy(uint8_t *, std::string *s) noexcept override {
+  bool msg_read_legacy(libndt::MsgType *, std::string *s) noexcept override {
     *s = "{}";
     return true;
   }
@@ -1436,7 +1436,7 @@ TEST_CASE("Client::msg_read() deals with incomplete JSON") {
   libndt::Settings settings;
   settings.protocol_flags = libndt::protocol_flag_json;
   ReadIncompleteJson client{settings};
-  uint8_t code = 0;
+  libndt::MsgType code = libndt::MsgType{0};
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
 }
@@ -1444,7 +1444,7 @@ TEST_CASE("Client::msg_read() deals with incomplete JSON") {
 class OkayMsgReadLegacy : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_read_legacy(uint8_t *, std::string *) noexcept override {
+  bool msg_read_legacy(libndt::MsgType *, std::string *) noexcept override {
     return true;
   }
 };
@@ -1454,7 +1454,7 @@ TEST_CASE("Client::msg_read() deals with unknown protocol") {
   // That is, more precisely, a valid but unimplemented proto
   settings.protocol_flags = libndt::protocol_flag_websockets;
   OkayMsgReadLegacy client{settings};
-  uint8_t code = 0;
+  libndt::MsgType code = libndt::MsgType{0};
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
 }
@@ -1467,7 +1467,7 @@ TEST_CASE(
     "header") {
   FailNetxRecvn client;
   client.set_last_system_error(0);
-  uint8_t code = 0;
+  libndt::MsgType code = libndt::MsgType{0};
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
 }
@@ -1493,7 +1493,7 @@ TEST_CASE(
     "message") {
   FailLargeNetxRecvn client;
   client.set_last_system_error(0);
-  uint8_t code = 0;
+  libndt::MsgType code = libndt::MsgType{0};
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
 }
