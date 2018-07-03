@@ -1515,7 +1515,7 @@ again:
 
 // Dependencies (curl)
 
-uint32_t Client::get_verbosity() const noexcept {
+Verbosity Client::get_verbosity() const noexcept {
   return impl->settings.verbosity;
 }
 

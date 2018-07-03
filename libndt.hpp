@@ -75,17 +75,47 @@ constexpr uint8_t nettest_flag_upload_ext = 1U << 6;
 /// The multi-stream download net test.
 constexpr uint8_t nettest_flag_download_ext = 1U << 7;
 
+#if 0
+class Verbosity {
+ public:
+  explicit Verbosity(unsigned int v) noexcept : value_{v} {}
+  bool operator==(const Verbosity &other) const noexcept {
+    return value_ == other.value_;
+  }
+  bool operator!=(const Verbosity &other) const noexcept {
+    return value_ != other.value_;
+  }
+  bool operator<(const Verbosity &other) const noexcept {
+    return value_ < other.value_;
+  }
+  bool operator>=(const Verbosity &other) const noexcept {
+    return value_ >= other.value_;
+  }
+  bool operator&(const Verbosity &other) const noexcept {
+    return value_ & other.value_;
+  }
+  unsigned int as_value() const noexcept { return value_; }
+ private:
+  unsigned int value_;
+};
+#define constexpr const
+#undef constexpr
+#endif
+
+/// Library's logging verbosity.
+using Verbosity = unsigned int;
+
 /// Do not emit any log message.
-constexpr uint32_t verbosity_quiet = 0;
+constexpr Verbosity verbosity_quiet = Verbosity{0};
 
 /// Emit only warning messages.
-constexpr uint32_t verbosity_warning = 1;
+constexpr Verbosity verbosity_warning = Verbosity{1};
 
 /// Emit warning and informational messages.
-constexpr uint32_t verbosity_info = 2;
+constexpr Verbosity verbosity_info = Verbosity{2};
 
 /// Emit all log messages.
-constexpr uint32_t verbosity_debug = 3;
+constexpr Verbosity verbosity_debug = Verbosity{3};
 
 constexpr const char *ndt_version_compat = "v3.7.0";
 
@@ -96,30 +126,6 @@ using Ssize = int64_t;
 using Socket = int64_t;
 
 using SockLen = int;
-
-#if 0
-class ProtocolFlags {
- public:
-  explicit ProtocolFlags(unsigned int v) noexcept : value_{v} {}
-  bool operator==(const ProtocolFlags &other) const noexcept {
-    return value_ == other.value_;
-  }
-  bool operator!=(const ProtocolFlags &other) const noexcept {
-    return value_ != other.value_;
-  }
-  bool operator<(const ProtocolFlags &other) const noexcept {
-    return value_ < other.value_;
-  }
-  bool operator&(const ProtocolFlags &other) const noexcept {
-    return value_ & other.value_;
-  }
-  unsigned int as_value() const noexcept { return value_; }
- private:
-  unsigned int value_;
-};
-#define constexpr const
-#undef constexpr
-#endif
 
 /// Flags to select what protocol should be used.
 using ProtocolFlags = unsigned int;
@@ -162,7 +168,7 @@ class Settings {
 
   /// Verbosity of the client. By default no message is emitted. Set to other
   /// values to get more messages (useful when debugging).
-  uint32_t verbosity = verbosity_quiet;
+  Verbosity verbosity = verbosity_quiet;
 
   /// Metadata to include in the server side logs. By default we just identify
   /// the NDT version and the application.
@@ -348,7 +354,7 @@ class Client {
 
   // Dependencies (cURL)
 
-  uint32_t get_verbosity() const noexcept;
+  Verbosity get_verbosity() const noexcept;
 
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
