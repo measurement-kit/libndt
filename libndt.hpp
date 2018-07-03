@@ -124,7 +124,7 @@ constexpr ProtocolFlags protocol_flag_websockets = ProtocolFlags{1 << 2};
 enum class Err;  // Forward declaration (see bottom of this file)
 
 /// Timeout expressed in seconds.
-using Timeout = unsigned short;
+using Timeout = unsigned int;
 
 /// NDT client settings. If you do not customize the settings when creating
 /// a Client, the defaults listed below will be used instead.
