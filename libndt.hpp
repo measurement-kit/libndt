@@ -97,17 +97,44 @@ using Socket = int64_t;
 
 using SockLen = int;
 
+#if 0
+class ProtocolFlags {
+ public:
+  explicit ProtocolFlags(unsigned int v) noexcept : value_{v} {}
+  bool operator==(const ProtocolFlags &other) const noexcept {
+    return value_ == other.value_;
+  }
+  bool operator!=(const ProtocolFlags &other) const noexcept {
+    return value_ != other.value_;
+  }
+  bool operator<(const ProtocolFlags &other) const noexcept {
+    return value_ < other.value_;
+  }
+  bool operator&(const ProtocolFlags &other) const noexcept {
+    return value_ & other.value_;
+  }
+  unsigned int as_value() const noexcept { return value_; }
+ private:
+  unsigned int value_;
+};
+#define constexpr const
+#undef constexpr
+#endif
+
+/// Flags to select what protocol should be used.
+using ProtocolFlags = unsigned int;
+
 /// When this flag is set we use JSON messages. This specifically means that
 /// we send and receive JSON messages (as opposed to raw strings).
-constexpr uint32_t protocol_flag_json = (1 << 0);
+constexpr ProtocolFlags protocol_flag_json = ProtocolFlags{1 << 0};
 
 /// When this flag is set we use TLS. This specifically means that we will
 /// use TLS channels for the control and the measurement connections.
-constexpr uint32_t protocol_flag_tls = (1 << 1);
+constexpr ProtocolFlags protocol_flag_tls = ProtocolFlags{1 << 1};
 
 /// When this flag is set we use WebSockets. This specifically means that
 /// we use the WebSockets framing (as opposed to the original binary framing).
-constexpr uint32_t protocol_flag_websockets = (1 << 2);
+constexpr ProtocolFlags protocol_flag_websockets = ProtocolFlags{1 << 2};
 
 enum class Err;  // Forward declaration (see bottom of this file)
 
@@ -147,7 +174,7 @@ class Settings {
   /// Type of NDT protocol that you want to use. Depending on the requested
   /// protocol, you may need to change also the port. By default, NDT listens
   /// on port 3001 for in-clear communications and port 3010 for TLS ones.
-  uint32_t protocol_flags = 0;
+  ProtocolFlags protocol_flags = ProtocolFlags{0};
 
   /// Maximum time for which a nettest (i.e. download) is allowed to run. After
   /// this time has elapsed, the code will stop downloading (or uploading). It
