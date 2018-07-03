@@ -692,7 +692,7 @@ class RecvEofDuringDownload : public libndt::Client {
 
 TEST_CASE("Client::run_download() honours max_runtime") {
   libndt::Settings settings;
-  settings.max_runtime = 0;
+  settings.max_runtime = libndt::Timeout{0};
   RecvEofDuringDownload client{settings};
   REQUIRE(client.run_download() == false);
 }
@@ -1074,7 +1074,7 @@ TEST_CASE("Client::run_upload() deals with Client::send() failure") {
 
 TEST_CASE("Client::run_upload() honours max_runtime") {
   libndt::Settings settings;
-  settings.max_runtime = 0;
+  settings.max_runtime = libndt::Timeout{0};
   FailSendDuringUpload client{settings};
   REQUIRE(client.run_upload() == false);
 }

@@ -59,51 +59,6 @@ constexpr Version version_minor = Version{24};
 /// Patch API version number of measurement-kit/libndt.
 constexpr Version version_patch = Version{0};
 
-#if 0
-class NettestFlags {
- public:
-  //explicit NettestFlags(char v) noexcept : value_{(unsigned char)v} {}
-  explicit NettestFlags(unsigned char v) noexcept : value_{v} {}
-  bool operator==(const NettestFlags &other) const noexcept {
-    return value_ == other.value_;
-  }
-  bool operator!=(const NettestFlags &other) const noexcept {
-    return value_ != other.value_;
-  }
-  bool operator<(const NettestFlags &other) const noexcept {
-    return value_ < other.value_;
-  }
-  bool operator>=(const NettestFlags &other) const noexcept {
-    return value_ >= other.value_;
-  }
-  NettestFlags operator&(const NettestFlags &other) const noexcept {
-    unsigned char v = value_ & other.value_;
-    return NettestFlags{v};
-  }
-  NettestFlags operator|(const NettestFlags &other) const noexcept {
-    unsigned char v = value_ | other.value_;
-    return NettestFlags{v};
-  }
-  NettestFlags operator~() const noexcept {
-    unsigned char v = ~value_;
-    return NettestFlags{v};
-  }
-  NettestFlags &operator|=(const NettestFlags &other)  noexcept {
-    value_ |= other.value_;
-    return *this;
-  }
-  NettestFlags &operator&=(const NettestFlags &other)  noexcept {
-    value_ &= other.value_;
-    return *this;
-  }
-  unsigned char as_value() const noexcept { return value_; }
- private:
-  unsigned char value_;
-};
-#define constexpr const
-#undef constexpr
-#endif
-
 /// Flags that indicate what subtests to run.
 using NettestFlags = unsigned char;
 
@@ -168,6 +123,9 @@ constexpr ProtocolFlags protocol_flag_websockets = ProtocolFlags{1 << 2};
 
 enum class Err;  // Forward declaration (see bottom of this file)
 
+/// Timeout expressed in seconds.
+using Timeout = unsigned short;
+
 /// NDT client settings. If you do not customize the settings when creating
 /// a Client, the defaults listed below will be used instead.
 class Settings {
@@ -178,7 +136,7 @@ class Settings {
 
   /// Timeout used for I/O operations. \bug in v0.23.0 this timeout is only
   /// used for cURL operations, but this will be fixed in v0.24.0.
-  uint16_t timeout = 3 /* seconds */;
+  Timeout timeout = Timeout{3} /* seconds */;
 
   /// Host name of the NDT server to use. If this is left blank (the default),
   /// we will use mlab-ns to discover a nearby server.
@@ -210,7 +168,7 @@ class Settings {
   /// this time has elapsed, the code will stop downloading (or uploading). It
   /// is meant as a safeguard to prevent the test for running for much more time
   /// than anticipated, due to buffering and/or changing network conditions.
-  uint16_t max_runtime = 14 /* seconds */;
+  Timeout max_runtime = Timeout{14} /* seconds */;
 
   /// SOCKSv5h port to use for tunnelling traffic using, e.g., Tor. If non
   /// empty, all DNS and TCP traffic should be tunnelled over such port.
