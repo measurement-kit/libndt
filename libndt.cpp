@@ -87,7 +87,7 @@ constexpr size_t msg_kickoff_size = sizeof(msg_kickoff) - 1;
 class Client::Impl {
  public:
   Socket sock = -1;
-  std::vector<uint64_t> granted_suite;
+  std::vector<NettestFlags> granted_suite;
   Settings settings;
 };
 
@@ -256,9 +256,9 @@ void Client::on_debug(const std::string &msg) {
   std::clog << "[D] " << msg << std::endl;
 }
 
-void Client::on_performance(uint8_t tid, uint8_t nflows, double measured_bytes,
-                            double measured_interval, double elapsed_time,
-                            double max_runtime) {
+void Client::on_performance(NettestFlags tid, uint8_t nflows,
+                            double measured_bytes, double measured_interval,
+                            double elapsed_time, double max_runtime) {
   auto speed = compute_speed(measured_bytes, measured_interval);
   EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
                   << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
@@ -365,42 +365,40 @@ bool Client::recv_tests_ids() noexcept {
   std::string cur;
   while ((std::getline(ss, cur, ' '))) {
     const char *errstr = nullptr;
-    uint8_t tid = (uint8_t)this->strtonum(cur.data(), 1, 256, &errstr);
+    static_assert(sizeof (NettestFlags) == sizeof (uint8_t),
+                  "Invalid NettestFlags size");
+    auto tid = (uint8_t)this->strtonum(cur.data(), 1, 256, &errstr);
     if (errstr != nullptr) {
       EMIT_WARNING("recv_tests_ids: found invalid test-id: "
                    << cur.data() << " (error: " << errstr << ")");
       return false;
     }
-    impl->granted_suite.push_back(tid);
+    impl->granted_suite.push_back(NettestFlags{tid});
   }
   return true;
 }
 
 bool Client::run_tests() noexcept {
   for (auto &tid : impl->granted_suite) {
-    switch (tid) {
-      case nettest_flag_upload:
-        EMIT_INFO("running upload test");
-        if (!run_upload()) {
-          return false;
-        }
-        break;
-      case nettest_flag_meta:
-        EMIT_DEBUG("running meta test");  // don't annoy the user with this
-        if (!run_meta()) {
-          return false;
-        }
-        break;
-      case nettest_flag_download:
-      case nettest_flag_download_ext:
-        EMIT_INFO("running download test");
-        if (!run_download()) {
-          return false;
-        }
-        break;
-      default:
-        EMIT_WARNING("run_tests(): unexpected test id");
+    if (tid == nettest_flag_upload) {
+      EMIT_INFO("running upload test");
+      if (!run_upload()) {
         return false;
+      }
+    } else if (tid == nettest_flag_meta) {
+      EMIT_DEBUG("running meta test");  // don't annoy the user with this
+      if (!run_meta()) {
+        return false;
+      }
+    } else if (tid == nettest_flag_download ||
+               tid == nettest_flag_download_ext) {
+      EMIT_INFO("running download test");
+      if (!run_download()) {
+        return false;
+      }
+    } else {
+      EMIT_WARNING("run_tests(): unexpected test id");
+      return false;
     }
   }
   return true;
@@ -754,16 +752,16 @@ bool Client::msg_write_login(const std::string &version) noexcept {
                 "nettest_flags too large");
   MsgType code = MsgType{0};
   impl->settings.nettest_flags |= nettest_flag_status | nettest_flag_meta;
-  if ((impl->settings.nettest_flags & nettest_flag_middlebox)) {
+  if ((impl->settings.nettest_flags & nettest_flag_middlebox) != NettestFlags{0}) {
     EMIT_WARNING("msg_write_login(): nettest_flag_middlebox: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_middlebox;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_simple_firewall)) {
+  if ((impl->settings.nettest_flags & nettest_flag_simple_firewall) != NettestFlags{0}) {
     EMIT_WARNING(
         "msg_write_login(): nettest_flag_simple_firewall: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_simple_firewall;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_upload_ext)) {
+  if ((impl->settings.nettest_flags & nettest_flag_upload_ext) != NettestFlags{0}) {
     EMIT_WARNING("msg_write_login(): nettest_flag_upload_ext: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_upload_ext;
   }

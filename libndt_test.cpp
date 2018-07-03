@@ -1171,11 +1171,11 @@ class ValidatingMsgWriteLegacy : public libndt::Client {
     auto doc = nlohmann::json::parse(value);
     std::string tests_string = doc.at("tests");
     const char *errstr = nullptr;
-    auto tests = this->strtonum(tests_string.c_str(), 0, 256, &errstr);
+    libndt::NettestFlags tests{(uint8_t)this->strtonum(tests_string.c_str(), 0, 256, &errstr)};
     REQUIRE(errstr == nullptr);
-    REQUIRE((tests & libndt::nettest_flag_middlebox) == 0);
-    REQUIRE((tests & libndt::nettest_flag_simple_firewall) == 0);
-    REQUIRE((tests & libndt::nettest_flag_upload_ext) == 0);
+    REQUIRE((tests & libndt::nettest_flag_middlebox) == libndt::NettestFlags{0});
+    REQUIRE((tests & libndt::nettest_flag_simple_firewall) == libndt::NettestFlags{0});
+    REQUIRE((tests & libndt::nettest_flag_upload_ext) == libndt::NettestFlags{0});
     return true;
   }
 };
@@ -1183,7 +1183,7 @@ class ValidatingMsgWriteLegacy : public libndt::Client {
 TEST_CASE("Client::msg_write_login() does not propagate unknown tests ids") {
   libndt::Settings settings;
   settings.protocol_flags = libndt::protocol_flag_json;
-  settings.nettest_flags = 0xff;
+  settings.nettest_flags = libndt::NettestFlags{0xff};
   ValidatingMsgWriteLegacy client{settings};
   REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == true);
 }

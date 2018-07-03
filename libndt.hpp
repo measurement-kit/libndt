@@ -59,24 +59,72 @@ constexpr Version version_minor = Version{24};
 /// Patch API version number of measurement-kit/libndt.
 constexpr Version version_patch = Version{0};
 
-constexpr uint8_t nettest_flag_middlebox = 1U << 0;
+#if 0
+class NettestFlags {
+ public:
+  //explicit NettestFlags(char v) noexcept : value_{(unsigned char)v} {}
+  explicit NettestFlags(unsigned char v) noexcept : value_{v} {}
+  bool operator==(const NettestFlags &other) const noexcept {
+    return value_ == other.value_;
+  }
+  bool operator!=(const NettestFlags &other) const noexcept {
+    return value_ != other.value_;
+  }
+  bool operator<(const NettestFlags &other) const noexcept {
+    return value_ < other.value_;
+  }
+  bool operator>=(const NettestFlags &other) const noexcept {
+    return value_ >= other.value_;
+  }
+  NettestFlags operator&(const NettestFlags &other) const noexcept {
+    unsigned char v = value_ & other.value_;
+    return NettestFlags{v};
+  }
+  NettestFlags operator|(const NettestFlags &other) const noexcept {
+    unsigned char v = value_ | other.value_;
+    return NettestFlags{v};
+  }
+  NettestFlags operator~() const noexcept {
+    unsigned char v = ~value_;
+    return NettestFlags{v};
+  }
+  NettestFlags &operator|=(const NettestFlags &other)  noexcept {
+    value_ |= other.value_;
+    return *this;
+  }
+  NettestFlags &operator&=(const NettestFlags &other)  noexcept {
+    value_ &= other.value_;
+    return *this;
+  }
+  unsigned char as_value() const noexcept { return value_; }
+ private:
+  unsigned char value_;
+};
+#define constexpr const
+#undef constexpr
+#endif
 
-/// The upload net test.
-constexpr uint8_t nettest_flag_upload = 1U << 1;
+/// Flags that indicate what subtests to run.
+using NettestFlags = unsigned char;
 
-/// The download net test.
-constexpr uint8_t nettest_flag_download = 1U << 2;
+constexpr NettestFlags nettest_flag_middlebox = NettestFlags{1U << 0};
 
-constexpr uint8_t nettest_flag_simple_firewall = 1U << 3;
+/// Run the upload subtest.
+constexpr NettestFlags nettest_flag_upload = NettestFlags{1U << 1};
 
-constexpr uint8_t nettest_flag_status = 1U << 4;
+/// Run the download subtest.
+constexpr NettestFlags nettest_flag_download = NettestFlags{1U << 2};
 
-constexpr uint8_t nettest_flag_meta = 1U << 5;
+constexpr NettestFlags nettest_flag_simple_firewall = NettestFlags{1U << 3};
 
-constexpr uint8_t nettest_flag_upload_ext = 1U << 6;
+constexpr NettestFlags nettest_flag_status = NettestFlags{1U << 4};
 
-/// The multi-stream download net test.
-constexpr uint8_t nettest_flag_download_ext = 1U << 7;
+constexpr NettestFlags nettest_flag_meta = NettestFlags{1U << 5};
+
+constexpr NettestFlags nettest_flag_upload_ext = NettestFlags{1U << 6};
+
+/// Run the multi-stream download subtest.
+constexpr NettestFlags nettest_flag_download_ext = NettestFlags{1U << 7};
 
 /// Library's logging verbosity.
 using Verbosity = unsigned int;
@@ -140,7 +188,7 @@ class Settings {
   std::string port = "3001";
 
   /// The tests you want to run with the NDT server.
-  uint8_t nettest_flags = nettest_flag_download;
+  NettestFlags nettest_flags = nettest_flag_download;
 
   /// Verbosity of the client. By default no message is emitted. Set to other
   /// values to get more messages (useful when debugging).
@@ -168,34 +216,6 @@ class Settings {
   /// empty, all DNS and TCP traffic should be tunnelled over such port.
   std::string socks5h_port;
 };
-
-#if 0
-class MsgType {
- public:
-  //explicit MsgType(char v) noexcept : value_{(unsigned char)v} {}
-  explicit MsgType(unsigned char v) noexcept : value_{v} {}
-  bool operator==(const MsgType &other) const noexcept {
-    return value_ == other.value_;
-  }
-  bool operator!=(const MsgType &other) const noexcept {
-    return value_ != other.value_;
-  }
-  bool operator<(const MsgType &other) const noexcept {
-    return value_ < other.value_;
-  }
-  bool operator>=(const MsgType &other) const noexcept {
-    return value_ >= other.value_;
-  }
-  bool operator&(const MsgType &other) const noexcept {
-    return value_ & other.value_;
-  }
-  unsigned char as_value() const noexcept { return value_; }
- private:
-  unsigned char value_;
-};
-#define constexpr const
-#undef constexpr
-#endif
 
 using MsgType = unsigned char;
 
@@ -255,7 +275,7 @@ class Client {
   /// get the percentage of completion of the current nettest. @remark We
   /// provide you with @p tid, so you know whether the nettest is downloading
   /// bytes from the server or uploading bytes to the server.
-  virtual void on_performance(uint8_t tid, uint8_t nflows,
+  virtual void on_performance(NettestFlags tid, uint8_t nflows,
                               double measured_bytes,
                               double measurement_interval, double elapsed,
                               double max_runtime);

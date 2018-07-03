@@ -32,7 +32,7 @@ static void usage() {
 int main(int, char **argv) {
   libndt::Settings settings;
   settings.verbosity = libndt::verbosity_quiet;
-  settings.nettest_flags = 0;  // you need to enable tests explicitly
+  settings.nettest_flags = libndt::NettestFlags{0};  // you need to enable tests explicitly
 
   {
     argh::parser cmdline;
