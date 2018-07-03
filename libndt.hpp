@@ -47,14 +47,44 @@
 /// Contains measurement-kit/libndt code.
 namespace libndt {
 
+#if 0
+class Version {
+ public:
+  explicit Version(unsigned int v) noexcept : value_{v} {}
+  bool operator==(const Version &other) const noexcept {
+    return value_ == other.value_;
+  }
+  bool operator!=(const Version &other) const noexcept {
+    return value_ != other.value_;
+  }
+  bool operator<(const Version &other) const noexcept {
+    return value_ < other.value_;
+  }
+  bool operator>=(const Version &other) const noexcept {
+    return value_ >= other.value_;
+  }
+  bool operator&(const Version &other) const noexcept {
+    return value_ & other.value_;
+  }
+  unsigned int as_value() const noexcept { return value_; }
+ private:
+  unsigned int value_;
+};
+#define constexpr const
+#undef constexpr
+#endif
+
+/// Type containing a version number.
+using Version = unsigned int;
+
 /// Major API version number of measurement-kit/libndt.
-constexpr uint32_t version_major = 0;
+constexpr Version version_major = Version{0};
 
 /// Minor API version number of measurement-kit/libndt.
-constexpr uint32_t version_minor = 24;
+constexpr Version version_minor = Version{24};
 
 /// Patch API version number of measurement-kit/libndt.
-constexpr uint32_t version_patch = 0;
+constexpr Version version_patch = Version{0};
 
 constexpr uint8_t nettest_flag_middlebox = 1U << 0;
 
@@ -74,33 +104,6 @@ constexpr uint8_t nettest_flag_upload_ext = 1U << 6;
 
 /// The multi-stream download net test.
 constexpr uint8_t nettest_flag_download_ext = 1U << 7;
-
-#if 0
-class Verbosity {
- public:
-  explicit Verbosity(unsigned int v) noexcept : value_{v} {}
-  bool operator==(const Verbosity &other) const noexcept {
-    return value_ == other.value_;
-  }
-  bool operator!=(const Verbosity &other) const noexcept {
-    return value_ != other.value_;
-  }
-  bool operator<(const Verbosity &other) const noexcept {
-    return value_ < other.value_;
-  }
-  bool operator>=(const Verbosity &other) const noexcept {
-    return value_ >= other.value_;
-  }
-  bool operator&(const Verbosity &other) const noexcept {
-    return value_ & other.value_;
-  }
-  unsigned int as_value() const noexcept { return value_; }
- private:
-  unsigned int value_;
-};
-#define constexpr const
-#undef constexpr
-#endif
 
 /// Library's logging verbosity.
 using Verbosity = unsigned int;
