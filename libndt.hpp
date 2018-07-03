@@ -54,7 +54,7 @@ using Version = unsigned int;
 constexpr Version version_major = Version{0};
 
 /// Minor API version number of measurement-kit/libndt.
-constexpr Version version_minor = Version{24};
+constexpr Version version_minor = Version{25};
 
 /// Patch API version number of measurement-kit/libndt.
 constexpr Version version_patch = Version{0};
@@ -135,7 +135,7 @@ class Settings {
   std::string mlabns_url = "https://mlab-ns.appspot.com/ndt";
 
   /// Timeout used for I/O operations. \bug in v0.23.0 this timeout is only
-  /// used for cURL operations, but this will be fixed in v0.24.0.
+  /// used for cURL operations, but this will be fixed in v0.25.0.
   Timeout timeout = Timeout{3} /* seconds */;
 
   /// Host name of the NDT server to use. If this is left blank (the default),
