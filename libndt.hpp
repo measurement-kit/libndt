@@ -47,45 +47,54 @@
 /// Contains measurement-kit/libndt code.
 namespace libndt {
 
+/// Type containing a version number.
+using Version = unsigned int;
+
 /// Major API version number of measurement-kit/libndt.
-constexpr uint32_t version_major = 0;
+constexpr Version version_major = Version{0};
 
 /// Minor API version number of measurement-kit/libndt.
-constexpr uint32_t version_minor = 24;
+constexpr Version version_minor = Version{24};
 
 /// Patch API version number of measurement-kit/libndt.
-constexpr uint32_t version_patch = 0;
+constexpr Version version_patch = Version{0};
 
-constexpr uint8_t nettest_flag_middlebox = 1U << 0;
+/// Flags that indicate what subtests to run.
+using NettestFlags = unsigned char;
 
-/// The upload net test.
-constexpr uint8_t nettest_flag_upload = 1U << 1;
+constexpr NettestFlags nettest_flag_middlebox = NettestFlags{1U << 0};
 
-/// The download net test.
-constexpr uint8_t nettest_flag_download = 1U << 2;
+/// Run the upload subtest.
+constexpr NettestFlags nettest_flag_upload = NettestFlags{1U << 1};
 
-constexpr uint8_t nettest_flag_simple_firewall = 1U << 3;
+/// Run the download subtest.
+constexpr NettestFlags nettest_flag_download = NettestFlags{1U << 2};
 
-constexpr uint8_t nettest_flag_status = 1U << 4;
+constexpr NettestFlags nettest_flag_simple_firewall = NettestFlags{1U << 3};
 
-constexpr uint8_t nettest_flag_meta = 1U << 5;
+constexpr NettestFlags nettest_flag_status = NettestFlags{1U << 4};
 
-constexpr uint8_t nettest_flag_upload_ext = 1U << 6;
+constexpr NettestFlags nettest_flag_meta = NettestFlags{1U << 5};
 
-/// The multi-stream download net test.
-constexpr uint8_t nettest_flag_download_ext = 1U << 7;
+constexpr NettestFlags nettest_flag_upload_ext = NettestFlags{1U << 6};
+
+/// Run the multi-stream download subtest.
+constexpr NettestFlags nettest_flag_download_ext = NettestFlags{1U << 7};
+
+/// Library's logging verbosity.
+using Verbosity = unsigned int;
 
 /// Do not emit any log message.
-constexpr uint32_t verbosity_quiet = 0;
+constexpr Verbosity verbosity_quiet = Verbosity{0};
 
 /// Emit only warning messages.
-constexpr uint32_t verbosity_warning = 1;
+constexpr Verbosity verbosity_warning = Verbosity{1};
 
 /// Emit warning and informational messages.
-constexpr uint32_t verbosity_info = 2;
+constexpr Verbosity verbosity_info = Verbosity{2};
 
 /// Emit all log messages.
-constexpr uint32_t verbosity_debug = 3;
+constexpr Verbosity verbosity_debug = Verbosity{3};
 
 constexpr const char *ndt_version_compat = "v3.7.0";
 
@@ -97,19 +106,25 @@ using Socket = int64_t;
 
 using SockLen = int;
 
+/// Flags to select what protocol should be used.
+using ProtocolFlags = unsigned int;
+
 /// When this flag is set we use JSON messages. This specifically means that
 /// we send and receive JSON messages (as opposed to raw strings).
-constexpr uint32_t protocol_flag_json = (1 << 0);
+constexpr ProtocolFlags protocol_flag_json = ProtocolFlags{1 << 0};
 
 /// When this flag is set we use TLS. This specifically means that we will
 /// use TLS channels for the control and the measurement connections.
-constexpr uint32_t protocol_flag_tls = (1 << 1);
+constexpr ProtocolFlags protocol_flag_tls = ProtocolFlags{1 << 1};
 
 /// When this flag is set we use WebSockets. This specifically means that
 /// we use the WebSockets framing (as opposed to the original binary framing).
-constexpr uint32_t protocol_flag_websockets = (1 << 2);
+constexpr ProtocolFlags protocol_flag_websockets = ProtocolFlags{1 << 2};
 
 enum class Err;  // Forward declaration (see bottom of this file)
+
+/// Timeout expressed in seconds.
+using Timeout = unsigned int;
 
 /// NDT client settings. If you do not customize the settings when creating
 /// a Client, the defaults listed below will be used instead.
@@ -121,7 +136,7 @@ class Settings {
 
   /// Timeout used for I/O operations. \bug in v0.23.0 this timeout is only
   /// used for cURL operations, but this will be fixed in v0.24.0.
-  uint16_t timeout = 3 /* seconds */;
+  Timeout timeout = Timeout{3} /* seconds */;
 
   /// Host name of the NDT server to use. If this is left blank (the default),
   /// we will use mlab-ns to discover a nearby server.
@@ -131,11 +146,11 @@ class Settings {
   std::string port = "3001";
 
   /// The tests you want to run with the NDT server.
-  uint8_t nettest_flags = nettest_flag_download;
+  NettestFlags nettest_flags = nettest_flag_download;
 
   /// Verbosity of the client. By default no message is emitted. Set to other
   /// values to get more messages (useful when debugging).
-  uint32_t verbosity = verbosity_quiet;
+  Verbosity verbosity = verbosity_quiet;
 
   /// Metadata to include in the server side logs. By default we just identify
   /// the NDT version and the application.
@@ -147,18 +162,20 @@ class Settings {
   /// Type of NDT protocol that you want to use. Depending on the requested
   /// protocol, you may need to change also the port. By default, NDT listens
   /// on port 3001 for in-clear communications and port 3010 for TLS ones.
-  uint32_t protocol_flags = 0;
+  ProtocolFlags protocol_flags = ProtocolFlags{0};
 
   /// Maximum time for which a nettest (i.e. download) is allowed to run. After
   /// this time has elapsed, the code will stop downloading (or uploading). It
   /// is meant as a safeguard to prevent the test for running for much more time
   /// than anticipated, due to buffering and/or changing network conditions.
-  uint16_t max_runtime = 14 /* seconds */;
+  Timeout max_runtime = Timeout{14} /* seconds */;
 
   /// SOCKSv5h port to use for tunnelling traffic using, e.g., Tor. If non
   /// empty, all DNS and TCP traffic should be tunnelled over such port.
   std::string socks5h_port;
 };
+
+using MsgType = unsigned char;
 
 /// NDT client. In the typical usage, you just need to construct a Client,
 /// optionally providing settings, and to call the run() method. More advanced
@@ -216,7 +233,7 @@ class Client {
   /// get the percentage of completion of the current nettest. @remark We
   /// provide you with @p tid, so you know whether the nettest is downloading
   /// bytes from the server or uploading bytes to the server.
-  virtual void on_performance(uint8_t tid, uint8_t nflows,
+  virtual void on_performance(NettestFlags tid, uint8_t nflows,
                               double measured_bytes,
                               double measurement_interval, double elapsed,
                               double max_runtime);
@@ -273,20 +290,20 @@ class Client {
 
   bool msg_write_login(const std::string &version) noexcept;
 
-  virtual bool msg_write(uint8_t code, std::string &&msg) noexcept;
+  virtual bool msg_write(MsgType code, std::string &&msg) noexcept;
 
-  virtual bool msg_write_legacy(uint8_t code, std::string &&msg) noexcept;
+  virtual bool msg_write_legacy(MsgType code, std::string &&msg) noexcept;
 
   virtual bool msg_expect_test_prepare(  //
       std::string *pport, uint8_t *pnflows) noexcept;
 
-  virtual bool msg_expect_empty(uint8_t code) noexcept;
+  virtual bool msg_expect_empty(MsgType code) noexcept;
 
-  virtual bool msg_expect(uint8_t code, std::string *msg) noexcept;
+  virtual bool msg_expect(MsgType code, std::string *msg) noexcept;
 
-  virtual bool msg_read(uint8_t *code, std::string *msg) noexcept;
+  virtual bool msg_read(MsgType *code, std::string *msg) noexcept;
 
-  virtual bool msg_read_legacy(uint8_t *code, std::string *msg) noexcept;
+  virtual bool msg_read_legacy(MsgType *code, std::string *msg) noexcept;
 
   // Networking layer
 
@@ -321,7 +338,7 @@ class Client {
 
   // Dependencies (cURL)
 
-  uint32_t get_verbosity() const noexcept;
+  Verbosity get_verbosity() const noexcept;
 
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
@@ -366,19 +383,6 @@ class Client {
   std::unique_ptr<Impl> impl;
 };
 
-constexpr uint8_t msg_comm_failure = 0;
-constexpr uint8_t msg_srv_queue = 1;
-constexpr uint8_t msg_login = 2;
-constexpr uint8_t msg_test_prepare = 3;
-constexpr uint8_t msg_test_start = 4;
-constexpr uint8_t msg_test_msg = 5;
-constexpr uint8_t msg_test_finalize = 6;
-constexpr uint8_t msg_error = 7;
-constexpr uint8_t msg_results = 8;
-constexpr uint8_t msg_logout = 9;
-constexpr uint8_t msg_waiting = 10;
-constexpr uint8_t msg_extended_login = 11;
-
 enum class Err {
   none,
   broken_pipe,
@@ -402,6 +406,19 @@ enum class Err {
   ai_noname,
   socks5h,
 };
+
+constexpr MsgType msg_comm_failure = MsgType{0};
+constexpr MsgType msg_srv_queue = MsgType{1};
+constexpr MsgType msg_login = MsgType{2};
+constexpr MsgType msg_test_prepare = MsgType{3};
+constexpr MsgType msg_test_start = MsgType{4};
+constexpr MsgType msg_test_msg = MsgType{5};
+constexpr MsgType msg_test_finalize = MsgType{6};
+constexpr MsgType msg_error = MsgType{7};
+constexpr MsgType msg_results = MsgType{8};
+constexpr MsgType msg_logout = MsgType{9};
+constexpr MsgType msg_waiting = MsgType{10};
+constexpr MsgType msg_extended_login = MsgType{11};
 
 }  // namespace libndt
 #endif

@@ -87,7 +87,7 @@ constexpr size_t msg_kickoff_size = sizeof(msg_kickoff) - 1;
 class Client::Impl {
  public:
   Socket sock = -1;
-  std::vector<uint64_t> granted_suite;
+  std::vector<NettestFlags> granted_suite;
   Settings settings;
 };
 
@@ -256,9 +256,9 @@ void Client::on_debug(const std::string &msg) {
   std::clog << "[D] " << msg << std::endl;
 }
 
-void Client::on_performance(uint8_t tid, uint8_t nflows, double measured_bytes,
-                            double measured_interval, double elapsed_time,
-                            double max_runtime) {
+void Client::on_performance(NettestFlags tid, uint8_t nflows,
+                            double measured_bytes, double measured_interval,
+                            double elapsed_time, double max_runtime) {
   auto speed = compute_speed(measured_bytes, measured_interval);
   EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
                   << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
@@ -365,42 +365,40 @@ bool Client::recv_tests_ids() noexcept {
   std::string cur;
   while ((std::getline(ss, cur, ' '))) {
     const char *errstr = nullptr;
-    uint8_t tid = (uint8_t)this->strtonum(cur.data(), 1, 256, &errstr);
+    static_assert(sizeof (NettestFlags) == sizeof (uint8_t),
+                  "Invalid NettestFlags size");
+    auto tid = (uint8_t)this->strtonum(cur.data(), 1, 256, &errstr);
     if (errstr != nullptr) {
       EMIT_WARNING("recv_tests_ids: found invalid test-id: "
                    << cur.data() << " (error: " << errstr << ")");
       return false;
     }
-    impl->granted_suite.push_back(tid);
+    impl->granted_suite.push_back(NettestFlags{tid});
   }
   return true;
 }
 
 bool Client::run_tests() noexcept {
   for (auto &tid : impl->granted_suite) {
-    switch (tid) {
-      case nettest_flag_upload:
-        EMIT_INFO("running upload test");
-        if (!run_upload()) {
-          return false;
-        }
-        break;
-      case nettest_flag_meta:
-        EMIT_DEBUG("running meta test");  // don't annoy the user with this
-        if (!run_meta()) {
-          return false;
-        }
-        break;
-      case nettest_flag_download:
-      case nettest_flag_download_ext:
-        EMIT_INFO("running download test");
-        if (!run_download()) {
-          return false;
-        }
-        break;
-      default:
-        EMIT_WARNING("run_tests(): unexpected test id");
+    if (tid == nettest_flag_upload) {
+      EMIT_INFO("running upload test");
+      if (!run_upload()) {
         return false;
+      }
+    } else if (tid == nettest_flag_meta) {
+      EMIT_DEBUG("running meta test");  // don't annoy the user with this
+      if (!run_meta()) {
+        return false;
+      }
+    } else if (tid == nettest_flag_download ||
+               tid == nettest_flag_download_ext) {
+      EMIT_INFO("running download test");
+      if (!run_download()) {
+        return false;
+      }
+    } else {
+      EMIT_WARNING("run_tests(): unexpected test id");
+      return false;
     }
   }
   return true;
@@ -409,7 +407,7 @@ bool Client::run_tests() noexcept {
 bool Client::recv_results_and_logout() noexcept {
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
-    uint8_t code = 0;
+    MsgType code = MsgType{0};
     if (!msg_read(&code, &message)) {
       return false;
     }
@@ -562,7 +560,7 @@ bool Client::run_download() noexcept {
 
   {
     // TODO(bassosimone): emit this information.
-    uint8_t code = 0;
+    MsgType code = MsgType{0};
     std::string message;
     if (!msg_read_legacy(&code, &message)) {  // legacy on purpose!
       return false;
@@ -581,7 +579,7 @@ bool Client::run_download() noexcept {
   EMIT_INFO("reading summary web100 variables");
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
-    uint8_t code = 0;
+    MsgType code = MsgType{0};
     if (!msg_read(&code, &message)) {
       return false;
     }
@@ -752,18 +750,18 @@ bool Client::run_upload() noexcept {
 bool Client::msg_write_login(const std::string &version) noexcept {
   static_assert(sizeof(impl->settings.nettest_flags) == 1,
                 "nettest_flags too large");
-  uint8_t code = 0;
+  MsgType code = MsgType{0};
   impl->settings.nettest_flags |= nettest_flag_status | nettest_flag_meta;
-  if ((impl->settings.nettest_flags & nettest_flag_middlebox)) {
+  if ((impl->settings.nettest_flags & nettest_flag_middlebox) != NettestFlags{0}) {
     EMIT_WARNING("msg_write_login(): nettest_flag_middlebox: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_middlebox;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_simple_firewall)) {
+  if ((impl->settings.nettest_flags & nettest_flag_simple_firewall) != NettestFlags{0}) {
     EMIT_WARNING(
         "msg_write_login(): nettest_flag_simple_firewall: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_simple_firewall;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_upload_ext)) {
+  if ((impl->settings.nettest_flags & nettest_flag_upload_ext) != NettestFlags{0}) {
     EMIT_WARNING("msg_write_login(): nettest_flag_upload_ext: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_upload_ext;
   }
@@ -785,7 +783,7 @@ bool Client::msg_write_login(const std::string &version) noexcept {
       return false;
     }
   }
-  assert(code != 0);
+  assert(code != MsgType{0});
   if ((impl->settings.protocol_flags & protocol_flag_websockets) != 0) {
     EMIT_WARNING("msg_write_login: websockets not supported");
     return false;
@@ -799,7 +797,7 @@ bool Client::msg_write_login(const std::string &version) noexcept {
 // TODO(bassosimone): when we will implement WebSockets here, it may
 // be useful to have an interface for reading/writing data and to use
 // a different implementation depending on the actual protocol.
-bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
+bool Client::msg_write(MsgType code, std::string &&msg) noexcept {
   EMIT_DEBUG("msg_write: message to send: " << represent(msg));
   if ((impl->settings.protocol_flags & protocol_flag_json) != 0) {
     nlohmann::json json;
@@ -821,7 +819,7 @@ bool Client::msg_write(uint8_t code, std::string &&msg) noexcept {
   return true;
 }
 
-bool Client::msg_write_legacy(uint8_t code, std::string &&msg) noexcept {
+bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
   {
     EMIT_DEBUG("msg_write_legacy: raw message: " << represent(msg));
     EMIT_DEBUG("msg_write_legacy: message length: " << msg.size());
@@ -917,7 +915,7 @@ bool Client::msg_expect_test_prepare(std::string *pport,
   return true;
 }
 
-bool Client::msg_expect_empty(uint8_t expected_code) noexcept {
+bool Client::msg_expect_empty(MsgType expected_code) noexcept {
   std::string s;
   if (!msg_expect(expected_code, &s)) {
     return false;
@@ -929,9 +927,9 @@ bool Client::msg_expect_empty(uint8_t expected_code) noexcept {
   return true;
 }
 
-bool Client::msg_expect(uint8_t expected_code, std::string *s) noexcept {
+bool Client::msg_expect(MsgType expected_code, std::string *s) noexcept {
   assert(s != nullptr);
-  uint8_t code = 0;
+  MsgType code = MsgType{0};
   if (!msg_read(&code, s)) {
     return false;
   }
@@ -942,7 +940,7 @@ bool Client::msg_expect(uint8_t expected_code, std::string *s) noexcept {
   return true;
 }
 
-bool Client::msg_read(uint8_t *code, std::string *msg) noexcept {
+bool Client::msg_read(MsgType *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   std::string s;
   if ((impl->settings.protocol_flags & protocol_flag_websockets) != 0) {
@@ -973,7 +971,7 @@ bool Client::msg_read(uint8_t *code, std::string *msg) noexcept {
   return true;
 }
 
-bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
+bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   uint16_t len = 0;
   {
@@ -989,7 +987,9 @@ bool Client::msg_read_legacy(uint8_t *code, std::string *msg) noexcept {
     EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)header[2]);
-    *code = header[0];
+    static_assert(sizeof (MsgType) == sizeof (unsigned char),
+                  "Unexpected MsgType size");
+    *code = MsgType{(unsigned char)header[0]};
     memcpy(&len, &header[1], sizeof(len));
     len = ntohs(len);
     EMIT_DEBUG("msg_read_legacy: message length: " << len);
@@ -1515,7 +1515,7 @@ again:
 
 // Dependencies (curl)
 
-uint32_t Client::get_verbosity() const noexcept {
+Verbosity Client::get_verbosity() const noexcept {
   return impl->settings.verbosity;
 }
 
