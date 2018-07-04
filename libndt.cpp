@@ -523,7 +523,7 @@ bool Client::run_download() noexcept {
             Size n = 0;
             auto err = netx_recv(fd, buf, sizeof(buf), &n);
             if (err != Err::none) {
-              EMIT_WARNING("run_download: next_recv() failed: "
+              EMIT_WARNING("run_download: netx_recv() failed: "
                            << get_last_system_error());
               done = true;
               break;
