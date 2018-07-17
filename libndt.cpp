@@ -521,8 +521,9 @@ bool Client::run_download() noexcept {
         for (auto &fd : dload_socks.sockets) {
           if (FD_ISSET(fd, &set)) {
             Size n = 0;
-            auto err = netx_recv(fd, buf, sizeof(buf), &n);
+            auto err = netx_recv_nonblocking(fd, buf, sizeof(buf), &n);
             if (err != Err::none) {
+              assert(err != Err::operation_would_block);  // we called select
               EMIT_WARNING("run_download: netx_recv() failed: "
                            << get_last_system_error());
               done = true;
@@ -689,8 +690,9 @@ bool Client::run_upload() noexcept {
         for (auto &fd : upload_socks.sockets) {
           if (FD_ISSET(fd, &set)) {
             Size n = 0;
-            auto err = netx_send(fd, buf, sizeof(buf), &n);
+            auto err = netx_send_nonblocking(fd, buf, sizeof(buf), &n);
             if (err != Err::none) {
+              assert(err != Err::operation_would_block);  // we called select
               if (err != Err::broken_pipe) {
                 EMIT_WARNING("run_upload: netx_send() failed: "
                              << get_last_system_error());
@@ -1293,6 +1295,14 @@ Err Client::netx_map_eai(int ec) noexcept {
   return Err::ai_generic;
 }
 
+#ifdef _WIN32
+// Depending on the version of Winsock it's either EAGAIN or EINPROGRESS
+#define CONNECT_IN_PROGRESS(e) \
+  (e == Err::operation_would_block || e == Err::operation_in_progress)
+#else
+#define CONNECT_IN_PROGRESS(e) (e == Err::operation_in_progress)
+#endif
+
 Err Client::netx_dial(const std::string &hostname, const std::string &port,
                       Socket *sock) noexcept {
   assert(sock != nullptr);
@@ -1327,6 +1337,13 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         EMIT_WARNING("socket() failed: " << get_last_system_error());
         continue;
       }
+      if (netx_setnonblocking(*sock, true) != 0) {
+        EMIT_WARNING("netx_setnonblocking() failed: "
+                     << get_last_system_error());
+        this->closesocket(*sock);
+        *sock = -1;
+        continue;
+      }
       // The following two lines ensure that casting `size_t` to
       // SockLen is safe because SockLen is `int` and the value of
       // the ai_addrlen field is always small enough.
@@ -1335,6 +1352,30 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
         EMIT_DEBUG("connect(): okay");
         break;
+      }
+      auto err = netx_map_errno(get_last_system_error());
+      if (CONNECT_IN_PROGRESS(err)) {
+        assert(*sock >= 0 && *sock < INT_MAX);
+        fd_set writeset;
+        FD_ZERO(&writeset);
+        FD_SET(AS_OS_SOCKET(*sock), &writeset);
+        timeval tv{};
+        tv.tv_sec = settings.timeout;
+        // Cast to `int` safe here as explained elsewhere.
+        err = netx_select((int)*sock + 1, nullptr, &writeset, nullptr, &tv);
+        if (err == Err::none) {
+          int soerr = 0;
+          SockLen soerrlen = sizeof(soerr);
+          if (this->getsockopt(*sock, SOL_SOCKET, SO_ERROR, (void *)&soerr,
+                               &soerrlen) == 0) {
+            assert(soerrlen == sizeof (soerr));
+            if (soerr == 0) {
+              EMIT_DEBUG("connect(): okay");
+              break;
+            }
+            set_last_system_error(soerr);
+          }
+        }
       }
       EMIT_WARNING("connect() failed: " << get_last_system_error());
       this->closesocket(*sock);
@@ -1349,8 +1390,30 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
   return *sock != -1 ? Err::none : Err::io_error;
 }
 
+#undef CONNECT_IN_PROGRESS  // Tidy
+
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
+  auto err = netx_recv_nonblocking(fd, base, count, actual);
+  if (err != Err::operation_would_block) {
+    return err;
+  }
+  assert(fd >= 0 && fd < INT_MAX);
+  fd_set readset;
+  FD_ZERO(&readset);
+  FD_SET(AS_OS_SOCKET(fd), &readset);
+  timeval tv{};
+  tv.tv_sec = settings.timeout;
+  // As explained elsewhere cast to int is safe here.
+  err = netx_select((int)fd + 1, &readset, nullptr, nullptr, &tv);
+  if (err != Err::none) {
+    return err;
+  }
+  return netx_recv_nonblocking(fd, base, count, actual);
+}
+
+Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
+                                  Size *actual) noexcept {
   if (count <= 0) {
     EMIT_WARNING(
         "netx_recv: explicitly disallowing zero read; use netx_select() "
@@ -1388,6 +1451,26 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
+  auto err = netx_send_nonblocking(fd, base, count, actual);
+  if (err != Err::operation_would_block) {
+    return err;
+  }
+  assert(fd >= 0 && fd < INT_MAX);
+  fd_set writeset;
+  FD_ZERO(&writeset);
+  FD_SET(AS_OS_SOCKET(fd), &writeset);
+  timeval tv{};
+  tv.tv_sec = settings.timeout;
+  // As explained elsewhere cast to int is safe here.
+  err = netx_select((int)fd + 1, nullptr, &writeset, nullptr, &tv);
+  if (err != Err::none) {
+    return err;
+  }
+  return netx_send_nonblocking(fd, base, count, actual);
+}
+
+Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
+                                  Size *actual) noexcept {
   if (count <= 0) {
     EMIT_WARNING(
         "netx_send: explicitly disallowing zero send; use netx_select() "
