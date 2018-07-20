@@ -306,37 +306,53 @@ class Client {
   virtual bool msg_read_legacy(MsgType *code, std::string *msg) noexcept;
 
   // Networking layer
+  // ````````````````
+  //
+  // This section contains network functionality used to implement NDT.
 
+  // Connect to @p hostname and @port possibly using SOCKSv5.
   virtual Err netx_maybesocks5h_dial(const std::string &hostname,
                                      const std::string &port,
                                      Socket *sock) noexcept;
 
+  // Map errno code into a Err value.
   static Err netx_map_errno(int ec) noexcept;
 
+  // Map getaddrinfo return value into a Err value.
   Err netx_map_eai(int ec) noexcept;
 
+  // Connect to @p hostname and @p port.
   virtual Err netx_dial(const std::string &hostname, const std::string &port,
                         Socket *sock) noexcept;
 
+  // Receive from the network.
   virtual Err netx_recv(Socket fd, void *base, Size count,
                         Size *actual) noexcept;
 
+  // Receive exactly N bytes from the network.
   virtual Err netx_recvn(Socket fd, void *base, Size count) noexcept;
 
+  // Send data to the network.
   virtual Err netx_send(Socket fd, const void *base, Size count,
                         Size *actual) noexcept;
 
+  // Send exactly N bytes to the network.
   virtual Err netx_sendn(Socket fd, const void *base, Size count) noexcept;
 
+  // Resolve hostname into a list of IP addresses.
   virtual Err netx_resolve(const std::string &hostname,
                            std::vector<std::string> *addrs) noexcept;
 
+  // Set socket non blocking.
   virtual Err netx_setnonblocking(Socket fd, bool enable) noexcept;
 
+  // Pauses until the socket becomes readable.
   virtual Err netx_wait_readable(Socket, timeval timeout) noexcept;
 
+  // Pauses until the socket becomes writeable.
   virtual Err netx_wait_writeable(Socket, timeval timeout) noexcept;
 
+  // Simplified wrapper for select that deals with EINTR and FD_SETSIZE.
   virtual Err netx_select(std::vector<Socket> wantread,
                           std::vector<Socket> wantwrite, timeval timeout,
                           std::vector<Socket> *readable,
@@ -350,6 +366,9 @@ class Client {
                                  std::string *body) noexcept;
 
   // Dependencies (system)
+  // `````````````````````
+  //
+  // This section contains wrappers for system calls used in regress tests.
 
   // Access the value of errno in a portable way.
   virtual int sys_get_last_error() noexcept;

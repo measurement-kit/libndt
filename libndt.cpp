@@ -1529,13 +1529,18 @@ Err Client::netx_select(std::vector<Socket> wantread, std::vector<Socket> wantwr
       if (!add_descriptor(fd, &readset)) {
         return Err::invalid_argument;
       }
-      maxfd = std::max(maxfd, fd);
+      maxfd = (std::max)(maxfd, fd);
     }
     for (auto fd : wantwrite) {
       if (!add_descriptor(fd, &writeset)) {
         return Err::invalid_argument;
       }
-      maxfd = std::max(maxfd, fd);
+      maxfd = (std::max)(maxfd, fd);
+    }
+    assert(maxfd >= -1);
+    if (maxfd == -1) {
+      EMIT_WARNING("netx_select: you did not pass me any descriptor");
+      return Err::invalid_argument;
     }
     sys_set_last_error(0);
     // Implementation note: cast to `int` is safe because on Windows the first
