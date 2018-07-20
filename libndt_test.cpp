@@ -2163,6 +2163,20 @@ TEST_CASE("Client::netx_dial() deals with Client::socket() failure") {
   REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
 }
 
+class FailSetnonblocking : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Err netx_setnonblocking(libndt::Socket, bool) noexcept override {
+    return libndt::Err::io_error;
+  }
+};
+
+TEST_CASE("Client::netx_dial() deals with Client::netx_setnonblocking() failure") {
+  FailSetnonblocking client;
+  libndt::Socket sock = -1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+}
+
 class FailSocketConnect : public libndt::Client {
  public:
   using libndt::Client::Client;
