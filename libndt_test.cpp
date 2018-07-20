@@ -657,8 +657,8 @@ class FailRecvDuringDownload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::invalid_argument;
   }
 };
@@ -684,8 +684,8 @@ class RecvEofDuringDownload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
 };
@@ -713,8 +713,8 @@ class FailMsgReadLegacyDuringDownload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *, std::string *) noexcept override {
@@ -744,8 +744,8 @@ class RecvNonTestMsgDuringDownload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -775,8 +775,8 @@ class FailMsgWriteDuringDownload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -807,8 +807,8 @@ class FailMsgReadDuringDownload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -840,8 +840,8 @@ class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -876,8 +876,8 @@ class FailEmitResultDuringDownload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -913,8 +913,8 @@ class TooManyTestMsgsDuringDownload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -1061,8 +1061,8 @@ class FailSendDuringUpload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_send(libndt::Socket, const void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::io_error;
   }
 };
@@ -1095,8 +1095,8 @@ class FailMsgExpectDuringUpload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_send(libndt::Socket, const void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::io_error;
   }
   bool msg_expect(libndt::MsgType, std::string *) noexcept override { return false; }
@@ -1125,8 +1125,8 @@ class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
                           timeval *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_send(libndt::Socket, const void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::io_error;
   }
   bool msg_expect(libndt::MsgType, std::string *) noexcept override { return true; }
@@ -2177,7 +2177,7 @@ TEST_CASE("Client::netx_dial() deals with Client::netx_setnonblocking() failure"
   REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
 }
 
-class FailSocketConnect : public libndt::Client {
+class FailSocketConnectImmediate : public libndt::Client {
  public:
   using libndt::Client::Client;
   int connect(  //
@@ -2187,8 +2187,88 @@ class FailSocketConnect : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::netx_dial() deals with Client::connect() failure") {
-  FailSocketConnect client{};
+TEST_CASE(
+    "Client::netx_dial() deals with immediate Client::connect() failure") {
+  FailSocketConnectImmediate client{};
+  libndt::Socket sock = -1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+}
+
+#ifdef _WIN32
+#define OS_EINPROGRESS WSAEWOULDBLOCK
+#else
+#define OS_EINPROGRESS EINPROGRESS
+#endif
+
+class FailSocketConnectTimeout : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int connect(  //
+      libndt::Socket, const sockaddr *, libndt::SockLen) noexcept override {
+    set_last_system_error(OS_EINPROGRESS);
+    return -1;
+  }
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::timed_out;
+  }
+};
+
+TEST_CASE("Client::netx_dial() deals with Client::connect() timeout") {
+  FailSocketConnectTimeout client{};
+  libndt::Socket sock = -1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+}
+
+class FailSocketConnectGetsockoptError : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int connect(  //
+      libndt::Socket, const sockaddr *, libndt::SockLen) noexcept override {
+    set_last_system_error(OS_EINPROGRESS);
+    return -1;
+  }
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
+  }
+  virtual int getsockopt(libndt::Socket, int, int, void *,
+                         libndt::SockLen *) noexcept override {
+    set_last_system_error(OS_EINVAL);
+    return -1;
+  }
+};
+
+TEST_CASE(
+    "Client::netx_dial() deals with Client::connect() getsockopt() error") {
+  FailSocketConnectGetsockoptError client{};
+  libndt::Socket sock = -1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+}
+
+class FailSocketConnectSocketError : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int connect(  //
+      libndt::Socket, const sockaddr *, libndt::SockLen) noexcept override {
+    set_last_system_error(OS_EINPROGRESS);
+    return -1;
+  }
+  libndt::Err netx_select(int, fd_set *, fd_set *, fd_set *,
+                          timeval *) noexcept override {
+    return libndt::Err::none;
+  }
+  virtual int getsockopt(libndt::Socket, int, int, void *value,
+                         libndt::SockLen *) noexcept override {
+    int *ivalue = static_cast<int *>(value);
+    *ivalue = OS_EINVAL;  // Any error would actually do here
+    return 0;
+  }
+};
+
+TEST_CASE(
+    "Client::netx_dial() deals with Client::connect() socket error") {
+  FailSocketConnectSocketError client{};
   libndt::Socket sock = -1;
   REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
 }
