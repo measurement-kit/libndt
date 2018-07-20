@@ -1645,11 +1645,11 @@ int Client::fcntl3i(Socket s, int cmd, int arg) noexcept {
 }
 #endif
 
-int Client::getsockopt(int socket, int level, int name, void *value,
+int Client::getsockopt(Socket socket, int level, int name, void *value,
                        SockLen *len) noexcept {
   static_assert(sizeof(*len) == sizeof(int), "invalid SockLen size");
-  return ::getsockopt(socket, level, name, AS_OS_OPTION_VALUE(value),
-                      AS_OS_SOCKLEN_STAR(len));
+  return ::getsockopt(AS_OS_SOCKET(socket), level, name,
+                      AS_OS_OPTION_VALUE(value), AS_OS_SOCKLEN_STAR(len));
 }
 
 }  // namespace libndt
