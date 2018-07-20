@@ -104,7 +104,7 @@ using Ssize = int64_t;
 
 using Socket = int64_t;
 
-using SockLen = int;
+using SockLen = socklen_t;
 
 /// Flags to select what protocol should be used.
 using ProtocolFlags = unsigned int;
