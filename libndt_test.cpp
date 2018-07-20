@@ -331,7 +331,9 @@ TEST_CASE("Client::recv_kickoff() deals with invalid kickoff") {
 class FailMsgExpect : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect(libndt::MsgType, std::string *) noexcept override { return false; }
+  bool msg_expect(libndt::MsgType, std::string *) noexcept override {
+    return false;
+  }
 };
 
 TEST_CASE("Client::wait_in_queue() deals with Client::msg_expect() failure") {
@@ -435,7 +437,9 @@ TEST_CASE("Client::run_tests() deals with unexpected test-id") {
 class FailMsgRead : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_read(libndt::MsgType *, std::string *) noexcept override { return false; }
+  bool msg_read(libndt::MsgType *, std::string *) noexcept override {
+    return false;
+  }
 };
 
 TEST_CASE(
@@ -783,7 +787,9 @@ class FailMsgWriteDuringDownload : public libndt::Client {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return false; }
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+    return false;
+  }
 };
 
 TEST_CASE("Client::run_download() deals with Client::msg_write() failure") {
@@ -815,8 +821,12 @@ class FailMsgReadDuringDownload : public libndt::Client {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return true; }
-  bool msg_read(libndt::MsgType *, std::string *) noexcept override { return false; }
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+    return true;
+  }
+  bool msg_read(libndt::MsgType *, std::string *) noexcept override {
+    return false;
+  }
 };
 
 TEST_CASE("Client::run_download() deals with Client::msg_read() failure") {
@@ -848,7 +858,9 @@ class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return true; }
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+    return true;
+  }
   bool msg_read(libndt::MsgType *code, std::string *) noexcept override {
     *code = libndt::msg_login;
     return true;
@@ -884,7 +896,9 @@ class FailEmitResultDuringDownload : public libndt::Client {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return true; }
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+    return true;
+  }
   bool msg_read(libndt::MsgType *code, std::string *s) noexcept override {
     *code = libndt::msg_test_msg;
     *s = "antani-antani";  // Causes emit_result() to fail
@@ -921,7 +935,9 @@ class TooManyTestMsgsDuringDownload : public libndt::Client {
     *code = libndt::msg_test_msg;
     return true;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return true; }
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+    return true;
+  }
   bool msg_read(libndt::MsgType *code, std::string *s) noexcept override {
     *code = libndt::msg_test_msg;
     *s = "antani:antani";  // Accepted by emit_result()
@@ -967,7 +983,9 @@ class FailMsgWriteDuringMeta : public libndt::Client {
  public:
   using libndt::Client::Client;
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return false; }
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+    return false;
+  }
 };
 
 TEST_CASE("Client::run_meta() deals with Client::msg_write() failure") {
@@ -979,7 +997,9 @@ class FailFinalMsgWriteDuringMeta : public libndt::Client {
  public:
   using libndt::Client::Client;
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  bool msg_write(libndt::MsgType, std::string &&s) noexcept override { return s != ""; }
+  bool msg_write(libndt::MsgType, std::string &&s) noexcept override {
+    return s != "";
+  }
 };
 
 TEST_CASE("Client::run_meta() deals with final Client::msg_write() failure") {
@@ -993,7 +1013,9 @@ class FailFinalMsgExpectEmptyDuringMeta : public libndt::Client {
   bool msg_expect_empty(libndt::MsgType code) noexcept override {
     return code != libndt::msg_test_finalize;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override { return true; }
+  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+    return true;
+  }
 };
 
 TEST_CASE(
@@ -1099,7 +1121,9 @@ class FailMsgExpectDuringUpload : public libndt::Client {
                         libndt::Size *) noexcept override {
     return libndt::Err::io_error;
   }
-  bool msg_expect(libndt::MsgType, std::string *) noexcept override { return false; }
+  bool msg_expect(libndt::MsgType, std::string *) noexcept override {
+    return false;
+  }
 };
 
 TEST_CASE("Client::run_upload() deals with Client::msg_expect() failure") {
@@ -1129,7 +1153,9 @@ class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
                         libndt::Size *) noexcept override {
     return libndt::Err::io_error;
   }
-  bool msg_expect(libndt::MsgType, std::string *) noexcept override { return true; }
+  bool msg_expect(libndt::MsgType, std::string *) noexcept override {
+    return true;
+  }
 };
 
 TEST_CASE(
@@ -1167,15 +1193,20 @@ TEST_CASE(
 class ValidatingMsgWriteLegacy : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_write_legacy(libndt::MsgType, std::string &&value) noexcept override {
+  bool msg_write_legacy(libndt::MsgType,
+                        std::string &&value) noexcept override {
     auto doc = nlohmann::json::parse(value);
     std::string tests_string = doc.at("tests");
     const char *errstr = nullptr;
-    libndt::NettestFlags tests{(uint8_t)this->strtonum(tests_string.c_str(), 0, 256, &errstr)};
+    libndt::NettestFlags tests{
+        (uint8_t)sys_strtonum(tests_string.c_str(), 0, 256, &errstr)};
     REQUIRE(errstr == nullptr);
-    REQUIRE((tests & libndt::nettest_flag_middlebox) == libndt::NettestFlags{0});
-    REQUIRE((tests & libndt::nettest_flag_simple_firewall) == libndt::NettestFlags{0});
-    REQUIRE((tests & libndt::nettest_flag_upload_ext) == libndt::NettestFlags{0});
+    REQUIRE((tests & libndt::nettest_flag_middlebox) ==
+            libndt::NettestFlags{0});
+    REQUIRE((tests & libndt::nettest_flag_simple_firewall) ==
+            libndt::NettestFlags{0});
+    REQUIRE((tests & libndt::nettest_flag_upload_ext) ==
+            libndt::NettestFlags{0});
     return true;
   }
 };
@@ -1268,7 +1299,7 @@ TEST_CASE(
     "sending header") {
   FailNetxSendn client;
   std::string m{"foo"};
-  client.set_last_system_error(0);
+  client.sys_set_last_error(0);
   REQUIRE(client.msg_write_legacy(  //
               libndt::msg_test_start, std::move(m)) == false);
 }
@@ -1287,7 +1318,7 @@ TEST_CASE(
     "sending message") {
   FailLargeNetxSendn client;
   std::string m{"foobar"};
-  client.set_last_system_error(0);
+  client.sys_set_last_error(0);
   REQUIRE(client.msg_write_legacy(  //
               libndt::msg_test_start, std::move(m)) == false);
 }
@@ -1307,7 +1338,9 @@ TEST_CASE(
 class TooShortVector : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool msg_expect(libndt::MsgType, std::string *) noexcept override { return true; }
+  bool msg_expect(libndt::MsgType, std::string *) noexcept override {
+    return true;
+  }
 };
 
 TEST_CASE("Client::msg_expect_test_prepare() deals with too-short vector") {
@@ -1466,7 +1499,7 @@ TEST_CASE(
     "Client::msg_read_legacy() deals with Client::recv() failure when reading "
     "header") {
   FailNetxRecvn client;
-  client.set_last_system_error(0);
+  client.sys_set_last_error(0);
   libndt::MsgType code = libndt::MsgType{0};
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
@@ -1492,7 +1525,7 @@ TEST_CASE(
     "Client::msg_read_legacy() deals with Client::recvn() failure when reading "
     "message") {
   FailLargeNetxRecvn client;
-  client.set_last_system_error(0);
+  client.sys_set_last_error(0);
   libndt::MsgType code = libndt::MsgType{0};
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
@@ -2093,9 +2126,9 @@ TEST_CASE("Client::netx_map_eai() correctly maps all errors") {
   REQUIRE(client.netx_map_eai(EAI_NONAME) == Err::ai_noname);
 #ifdef EAI_SYSTEM
   {
-    client.set_last_system_error(E(WOULDBLOCK));
+    client.sys_set_last_error(E(WOULDBLOCK));
     REQUIRE(client.netx_map_eai(EAI_SYSTEM) == Err::operation_would_block);
-    client.set_last_system_error(0);
+    client.sys_set_last_error(0);
   }
 #endif
 }
@@ -2136,8 +2169,8 @@ class FailGetaddrinfoInNetxConnect : public libndt::Client {
     addrs->push_back(str);
     return libndt::Err::none;
   }
-  int getaddrinfo(const char *, const char *, const addrinfo *,
-                  addrinfo **) noexcept override {
+  int sys_getaddrinfo(const char *, const char *, const addrinfo *,
+                      addrinfo **) noexcept override {
     return EAI_AGAIN;
   }
 };
@@ -2151,8 +2184,8 @@ TEST_CASE("Client::netx_dial() deals with Client::getaddrinfo() failure") {
 class FailSocket : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Socket socket(int, int, int) noexcept override {
-    set_last_system_error(OS_EINVAL);
+  libndt::Socket sys_socket(int, int, int) noexcept override {
+    sys_set_last_error(OS_EINVAL);
     return -1;
   }
 };
@@ -2166,9 +2199,9 @@ TEST_CASE("Client::netx_dial() deals with Client::socket() failure") {
 class FailSocketConnect : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int connect(  //
+  int sys_connect(  //
       libndt::Socket, const sockaddr *, libndt::SockLen) noexcept override {
-    set_last_system_error(OS_EINVAL);
+    sys_set_last_error(OS_EINVAL);
     return -1;
   }
 };
@@ -2206,8 +2239,9 @@ TEST_CASE("Client::netx_recvn() deals with too-large buffer") {
 class FailRecv : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
-    set_last_system_error(OS_EWOULDBLOCK);
+  libndt::Ssize sys_recv(libndt::Socket, void *,
+                         libndt::Size) noexcept override {
+    sys_set_last_error(OS_EWOULDBLOCK);
     return -1;
   }
 };
@@ -2222,7 +2256,8 @@ TEST_CASE("Client::netx_recvn() deals with Client::recv() failure") {
 class RecvEof : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
+  libndt::Ssize sys_recv(libndt::Socket, void *,
+                         libndt::Size) noexcept override {
     return 0;
   }
 };
@@ -2238,8 +2273,8 @@ class PartialRecvAndThenError : public libndt::Client {
   using libndt::Client::Client;
   static constexpr libndt::Size amount = 11;
   static constexpr libndt::Size good_amount = 3;
-  libndt::Ssize recv(libndt::Socket, void *buf,
-                     libndt::Size size) noexcept override {
+  libndt::Ssize sys_recv(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       for (size_t i = 0; i < good_amount; ++i) {
@@ -2247,7 +2282,7 @@ class PartialRecvAndThenError : public libndt::Client {
       }
       return good_amount;
     }
-    set_last_system_error(OS_EWOULDBLOCK);
+    sys_set_last_error(OS_EWOULDBLOCK);
     return -1;
   }
 };
@@ -2274,8 +2309,8 @@ class PartialRecvAndThenEof : public libndt::Client {
   using libndt::Client::Client;
   static constexpr libndt::Size amount = 7;
   static constexpr libndt::Size good_amount = 5;
-  libndt::Ssize recv(libndt::Socket, void *buf,
-                     libndt::Size size) noexcept override {
+  libndt::Ssize sys_recv(libndt::Socket, void *buf,
+                         libndt::Size size) noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       for (size_t i = 0; i < good_amount; ++i) {
@@ -2324,9 +2359,9 @@ TEST_CASE("Client::netx_sendn() deals with too-large buffer") {
 class FailSend : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size) noexcept override {
-    set_last_system_error(OS_EWOULDBLOCK);
+  libndt::Ssize sys_send(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
+    sys_set_last_error(OS_EWOULDBLOCK);
     return -1;
   }
 };
@@ -2342,8 +2377,8 @@ TEST_CASE("Client::netx_sendn() deals with Client::send() failure") {
 class SendEof : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size) noexcept override {
+  libndt::Ssize sys_send(libndt::Socket, const void *,
+                         libndt::Size) noexcept override {
     return 0;
   }
 };
@@ -2360,14 +2395,14 @@ class PartialSendAndThenError : public libndt::Client {
   static constexpr libndt::Size amount = 11;
   static constexpr libndt::Size good_amount = 3;
   libndt::Size successful = 0;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size size) noexcept override {
+  libndt::Ssize sys_send(libndt::Socket, const void *,
+                         libndt::Size size) noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       successful += good_amount;
       return good_amount;
     }
-    set_last_system_error(OS_EWOULDBLOCK);
+    sys_set_last_error(OS_EWOULDBLOCK);
     return -1;
   }
 };
@@ -2392,8 +2427,8 @@ class PartialSendAndThenEof : public libndt::Client {
   static constexpr libndt::Size amount = 7;
   static constexpr libndt::Size good_amount = 5;
   libndt::Size successful = 0;
-  libndt::Ssize send(libndt::Socket, const void *,
-                     libndt::Size size) noexcept override {
+  libndt::Ssize sys_send(libndt::Socket, const void *,
+                         libndt::Size size) noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       successful += good_amount;
@@ -2422,8 +2457,8 @@ TEST_CASE(
 class FailGetaddrinfo : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int getaddrinfo(const char *, const char *, const addrinfo *,
-                  addrinfo **) noexcept override {
+  int sys_getaddrinfo(const char *, const char *, const addrinfo *,
+                      addrinfo **) noexcept override {
     return EAI_AGAIN;
   }
 };
@@ -2437,8 +2472,9 @@ TEST_CASE("Client::netx_resolve() deals with Client::getaddrinfo() failure") {
 class FailGetnameinfo : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int getnameinfo(const sockaddr *, libndt::SockLen, char *, libndt::SockLen,
-                  char *, libndt::SockLen, int) noexcept override {
+  int sys_getnameinfo(const sockaddr *, libndt::SockLen, char *,
+                      libndt::SockLen, char *, libndt::SockLen,
+                      int) noexcept override {
     return EAI_AGAIN;
   }
 };
@@ -2458,7 +2494,8 @@ class FailIoctlsocket : public libndt::Client {
  public:
   using libndt::Client::Client;
   long expect = 2UL;  // value that should not be used
-  int ioctlsocket(libndt::Socket, long cmd, u_long *value) noexcept override {
+  int sys_ioctlsocket(libndt::Socket, long cmd,
+                      u_long *value) noexcept override {
     REQUIRE(cmd == FIONBIO);
     REQUIRE(*value == expect);
     ::SetLastError(WSAEINVAL);
@@ -2483,31 +2520,32 @@ TEST_CASE(
 
 #else
 
-class FailFcntl2 : public libndt::Client {
+class FailFcntlGet : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int fcntl2(libndt::Socket, int cmd) noexcept override {
+  int sys_fcntl(libndt::Socket, int cmd) noexcept override {
     REQUIRE(cmd == F_GETFL);
     errno = EINVAL;
     return -1;
   }
 };
 
-TEST_CASE("Client::netx_setnonblocking() deals with Client::fcntl2() failure") {
-  FailFcntl2 client;
+TEST_CASE(
+    "Client::netx_setnonblocking() deals with Client::fcntl(F_GETFL) failure") {
+  FailFcntlGet client;
   REQUIRE(client.netx_setnonblocking(17, true) ==
           libndt::Err::invalid_argument);
 }
 
-class FailFcntl3i : public libndt::Client {
+class FailFcntlSet : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int fcntl2(libndt::Socket, int cmd) noexcept override {
+  int sys_fcntl(libndt::Socket, int cmd) noexcept override {
     REQUIRE(cmd == F_GETFL);
     return 0;
   }
   int expect = ~0;  // value that should never appear
-  int fcntl3i(libndt::Socket, int cmd, int flags) noexcept override {
+  int sys_fcntl(libndt::Socket, int cmd, int flags) noexcept override {
     REQUIRE(cmd == F_SETFL);
     REQUIRE(flags == expect);
     errno = EINVAL;
@@ -2516,8 +2554,8 @@ class FailFcntl3i : public libndt::Client {
 };
 
 TEST_CASE(
-    "Client::netx_setnonblocking() deals with Client::fcntl3i() failure") {
-  FailFcntl3i client;
+    "Client::netx_setnonblocking() deals with Client::fcntl(F_SETFL) failure") {
+  FailFcntlSet client;
   {
     client.expect = O_NONBLOCK;
     REQUIRE(client.netx_setnonblocking(17, true) ==
@@ -2541,11 +2579,12 @@ class InterruptSelect : public libndt::Client {
  public:
   using libndt::Client::Client;
   unsigned int count = 0;
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+  int sys_select(int, fd_set *, fd_set *, fd_set *,
+                 timeval *) noexcept override {
     if (count++ == 0) {
-      set_last_system_error(EINTR);
+      sys_set_last_error(EINTR);
     } else {
-      set_last_system_error(EIO);
+      sys_set_last_error(EIO);
     }
     return -1;
   }
@@ -2569,7 +2608,8 @@ TEST_CASE("Client::netx_select() deals with EINTR") {
 class TimeoutSelect : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int select(int, fd_set *, fd_set *, fd_set *, timeval *) noexcept override {
+  int sys_select(int, fd_set *, fd_set *, fd_set *,
+                 timeval *) noexcept override {
     return 0;
   }
 };
@@ -2600,8 +2640,8 @@ TEST_CASE("Client::query_mlabns_curl() deals with Curl{} failure") {
 }
 #endif
 
-// Client::get_last_system_error() tests
-// -------------------------------------
+// Client::sys_get_last_error() tests
+// ----------------------------------
 
 #ifdef _WIN32
 #define OS_EINVAL WSAEINVAL
@@ -2609,25 +2649,28 @@ TEST_CASE("Client::query_mlabns_curl() deals with Curl{} failure") {
 #define OS_EINVAL EINVAL
 #endif
 
-TEST_CASE("Client::get_last_system_error() works as expected") {
+TEST_CASE("Client::sys_get_last_error() works as expected") {
   libndt::Client client;
-  client.set_last_system_error(OS_EINVAL);
-  REQUIRE(client.get_last_system_error() == OS_EINVAL);
-  client.set_last_system_error(0);  // clear
+  client.sys_set_last_error(OS_EINVAL);
+  REQUIRE(client.sys_get_last_error() == OS_EINVAL);
+  client.sys_set_last_error(0);  // clear
+  REQUIRE(client.sys_get_last_error() == 0);
 }
 
 // Client::recv() tests
 // --------------------
 
-TEST_CASE("Client::recv() deals with too-large buffer") {
+TEST_CASE("Client::sys_recv() deals with too-large buffer") {
   libndt::Client client;
-  REQUIRE(client.recv(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
+  REQUIRE(client.sys_recv(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) ==
+          -1);
 }
 
 // Client::send() tests
 // --------------------
 
-TEST_CASE("Client::send() deals with too-large buffer") {
+TEST_CASE("Client::sys_send() deals with too-large buffer") {
   libndt::Client client;
-  REQUIRE(client.send(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
+  REQUIRE(client.sys_send(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) ==
+          -1);
 }
