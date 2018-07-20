@@ -1472,7 +1472,7 @@ Err Client::netx_resolve(const std::string &hostname,
 Err Client::netx_setnonblocking(Socket fd, bool enable) noexcept {
 #ifdef _WIN32
   u_long lv = (enable) ? 1UL : 0UL;
-  if (this->ioctlsocket(fd, FIONBIO, &lv) != 0) {
+  if (sys_ioctlsocket(fd, FIONBIO, &lv) != 0) {
     return netx_map_errno(sys_get_last_error());
   }
 #else
