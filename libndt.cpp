@@ -1337,7 +1337,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         EMIT_WARNING("socket() failed: " << get_last_system_error());
         continue;
       }
-      if (netx_setnonblocking(*sock, true) != 0) {
+      if (netx_setnonblocking(*sock, true) != Err::none) {
         EMIT_WARNING("netx_setnonblocking() failed: "
                      << get_last_system_error());
         this->closesocket(*sock);
@@ -1360,7 +1360,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         FD_ZERO(&writeset);
         FD_SET(AS_OS_SOCKET(*sock), &writeset);
         timeval tv{};
-        tv.tv_sec = settings.timeout;
+        tv.tv_sec = impl->settings.timeout;
         // Cast to `int` safe here as explained elsewhere.
         err = netx_select((int)*sock + 1, nullptr, &writeset, nullptr, &tv);
         if (err == Err::none) {
@@ -1403,7 +1403,7 @@ Err Client::netx_recv(Socket fd, void *base, Size count,
   FD_ZERO(&readset);
   FD_SET(AS_OS_SOCKET(fd), &readset);
   timeval tv{};
-  tv.tv_sec = settings.timeout;
+  tv.tv_sec = impl->settings.timeout;
   // As explained elsewhere cast to int is safe here.
   err = netx_select((int)fd + 1, &readset, nullptr, nullptr, &tv);
   if (err != Err::none) {
@@ -1460,7 +1460,7 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
   FD_ZERO(&writeset);
   FD_SET(AS_OS_SOCKET(fd), &writeset);
   timeval tv{};
-  tv.tv_sec = settings.timeout;
+  tv.tv_sec = impl->settings.timeout;
   // As explained elsewhere cast to int is safe here.
   err = netx_select((int)fd + 1, nullptr, &writeset, nullptr, &tv);
   if (err != Err::none) {
