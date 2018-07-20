@@ -426,24 +426,12 @@ bool Client::recv_results_and_logout() noexcept {
 }
 
 bool Client::wait_close() noexcept {
-  fd_set readset;
-  FD_ZERO(&readset);
-  // In wait_close() regress test we call wait_close() with sock
-  // equal to -1, which causes a segfault. For testability do not
-  // reject the value but rather just ignore the socket. We have
-  // an assert() below that catches other negative values.
-  if (impl->sock >= 0) {
-    FD_SET(AS_OS_SOCKET(impl->sock), &readset);
-  }
   timeval tv{};
   tv.tv_sec = 1;
-  // Note: cast to `int` safe because on Unix sockets are `int`s and on
-  // Windows instead the first argment to select() is ignored.
-  assert(impl->sock >= -1 && impl->sock < INT_MAX);
-  auto err = netx_select((int)impl->sock + 1, &readset, nullptr, nullptr, &tv);
+  auto err = netx_wait_readable(impl->sock, tv);
   if (err != Err::none) {
     EMIT_WARNING(
-        "wait_close(): netx_select() failed: " << sys_get_last_error());
+        "wait_close(): netx_wait_readable() failed: " << sys_get_last_error());
     (void)sys_shutdown(impl->sock, OS_SHUT_RDWR);
     return (err == Err::timed_out);
   }
@@ -498,38 +486,30 @@ bool Client::run_download() noexcept {
     auto prev = begin;
     char buf[64000];
     for (auto done = false; !done;) {
-      Socket maxsock = -1;
-      fd_set set;
-      FD_ZERO(&set);
-      for (auto &fd : dload_socks.sockets) {
-        assert(fd >= 0);
-        FD_SET(AS_OS_SOCKET(fd), &set);
-        maxsock = (std::max)(maxsock, fd);
+      std::vector<Socket> wantread, readable;
+      for (auto fd : dload_socks.sockets) {
+        wantread.push_back(fd);
       }
       timeval tv{};
       tv.tv_usec = 250000;
-      // Cast to `int` safe as explained above.
-      assert(maxsock < INT_MAX);
-      auto err = netx_select((int)maxsock + 1, &set, nullptr, nullptr, &tv);
+      auto err = netx_select(std::move(wantread), {}, tv, &readable, nullptr);
       if (err != Err::none && err != Err::timed_out) {
         EMIT_WARNING(
             "run_download: netx_select() failed: " << sys_get_last_error());
         return false;
       }
       if (err == Err::none) {
-        for (auto &fd : dload_socks.sockets) {
-          if (FD_ISSET(fd, &set)) {
-            Size n = 0;
-            auto err = netx_recv(fd, buf, sizeof(buf), &n);
-            if (err != Err::none) {
-              EMIT_WARNING(
-                  "run_download: netx_recv() failed: " << sys_get_last_error());
-              done = true;
-              break;
-            }
-            recent_data += (uint64_t)n;
-            total_data += (uint64_t)n;
+        for (auto fd : readable) {
+          Size n = 0;
+          auto err = netx_recv(fd, buf, sizeof(buf), &n);
+          if (err != Err::none) {
+            EMIT_WARNING(
+                "run_download: netx_recv() failed: " << sys_get_last_error());
+            done = true;
+            break;
           }
+          recent_data += (uint64_t)n;
+          total_data += (uint64_t)n;
         }
       }
       auto now = std::chrono::steady_clock::now();
@@ -666,40 +646,32 @@ bool Client::run_upload() noexcept {
     auto begin = std::chrono::steady_clock::now();
     auto prev = begin;
     for (auto done = false; !done;) {
-      Socket maxsock = -1;
-      fd_set set;
-      FD_ZERO(&set);
-      for (auto &fd : upload_socks.sockets) {
-        assert(fd >= 0);
-        FD_SET(AS_OS_SOCKET(fd), &set);
-        maxsock = (std::max)(maxsock, fd);
+      std::vector<Socket> wantwrite, writeable;
+      for (auto fd : upload_socks.sockets) {
+        wantwrite.push_back(fd);
       }
       timeval tv{};
       tv.tv_usec = 250000;
-      // Cast to `int` safe as explained above.
-      assert(maxsock < INT_MAX);
-      auto err = netx_select((int)maxsock + 1, nullptr, &set, nullptr, &tv);
+      auto err = netx_select({}, std::move(wantwrite), tv, nullptr, &writeable);
       if (err != Err::none && err != Err::timed_out) {
         EMIT_WARNING(
             "run_upload: netx_select() failed: " << sys_get_last_error());
         return false;
       }
       if (err == Err::none) {
-        for (auto &fd : upload_socks.sockets) {
-          if (FD_ISSET(fd, &set)) {
-            Size n = 0;
-            auto err = netx_send(fd, buf, sizeof(buf), &n);
-            if (err != Err::none) {
-              if (err != Err::broken_pipe) {
-                EMIT_WARNING(
-                    "run_upload: netx_send() failed: " << sys_get_last_error());
-              }
-              done = true;
-              break;
+        for (auto fd : writeable) {
+          Size n = 0;
+          auto err = netx_send(fd, buf, sizeof(buf), &n);
+          if (err != Err::none) {
+            if (err != Err::broken_pipe) {
+              EMIT_WARNING(
+                  "run_upload: netx_send() failed: " << sys_get_last_error());
             }
-            recent_data += (uint64_t)n;
-            total_data += (uint64_t)n;
+            done = true;
+            break;
           }
+          recent_data += (uint64_t)n;
+          total_data += (uint64_t)n;
         }
       }
       auto now = std::chrono::steady_clock::now();
@@ -1493,23 +1465,104 @@ Err Client::netx_setnonblocking(Socket fd, bool enable) noexcept {
   return Err::none;
 }
 
-Err Client::netx_select(int numfd, fd_set *readset, fd_set *writeset,
-                        fd_set *exceptset, timeval *tvp) noexcept {
-  auto rv = 0;
-  auto err = Err::none;
-again:
-  sys_set_last_error(0);
-  rv = sys_select(numfd, readset, writeset, exceptset, tvp);
-  if (rv < 0) {
-    assert(rv == -1);
-    err = netx_map_errno(sys_get_last_error());
-    if (err == Err::interrupted) {
-      goto again;
+Err Client::netx_wait_readable(Socket fd, timeval tv) noexcept {
+  std::vector<Socket> v, vv;
+  v.push_back(fd);
+  auto err = netx_select(std::move(v), {}, tv, nullptr, &vv);
+  assert((err == Err::none && vv.size() == 1) || vv.size() <= 0);
+  return err;
+}
+
+Err Client::netx_wait_writeable(Socket fd, timeval tv) noexcept {
+  std::vector<Socket> v, vv;
+  v.push_back(fd);
+  auto err = netx_select({}, std::move(v), tv, nullptr, &vv);
+  assert((err == Err::none && vv.size() == 1) || vv.size() <= 0);
+  return err;
+}
+
+Err Client::netx_select(std::vector<Socket> wantread, std::vector<Socket> wantwrite,
+                        timeval tv, std::vector<Socket> *readable,
+                        std::vector<Socket> *writeable) noexcept {
+  for (;;) {
+    // add_descriptor() safely adds @p fd to @p set.
+#ifdef _WIN32
+    size_t total = 0;
+    auto add_descriptor = [this, &total](Socket fd, fd_set *set) noexcept {
+      if (fd == -1) {
+        EMIT_WARNING("netx_select(): invalid file descriptor");
+        return false;
+      }
+      if (total++ >= FD_SETSIZE) {
+        EMIT_WARNING("netx_select(): too many descriptors");
+        return false;
+      }
+      FD_SET(AS_OS_SOCKET(fd), set);
+      return true;
+    };
+#else
+    auto add_descriptor = [this](Socket fd, fd_set *set) noexcept {
+      if (fd < 0) {
+        EMIT_WARNING("netx_select(): invalid file descriptor");
+        return false;
+      }
+      if (fd >= FD_SETSIZE) {
+        EMIT_WARNING("netx_select(): too many descriptors");
+        return false;
+      }
+      FD_SET(AS_OS_SOCKET(fd), set);
+      return true;
+    };
+#endif
+    Socket maxfd = -1;
+    fd_set readset;
+    FD_ZERO(&readset);
+    fd_set writeset;
+    FD_ZERO(&writeset);
+    for (auto fd : wantread) {
+      if (!add_descriptor(fd, &readset)) {
+        return Err::invalid_argument;
+      }
+      maxfd = std::max(maxfd, fd);
     }
-    return err;
-  }
-  if (rv == 0) {
-    return Err::timed_out;
+    for (auto fd : wantwrite) {
+      if (!add_descriptor(fd, &writeset)) {
+        return Err::invalid_argument;
+      }
+      maxfd = std::max(maxfd, fd);
+    }
+    sys_set_last_error(0);
+    // Implementation note: cast to `int` is safe because on Windows the first
+    // argument to select() is ignored and on Unix sockets are ints. However, on
+    // Unix we should also make sure that we don't overflow.
+#ifndef _WIN32
+    if (maxfd > INT_MAX - 1) {
+      return Err::value_too_large;
+    }
+#endif
+    int rv = sys_select((int)(maxfd + 1), &readset, &writeset, nullptr, &tv);
+    if (rv < 0) {
+      assert(rv == -1);
+      auto err = netx_map_errno(sys_get_last_error());
+      if (err == Err::interrupted) {
+        continue;
+      }
+      return err;
+    }
+    if (rv == 0) {
+      return Err::timed_out;
+    }
+    for (auto fd : wantread) {
+      if (FD_ISSET(fd, &readset) && readable != nullptr) {
+        readable->push_back(fd);
+      }
+    }
+    for (auto fd : wantwrite) {
+      if (FD_ISSET(fd, &writeset) && writeable != nullptr) {
+        writeable->push_back(fd);
+      }
+    }
+    break;
   }
   return Err::none;
 }

@@ -333,8 +333,14 @@ class Client {
 
   virtual Err netx_setnonblocking(Socket fd, bool enable) noexcept;
 
-  virtual Err netx_select(int numfd, fd_set *readset, fd_set *writeset,
-                          fd_set *exceptset, timeval *timeout) noexcept;
+  virtual Err netx_wait_readable(Socket, timeval timeout) noexcept;
+
+  virtual Err netx_wait_writeable(Socket, timeval timeout) noexcept;
+
+  virtual Err netx_select(std::vector<Socket> wantread,
+                          std::vector<Socket> wantwrite, timeval timeout,
+                          std::vector<Socket> *readable,
+                          std::vector<Socket> *writeable) noexcept;
 
   // Dependencies (cURL)
 
@@ -428,6 +434,7 @@ enum class Err {
   operation_in_progress,
   operation_would_block,
   timed_out,
+  value_too_large,
   eof,
   ai_generic,
   ai_again,
