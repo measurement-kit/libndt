@@ -2273,13 +2273,14 @@ TEST_CASE(
   REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
 }
 
-// Client::netx_recv() tests
-// -------------------------
+// Client::netx_recv_nonblocking() tests
+// -------------------------------------
 
-TEST_CASE("Client::netx_recv() deals with zero recv correctly") {
+TEST_CASE("Client::netx_recv_nonblocking() deals with zero recv correctly") {
   libndt::Client client;
   libndt::Size n = 0;
-  REQUIRE(client.netx_recv(0, nullptr, 0, &n) == libndt::Err::invalid_argument);
+  REQUIRE(client.netx_recv_nonblocking(0, nullptr, 0, &n) ==
+          libndt::Err::invalid_argument);
 }
 
 // Client::netx_recvn() tests
@@ -2297,20 +2298,20 @@ TEST_CASE("Client::netx_recvn() deals with too-large buffer") {
           libndt::Err::invalid_argument);
 }
 
-class FailRecv : public libndt::Client {
+class FailNetxRecv : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize recv(libndt::Socket, void *, libndt::Size) noexcept override {
-    set_last_system_error(OS_EWOULDBLOCK);
-    return -1;
+  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
+                        libndt::Size *) noexcept override {
+    return libndt::Err::invalid_argument;
   }
 };
 
-TEST_CASE("Client::netx_recvn() deals with Client::recv() failure") {
+TEST_CASE("Client::netx_recvn() deals with Client::netx_recv() failure") {
   char buf[1024];
-  FailRecv client;
+  FailNetxRecv client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
-          libndt::Err::operation_would_block);
+          libndt::Err::invalid_argument);
 }
 
 class RecvEof : public libndt::Client {
@@ -2327,35 +2328,35 @@ TEST_CASE("Client::netx_recvn() deals with Client::recv() EOF") {
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == libndt::Err::eof);
 }
 
-class PartialRecvAndThenError : public libndt::Client {
+class PartialNetxRecvAndThenError : public libndt::Client {
  public:
   using libndt::Client::Client;
   static constexpr libndt::Size amount = 11;
   static constexpr libndt::Size good_amount = 3;
-  libndt::Ssize recv(libndt::Socket, void *buf,
-                     libndt::Size size) noexcept override {
+  libndt::Err netx_recv(libndt::Socket, void *buf,
+                        libndt::Size size, libndt::Size *rv) noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       for (size_t i = 0; i < good_amount; ++i) {
         ((char *)buf)[i] = 'A';
       }
-      return good_amount;
+      *rv = good_amount;
+      return libndt::Err::none;
     }
-    set_last_system_error(OS_EWOULDBLOCK);
-    return -1;
+    return libndt::Err::invalid_argument;
   }
 };
 
 TEST_CASE(
-    "Client::netx_recvn() deals with partial Client::recv() and then error") {
-  char buf[PartialRecvAndThenError::amount] = {};
-  PartialRecvAndThenError client;
+    "Client::netx_recvn() deals with partial Client::netx_recv() and then error") {
+  char buf[PartialNetxRecvAndThenError::amount] = {};
+  PartialNetxRecvAndThenError client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
-          libndt::Err::operation_would_block);
+          libndt::Err::invalid_argument);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return -1, not a short read.
   for (size_t i = 0; i < sizeof(buf); ++i) {
-    if (i < PartialRecvAndThenError::good_amount) {
+    if (i < PartialNetxRecvAndThenError::good_amount) {
       REQUIRE(buf[i] == 'A');
     } else {
       REQUIRE(buf[i] == '\0');
@@ -2397,13 +2398,14 @@ TEST_CASE(
   }
 }
 
-// Client::netx_send() tests
-// -------------------------
+// Client::netx_send_nonblocking() tests
+// -------------------------------------
 
 TEST_CASE("Client::netx_send() deals with zero send correctly") {
   libndt::Client client;
   libndt::Size n = 0;
-  REQUIRE(client.netx_send(0, nullptr, 0, &n) == libndt::Err::invalid_argument);
+  REQUIRE(client.netx_send_nonblocking(0, nullptr, 0, &n) ==
+          libndt::Err::invalid_argument);
 }
 
 // Client::netx_sendn() tests
