@@ -1484,6 +1484,12 @@ Err Client::netx_wait_writeable(Socket fd, timeval tv) noexcept {
 Err Client::netx_select(std::vector<Socket> wantread, std::vector<Socket> wantwrite,
                         timeval tv, std::vector<Socket> *readable,
                         std::vector<Socket> *writeable) noexcept {
+  if (readable != nullptr) {
+    readable->clear();
+  }
+  if (writeable != nullptr) {
+    writeable->clear();
+  }
   for (;;) {
     // add_descriptor() safely adds @p fd to @p set.
 #ifdef _WIN32
