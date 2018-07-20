@@ -343,69 +343,69 @@ class Client {
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
 
-  // Dependencies (libc)
+  // Dependencies (system)
 
   // Access the value of errno in a portable way.
-  virtual int get_last_system_error() noexcept;
+  virtual int sys_get_last_error() noexcept;
 
   // Set the value of errno in a portable way.
-  virtual void set_last_system_error(int err) noexcept;
+  virtual void sys_set_last_error(int err) noexcept;
 
   // getaddrinfo() wrapper that can be mocked in tests.
-  virtual int getaddrinfo(const char *domain, const char *port,
-                          const addrinfo *hints, addrinfo **res) noexcept;
+  virtual int sys_getaddrinfo(const char *domain, const char *port,
+                              const addrinfo *hints, addrinfo **res) noexcept;
 
   // getnameinfo() wrapper that can be mocked in tests.
-  virtual int getnameinfo(const sockaddr *sa, SockLen salen, char *host,
-                          SockLen hostlen, char *serv, SockLen servlen,
-                          int flags) noexcept;
+  virtual int sys_getnameinfo(const sockaddr *sa, SockLen salen, char *host,
+                              SockLen hostlen, char *serv, SockLen servlen,
+                              int flags) noexcept;
 
   // freeaddrinfo() wrapper that can be mocked in tests.
-  virtual void freeaddrinfo(addrinfo *aip) noexcept;
+  virtual void sys_freeaddrinfo(addrinfo *aip) noexcept;
 
   // socket() wrapper that can be mocked in tests.
-  virtual Socket socket(int domain, int type, int protocol) noexcept;
+  virtual Socket sys_socket(int domain, int type, int protocol) noexcept;
 
   // connect() wrapper that can be mocked in tests.
-  virtual int connect(Socket fd, const sockaddr *sa, SockLen n) noexcept;
+  virtual int sys_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept;
 
   // recv() wrapper that can be mocked in tests.
-  virtual Ssize recv(Socket fd, void *base, Size count) noexcept;
+  virtual Ssize sys_recv(Socket fd, void *base, Size count) noexcept;
 
   // send() wrapper that can be mocked in tests.
-  virtual Ssize send(Socket fd, const void *base, Size count) noexcept;
+  virtual Ssize sys_send(Socket fd, const void *base, Size count) noexcept;
 
   // shutdown() wrapper that can be mocked in tests.
-  virtual int shutdown(Socket fd, int shutdown_how) noexcept;
+  virtual int sys_shutdown(Socket fd, int shutdown_how) noexcept;
 
   // Portable wrapper for closing a socket descriptor.
-  virtual int closesocket(Socket fd) noexcept;
+  virtual int sys_closesocket(Socket fd) noexcept;
 
   // select() wrapper that can be mocked in tests.
-  virtual int select(int numfd, fd_set *readset, fd_set *writeset,
-                     fd_set *exceptset, timeval *timeout) noexcept;
+  virtual int sys_select(int numfd, fd_set *readset, fd_set *writeset,
+                         fd_set *exceptset, timeval *timeout) noexcept;
 
   // If strtonum() is available, wrapper that can be mocked in tests, else
   // implementation of strtonum() borrowed from OpenBSD.
-  virtual long long strtonum(const char *s, long long minval, long long maxval,
-                             const char **err) noexcept;
+  virtual long long sys_strtonum(const char *s, long long minval,
+                                 long long maxval, const char **err) noexcept;
 
 #ifdef _WIN32
   // ioctlsocket() wrapper that can be mocked in tests.
-  virtual int ioctlsocket(Socket s, long cmd, u_long *argp) noexcept;
+  virtual int sys_ioctlsocket(Socket s, long cmd, u_long *argp) noexcept;
 #else
   // Wrapper for fcntl() taking just two arguments. Good for getting the
   // currently value of the socket flags.
-  virtual int fcntl2(Socket s, int cmd) noexcept;
+  virtual int sys_fcntl(Socket s, int cmd) noexcept;
 
   // Wrapper for fcntl() taking three arguments with the third argument
   // being an integer value. Good for setting O_NONBLOCK on a socket.
-  virtual int fcntl3i(Socket s, int cmd, int arg) noexcept;
+  virtual int sys_fcntl(Socket s, int cmd, int arg) noexcept;
 #endif
 
   // getsockopt() wrapper that can be mocked in tests.
-  virtual int getsockopt(Socket socket, int level, int name, void *value,
-                         SockLen *len) noexcept;
+  virtual int sys_getsockopt(Socket socket, int level, int name, void *value,
+                             SockLen *len) noexcept;
 
  private:
   class Impl;
