@@ -1311,7 +1311,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         continue;
       }
       // While on Unix ai_addrlen is socklen_t, it's size_t on Windows. Just
-      // for the sake of corretness, add a check that ensures that the size has
+      // for the sake of correctness, add a check that ensures that the size has
       // a reasonable value before casting to socklen_t. My understanding is
       // that size_t is `ULONG_PTR` while socklen_t is most likely `int`.
 #ifdef _WIN32
