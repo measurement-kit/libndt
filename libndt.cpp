@@ -1576,6 +1576,10 @@ Err Client::netx_select(std::vector<Socket> wantread,
                         std::vector<Socket> wantwrite, timeval tv,
                         std::vector<Socket> *readable,
                         std::vector<Socket> *writeable) noexcept {
+  if (wantread.size() <= 0 && wantwrite.size() <= 0) {
+    EMIT_WARNING("netx_select: you did not pass me any descriptor");
+    return Err::invalid_argument;
+  }
   if (readable != nullptr) {
     readable->clear();
   }
@@ -1587,7 +1591,7 @@ Err Client::netx_select(std::vector<Socket> wantread,
 #ifdef _WIN32
     size_t total = 0;
     auto add_descriptor = [ this, &total ](Socket fd, fd_set * set) noexcept {
-      if (fd == -1) {
+      if (fd == INVALID_SOCKET) {
         EMIT_WARNING("netx_select(): invalid file descriptor");
         return false;
       }
@@ -1629,11 +1633,17 @@ Err Client::netx_select(std::vector<Socket> wantread,
       }
       maxfd = (std::max)(maxfd, fd);
     }
-    assert(maxfd >= -1);
-    if (maxfd == -1) {
-      EMIT_WARNING("netx_select: you did not pass me any descriptor");
-      return Err::invalid_argument;
-    }
+    // Important: on Windows sockets are unsigned while on Unix they are signed
+    // hence here we'll get `maxfd == -1` on Windows and `maxfd == max(fd)` on
+    // Unix because of the way in which unsigned values work. To make sure this
+    // understanding is current, here is an assert to validate it. Note that,
+    // as mentioned also below, we don't care about the first argument to
+    // select() on Windows systems, since it's not used.
+#ifdef _WIN32
+    assert(maxfd == -1);
+#else
+    assert(maxfd > -1);
+#endif
     sys_set_last_error(0);
     // Implementation note: cast to `int` is safe because on Windows the first
     // argument to select() is ignored and on Unix sockets are ints. However, on
