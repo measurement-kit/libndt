@@ -26,11 +26,18 @@
 #include <chrono>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <random>
 #include <sstream>
 #include <utility>
 #include <vector>
+
+#ifdef HAVE_OPENSSL
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+#endif
 
 #include "curlx.hpp"
 #include "json.hpp"
@@ -85,6 +92,9 @@ class Client::Impl {
   Socket sock = -1;
   std::vector<NettestFlags> granted_suite;
   Settings settings;
+#ifdef HAVE_OPENSSL
+  std::map<Socket, SSL *> fd_to_ssl;
+#endif
 };
 
 static void random_printable_fill(char *buffer, size_t length) noexcept {
@@ -303,8 +313,8 @@ bool Client::query_mlabns() noexcept {
 }
 
 bool Client::connect() noexcept {
-  return netx_maybesocks5h_dial(impl->settings.hostname, impl->settings.port,
-                                &impl->sock) == Err::none;
+  return netx_maybessl_dial(impl->settings.hostname, impl->settings.port,
+                            &impl->sock) == Err::none;
 }
 
 bool Client::send_login() noexcept {
@@ -459,7 +469,7 @@ bool Client::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
-    Err err = netx_maybesocks5h_dial(impl->settings.hostname, port, &sock);
+    Err err = netx_maybessl_dial(impl->settings.hostname, port, &sock);
     if (err != Err::none) {
       break;
     }
@@ -481,23 +491,47 @@ bool Client::run_download() noexcept {
     auto begin = std::chrono::steady_clock::now();
     auto prev = begin;
     char buf[64000];
+    std::set<Socket> wantread, readable;
+    for (auto fd : dload_socks.sockets) {
+      wantread.insert(fd);
+    }
+    std::set<Socket> wantwrite, writeable;
     for (auto done = false; !done;) {
-      std::vector<Socket> wantread, readable;
-      for (auto fd : dload_socks.sockets) {
-        wantread.push_back(fd);
-      }
       timeval tv{};
       tv.tv_usec = 250000;
-      auto err = netx_select(std::move(wantread), {}, tv, &readable, nullptr);
+      // Implementation note: we move both wantread and wantwrite such that they
+      // become empty. Also, netx_select() clears readable and writeable.
+      auto err = netx_select(std::move(wantread), std::move(wantwrite), tv,
+                             &readable, &writeable);
       if (err != Err::none && err != Err::timed_out) {
         EMIT_WARNING(
             "run_download: netx_select() failed: " << sys_get_last_error());
         return false;
       }
       if (err == Err::none) {
-        for (auto fd : readable) {
+        // Implementation note: for robustness used a set such that any
+        // duplicate will be removed in the process of adding.
+        std::set<Socket> active;
+        active.insert(readable.begin(), readable.end());
+        active.insert(writeable.begin(), writeable.end());
+        for (auto fd : active) {
           Size n = 0;
           auto err = netx_recv_nonblocking(fd, buf, sizeof(buf), &n);
+          switch (err) {
+            case Err::operation_would_block:
+            case Err::ssl_want_read:
+              err = Err::none;
+              wantread.insert(fd);
+              assert(n == 0);
+              break;
+            case Err::ssl_want_write:
+              err = Err::none;
+              wantwrite.insert(fd);
+              assert(n == 0);
+              break;
+            default:
+              break;
+          }
           if (err != Err::none) {
             EMIT_WARNING(
                 "run_download: netx_recv() failed: " << sys_get_last_error());
@@ -624,7 +658,7 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = -1;
-    Err err = netx_maybesocks5h_dial(impl->settings.hostname, port, &sock);
+    Err err = netx_maybessl_dial(impl->settings.hostname, port, &sock);
     if (err != Err::none) {
       return false;
     }
@@ -641,23 +675,47 @@ bool Client::run_upload() noexcept {
     uint64_t total_data = 0;
     auto begin = std::chrono::steady_clock::now();
     auto prev = begin;
+    std::set<Socket> wantwrite, writeable;
+    for (auto fd : upload_socks.sockets) {
+      wantwrite.insert(fd);
+    }
+    std::set<Socket> wantread, readable;
     for (auto done = false; !done;) {
-      std::vector<Socket> wantwrite, writeable;
-      for (auto fd : upload_socks.sockets) {
-        wantwrite.push_back(fd);
-      }
       timeval tv{};
       tv.tv_usec = 250000;
-      auto err = netx_select({}, std::move(wantwrite), tv, nullptr, &writeable);
+      // Implementation note: we move both wantread and wantwrite such that they
+      // become empty. Also, netx_select() clears readable and writeable.
+      auto err = netx_select(std::move(readable), std::move(wantwrite), tv,
+                             &readable, &writeable);
       if (err != Err::none && err != Err::timed_out) {
         EMIT_WARNING(
             "run_upload: netx_select() failed: " << sys_get_last_error());
         return false;
       }
       if (err == Err::none) {
-        for (auto fd : writeable) {
+        // Implementation note: for robustness used a set such that any
+        // duplicate will be removed in the process of adding.
+        std::set<Socket> active;
+        active.insert(readable.begin(), readable.end());
+        active.insert(writeable.begin(), writeable.end());
+        for (auto fd : active) {
           Size n = 0;
           auto err = netx_send_nonblocking(fd, buf, sizeof(buf), &n);
+          switch (err) {
+            case Err::ssl_want_read:
+              err = Err::none;
+              wantread.insert(fd);
+              assert(n == 0);
+              break;
+            case Err::operation_would_block:
+            case Err::ssl_want_write:
+              err = Err::none;
+              wantwrite.insert(fd);
+              assert(n == 0);
+              break;
+            default:
+              break;
+          }
           if (err != Err::none) {
             if (err != Err::broken_pipe) {
               EMIT_WARNING(
@@ -988,6 +1046,49 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
 }
 
 // Networking layer
+
+Err Client::netx_maybessl_dial(const std::string &hostname,
+                               const std::string &port, Socket *sock) noexcept {
+  auto err = netx_maybesocks5h_dial(hostname, port, sock);
+  if ((impl->settings.protocol_flags & protocol_flag_tls) == 0 ||
+      err != Err::none) {
+    return err;
+  }
+#ifdef HAVE_SSL
+  SSL *ssl = nullptr;
+  {
+    SSL_CTX *ctx = ::SSL_CTX_new(SSLv23_client_method());
+    if (ctx == nullptr) {
+      EMIT_WARNING("SSL_CTX_new() failed");
+      this->closesocket(*sock);
+      return Err::generic;
+    }
+    EMIT_DEBUG("SSL_CTX created");
+    ssl = ::SSL_new(ctx);
+    if (ssl == nullptr) {
+      EMIT_WARNING("SSL_new() failed");
+      ::SSL_CTX_free(ctx);
+      this->closesocket(*sock);
+      return Err::generic;
+    }
+    EMIT_DEBUG("SSL created");
+    ::SSL_CTX_free(ctx);  // Referenced by `ssl` so safe to free here
+    assert(impl->fd_to_ssl(*sock) == 0);
+    impl->fd_to_ssl[*sock] = ssl;
+  }
+  if (!SSL_set_fd(ssl, *sock)) {
+    EMIT_WARNING("SSL_set_fd() failed");
+    this->closesocket(*sock);
+    SSL_free(ssl);
+    return Err::generic;
+  }
+  SSL_set_connect_state(ssl);
+  EMIT_DEBUG("SSL bound to socket");
+  return Err::none;
+#else
+  return Err::not_implemented;
+#endif
+}
 
 Err Client::netx_maybesocks5h_dial(const std::string &hostname,
                                    const std::string &port,
@@ -1362,13 +1463,20 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
-  auto err = netx_recv_nonblocking(fd, base, count, actual);
-  if (err != Err::operation_would_block) {
-    return err;
-  }
   timeval tv{};
   tv.tv_sec = impl->settings.timeout;
-  err = netx_wait_readable(fd, tv);
+  auto err = netx_recv_nonblocking(fd, base, count, actual);
+  switch (err) {
+    case Err::operation_would_block:
+    case Err::ssl_want_read:
+      err = netx_wait_readable(fd, tv);
+      break;
+    case Err::ssl_want_write:
+      err = netx_wait_writeable(fd, tv);
+      break;
+    default:
+      break;
+  }
   if (err != Err::none) {
     return err;
   }
@@ -1377,6 +1485,8 @@ Err Client::netx_recv(Socket fd, void *base, Size count,
 
 Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
                                   Size *actual) noexcept {
+  assert(base != nullptr && actual != nullptr);
+  *actual = 0;
   if (count <= 0) {
     EMIT_WARNING(
         "netx_recv: explicitly disallowing zero read; use netx_select() "
@@ -1384,15 +1494,41 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
     return Err::invalid_argument;
   }
   sys_set_last_error(0);
+#ifdef HAVE_OPENSSL
+  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if (count > INT_MAX) {
+      return Err::invalid_argument;
+    }
+    if (impl->fd_to_ssl.count(fd) != 1) {
+      return Err::invalid_argument;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    // TODO(bassosimone): add mocks and regress tests for OpenSSL.
+    int ret = ::SSL_read(ssl, base, count);
+    if (ret <= 0) {
+      switch (::SSL_get_error(ssl, ret)) {
+        case SSL_ERROR_ZERO_RETURN:
+          // TODO(bassosimone): consider the issue of dirty shutdown.
+          return Err::eof;
+        case SSL_ERROR_WANT_READ:
+          return Err::ssl_want_read;
+        case SSL_ERROR_WANT_WRITE:
+          return Err::ssl_want_write;
+        default:
+          return Err::ssl_generic;
+      }
+    }
+    *actual = (Size)ret;
+    return Err::none;
+  }
+#endif
   auto rv = sys_recv(fd, base, count);
   if (rv < 0) {
     assert(rv == -1);
-    *actual = 0;
     return netx_map_errno(sys_get_last_error());
   }
   if (rv == 0) {
     assert(count > 0);  // guaranteed by the above check
-    *actual = 0;
     return Err::eof;
   }
   *actual = (Size)rv;
@@ -1420,13 +1556,20 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
-  auto err = netx_send_nonblocking(fd, base, count, actual);
-  if (err != Err::operation_would_block) {
-    return err;
-  }
   timeval tv{};
   tv.tv_sec = impl->settings.timeout;
-  err = netx_wait_writeable(fd, tv);
+  auto err = netx_send_nonblocking(fd, base, count, actual);
+  switch (err) {
+    case Err::ssl_want_read:
+      err = netx_wait_readable(fd, tv);
+      break;
+    case Err::operation_would_block:
+    case Err::ssl_want_write:
+      err = netx_wait_writeable(fd, tv);
+      break;
+    default:
+      break;
+  }
   if (err != Err::none) {
     return err;
   }
@@ -1435,6 +1578,8 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
 
 Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
                                   Size *actual) noexcept {
+  assert(base != nullptr && actual != nullptr);
+  *actual = 0;
   if (count <= 0) {
     EMIT_WARNING(
         "netx_send: explicitly disallowing zero send; use netx_select() "
@@ -1442,17 +1587,43 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
     return Err::invalid_argument;
   }
   sys_set_last_error(0);
+#ifdef HAVE_OPENSSL
+  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if (count > INT_MAX) {
+      return Err::invalid_argument;
+    }
+    if (impl->fd_to_ssl.count(fd) != 1) {
+      return Err::invalid_argument;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    // TODO(bassosimone): add mocks and regress tests for OpenSSL.
+    int ret = ::SSL_write(ssl, base, count);
+    if (ret <= 0) {
+      switch (::SSL_get_error(ssl, ret)) {
+        case SSL_ERROR_ZERO_RETURN:
+          // TODO(bassosimone): consider the issue of dirty shutdown.
+          return Err::eof;
+        case SSL_ERROR_WANT_READ:
+          return Err::ssl_want_read;
+        case SSL_ERROR_WANT_WRITE:
+          return Err::ssl_want_write;
+        default:
+          return Err::ssl_generic;
+      }
+    }
+    *actual = (Size)ret;
+    return Err::none;
+  }
+#endif
   auto rv = sys_send(fd, base, count);
   if (rv < 0) {
     assert(rv == -1);
-    *actual = 0;
     return netx_map_errno(sys_get_last_error());
   }
   // Send() should not return zero unless count is zero. So consider a zero
   // return value as an I/O error rather than EOF.
   if (rv == 0) {
     assert(count > 0);  // guaranteed by the above check
-    *actual = 0;
     return Err::io_error;
   }
   *actual = (Size)rv;
@@ -1557,25 +1728,24 @@ Err Client::netx_setnonblocking(Socket fd, bool enable) noexcept {
 }
 
 Err Client::netx_wait_readable(Socket fd, timeval tv) noexcept {
-  std::vector<Socket> v, vv;
-  v.push_back(fd);
+  std::set<Socket> v, vv;
+  v.insert(fd);
   auto err = netx_select(std::move(v), {}, tv, nullptr, &vv);
   assert((err == Err::none && vv.size() == 1) || vv.size() <= 0);
   return err;
 }
 
 Err Client::netx_wait_writeable(Socket fd, timeval tv) noexcept {
-  std::vector<Socket> v, vv;
-  v.push_back(fd);
+  std::set<Socket> v, vv;
+  v.insert(fd);
   auto err = netx_select({}, std::move(v), tv, nullptr, &vv);
   assert((err == Err::none && vv.size() == 1) || vv.size() <= 0);
   return err;
 }
 
-Err Client::netx_select(std::vector<Socket> wantread,
-                        std::vector<Socket> wantwrite, timeval tv,
-                        std::vector<Socket> *readable,
-                        std::vector<Socket> *writeable) noexcept {
+Err Client::netx_select(std::set<Socket> wantread, std::set<Socket> wantwrite,
+                        timeval tv, std::set<Socket> *readable,
+                        std::set<Socket> *writeable) noexcept {
   if (wantread.size() <= 0 && wantwrite.size() <= 0) {
     EMIT_WARNING("netx_select: you did not pass me any descriptor");
     return Err::invalid_argument;
@@ -1667,15 +1837,52 @@ Err Client::netx_select(std::vector<Socket> wantread,
     }
     for (auto fd : wantread) {
       if (FD_ISSET(fd, &readset) && readable != nullptr) {
-        readable->push_back(fd);
+        readable->insert(fd);
       }
     }
     for (auto fd : wantwrite) {
       if (FD_ISSET(fd, &writeset) && writeable != nullptr) {
-        writeable->push_back(fd);
+        writeable->insert(fd);
       }
     }
     break;
+  }
+  return Err::none;
+}
+
+Err Client::netx_shutdown_both(Socket fd) noexcept {
+#ifdef HAVE_OPENSSL
+  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if (impl->fd_to_ssl.count(fd) != 1) {
+      return Err::invalid_argument;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    if (::SSL_shutdown(ssl) != 1) {
+      // TODO(bassosimone): correctly process SSL error here.
+      EMIT_WARNING("shutdown: SSL_shutdown: ");
+      ERR_print_errors_fp(stderr);
+      return Err::ssl_generic;
+    }
+  }
+#endif
+  if (sys_shutdown(fd, OS_SHUT_RDWR) != 0) {
+    return netx_map_errno(sys_get_last_error());
+  }
+  return Err::none;
+}
+
+Err Client::netx_closesocket(Socket fd) noexcept {
+#if HAVE_OPENSSL
+  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if (impl->fd_to_ssl.count(fd) != 1) {
+      return Err::invalid_argument;
+    }
+    ::SSL_free(impl->fd_to_ssl.at(fd));
+    impl->fd_to_ssl.erase(fd);
+  }
+#endif
+  if (sys_closesocket(fd) != 0) {
+    return netx_map_errno(sys_get_last_error());
   }
   return Err::none;
 }

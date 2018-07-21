@@ -41,6 +41,7 @@
 
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -320,7 +321,12 @@ class Client {
   // Networking layer
   // ````````````````
   //
-  // This section contains network functionality used to implement NDT.
+  // This section contains network functionality used by NDT.
+
+  // Connect to @p hostname and @p port possibly using SSL and SOCKSv5.
+  virtual Err netx_maybessl_dial(const std::string &hostname,
+                                 const std::string &port,
+                                 Socket *sock) noexcept;
 
   // Connect to @p hostname and @port possibly using SOCKSv5.
   virtual Err netx_maybesocks5h_dial(const std::string &hostname,
@@ -373,10 +379,16 @@ class Client {
   virtual Err netx_wait_writeable(Socket, timeval timeout) noexcept;
 
   // Simplified wrapper for select that deals with EINTR and FD_SETSIZE.
-  virtual Err netx_select(std::vector<Socket> wantread,
-                          std::vector<Socket> wantwrite, timeval timeout,
-                          std::vector<Socket> *readable,
-                          std::vector<Socket> *writeable) noexcept;
+  virtual Err netx_select(std::set<Socket> wantread,
+                          std::set<Socket> wantwrite, timeval timeout,
+                          std::set<Socket> *readable,
+                          std::set<Socket> *writeable) noexcept;
+
+  // Shutdown both ends of a socket.
+  virtual Err netx_shutdown_both(Socket fd) noexcept;
+
+  // Close a socket.
+  virtual Err netx_closesocket(Socket fd) noexcept;
 
   // Dependencies (cURL)
 
@@ -480,6 +492,10 @@ enum class Err {
   ai_fail,
   ai_noname,
   socks5h,
+  ssl_generic,
+  ssl_want_read,
+  ssl_want_write,
+  not_implemented,
 };
 
 constexpr MsgType msg_comm_failure = MsgType{0};

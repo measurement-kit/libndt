@@ -13,6 +13,7 @@
 #include "argh.h"
 
 static void usage() {
+  // clang-format off
   std::clog << "\n";
   std::clog << "Usage: libndt-client [options] [<hostname>]\n";
   std::clog << "\n";
@@ -20,13 +21,14 @@ static void usage() {
   std::clog << "  --download-ext        : run multi-stream download test\n";
   std::clog << "  --json                : use the JSON protocol\n";
   std::clog << "  --port <port>         : use the specified port\n";
-  std::clog
-      << "  --socks5h <port>      : use socks5h proxy at 127.0.0.1:<port>\n";
+  std::clog << "  --tls                 : use transport layer security\n";
+  std::clog << "  --socks5h <port>      : use socks5h proxy at 127.0.0.1:<port>\n";
   std::clog << "  --upload              : run upload test\n";
   std::clog << "  --verbose             : be verbose\n";
   std::clog << "\n";
   std::clog << "If <hostname> is omitted, we pick a random server.\n";
   std::clog << std::endl;
+  // clang-format on
 }
 
 int main(int, char **argv) {
@@ -49,6 +51,9 @@ int main(int, char **argv) {
       } else if (flag == "json") {
         settings.protocol_flags = libndt::protocol_flag_json;
         std::clog << "will use json" << std::endl;
+      } else if (flag == "tls") {
+        settings.protocol_flags = libndt::protocol_flag_tls;
+        std::clog << "will use TLS" << std::endl;
       } else if (flag == "upload") {
         settings.nettest_flags |= libndt::nettest_flag_upload;
         std::clog << "will run upload" << std::endl;
