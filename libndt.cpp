@@ -75,13 +75,9 @@ constexpr size_t msg_kickoff_size = sizeof(msg_kickoff) - 1;
   } while (0)
 
 #ifdef _WIN32
-#define OS_ERROR_IS_EINTR() (false)
 #define OS_SHUT_RDWR SD_BOTH
-#define AS_OS_SOCKET(s) ((SOCKET)s)
 #else
-#define OS_ERROR_IS_EINTR() (errno == EINTR)
 #define OS_SHUT_RDWR SHUT_RDWR
-#define AS_OS_SOCKET(s) ((int)s)
 #endif
 
 class Client::Impl {
@@ -1304,23 +1300,29 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
     for (auto aip = rp; (aip); aip = aip->ai_next) {
       sys_set_last_error(0);
       *sock = sys_socket(aip->ai_family, aip->ai_socktype, 0);
-      if (*sock == -1) {
+      if (!is_socket_valid(*sock)) {
         EMIT_WARNING("socket() failed: " << sys_get_last_error());
         continue;
       }
       if (netx_setnonblocking(*sock, true) != Err::none) {
-        EMIT_WARNING("netx_setnonblocking() failed: "
-                     << sys_get_last_error());
+        EMIT_WARNING("netx_setnonblocking() failed: " << sys_get_last_error());
         sys_closesocket(*sock);
         *sock = -1;
         continue;
       }
-      // The following two lines ensure that casting `size_t` to
-      // SockLen is safe because SockLen is `int` and the value of
-      // the ai_addrlen field is always small enough.
-      static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
-      assert(aip->ai_addrlen <= INT_MAX);
-      if (sys_connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
+      // While on Unix ai_addrlen is socklen_t, it's size_t on Windows. Just
+      // for the sake of corretness, add a check that ensures that the size has
+      // a reasonable value before casting to socklen_t. My understanding is
+      // that size_t is `ULONG_PTR` while socklen_t is most likely `int`.
+#ifdef _WIN32
+      if (aip->ai_addrlen > sizeof(sockaddr_in6)) {
+        EMIT_WARNING("unexpected size of aip->ai_addrlen");
+        sys_closesocket(*sock);
+        *sock = -1;
+        continue;
+      }
+#endif
+      if (sys_connect(*sock, aip->ai_addr, (socklen_t)aip->ai_addrlen) == 0) {
         EMIT_DEBUG("connect(): okay");
         break;
       }
@@ -1331,10 +1333,10 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         err = netx_wait_writeable(*sock, tv);
         if (err == Err::none) {
           int soerr = 0;
-          SockLen soerrlen = sizeof(soerr);
+          socklen_t soerrlen = sizeof(soerr);
           if (sys_getsockopt(*sock, SOL_SOCKET, SO_ERROR, (void *)&soerr,
                              &soerrlen) == 0) {
-            assert(soerrlen == sizeof (soerr));
+            assert(soerrlen == sizeof(soerr));
             if (soerr == 0) {
               EMIT_DEBUG("connect(): okay");
               break;
@@ -1401,7 +1403,7 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
   Size off = 0;
   while (off < count) {
     Size n = 0;
-    if ((uintptr_t) base > UINTPTR_MAX - off) {
+    if ((uintptr_t)base > UINTPTR_MAX - off) {
       return Err::value_too_large;
     }
     Err err = netx_recv(fd, ((char *)base) + off, count - off, &n);
@@ -1461,7 +1463,7 @@ Err Client::netx_sendn(Socket fd, const void *base, Size count) noexcept {
   Size off = 0;
   while (off < count) {
     Size n = 0;
-    if ((uintptr_t) base > UINTPTR_MAX - off) {
+    if ((uintptr_t)base > UINTPTR_MAX - off) {
       return Err::value_too_large;
     }
     Err err = netx_send(fd, ((char *)base) + off, count - off, &n);
@@ -1500,13 +1502,23 @@ Err Client::netx_resolve(const std::string &hostname,
   Err result = Err::none;
   for (auto aip = rp; (aip); aip = aip->ai_next) {
     char address[NI_MAXHOST], port[NI_MAXSERV];
-    // The following two lines ensure that casting `size_t` to
-    // SockLen is safe because SockLen is `int` and the value of
-    // the ai_addrlen field is always small enough.
-    static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
-    assert(sizeof(address) <= INT_MAX && sizeof(port) <= INT_MAX);
-    if (sys_getnameinfo(aip->ai_addr, (SockLen)aip->ai_addrlen, address,
-                        (SockLen)sizeof(address), port, (SockLen)sizeof(port),
+    // The following casts from `size_t` to `socklen_t` are safe for sure
+    // because NI_MAXHOST and NI_MAXSERV are small values. To make sure this
+    // assumption is correct, deploy the following static cast.
+    static_assert(sizeof(address) <= INT_MAX && sizeof(port) <= INT_MAX,
+                  "Wrong assumption about NI_MAXHOST or NI_MAXSERV");
+    // Additionally on Windows there's a cast from size_t to socklen_t that
+    // needs to be handled as we do above for getaddrinfo().
+#ifdef _WIN32
+    if (aip->ai_addrlen > sizeof(sockaddr_in6)) {
+      EMIT_WARNING("unexpected size of aip->ai_addrlen");
+      result = Err::value_too_large;
+      break;
+    }
+#endif
+    if (sys_getnameinfo(aip->ai_addr, (socklen_t)aip->ai_addrlen, address,
+                        (socklen_t)sizeof(address), port,
+                        (socklen_t)sizeof(port),
                         NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
       EMIT_WARNING("unexpected getnameinfo() failure");
       result = Err::ai_generic;
@@ -1559,8 +1571,9 @@ Err Client::netx_wait_writeable(Socket fd, timeval tv) noexcept {
   return err;
 }
 
-Err Client::netx_select(std::vector<Socket> wantread, std::vector<Socket> wantwrite,
-                        timeval tv, std::vector<Socket> *readable,
+Err Client::netx_select(std::vector<Socket> wantread,
+                        std::vector<Socket> wantwrite, timeval tv,
+                        std::vector<Socket> *readable,
                         std::vector<Socket> *writeable) noexcept {
   if (readable != nullptr) {
     readable->clear();
@@ -1572,7 +1585,7 @@ Err Client::netx_select(std::vector<Socket> wantread, std::vector<Socket> wantwr
     // add_descriptor() safely adds @p fd to @p set.
 #ifdef _WIN32
     size_t total = 0;
-    auto add_descriptor = [this, &total](Socket fd, fd_set *set) noexcept {
+    auto add_descriptor = [ this, &total ](Socket fd, fd_set * set) noexcept {
       if (fd == -1) {
         EMIT_WARNING("netx_select(): invalid file descriptor");
         return false;
@@ -1581,11 +1594,11 @@ Err Client::netx_select(std::vector<Socket> wantread, std::vector<Socket> wantwr
         EMIT_WARNING("netx_select(): too many descriptors");
         return false;
       }
-      FD_SET(AS_OS_SOCKET(fd), set);
+      FD_SET(fd, set);
       return true;
     };
 #else
-    auto add_descriptor = [this](Socket fd, fd_set *set) noexcept {
+    auto add_descriptor = [this](Socket fd, fd_set * set) noexcept {
       if (fd < 0) {
         EMIT_WARNING("netx_select(): invalid file descriptor");
         return false;
@@ -1594,7 +1607,7 @@ Err Client::netx_select(std::vector<Socket> wantread, std::vector<Socket> wantwr
         EMIT_WARNING("netx_select(): too many descriptors");
         return false;
       }
-      FD_SET(AS_OS_SOCKET(fd), set);
+      FD_SET(fd, set);
       return true;
     };
 #endif
@@ -1681,16 +1694,12 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 // Dependencies (libc)
 
 #ifdef _WIN32
-#define AS_OS_SOCKLEN(n) ((int)n)
-#define AS_OS_SOCKLEN_STAR(n) ((int *)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((int)n)
 #define OS_SSIZE_MAX INT_MAX
 #define OS_EINVAL WSAEINVAL
 #define AS_OS_OPTION_VALUE(x) ((char *)x)
 #else
-#define AS_OS_SOCKLEN(n) ((socklen_t)n)
-#define AS_OS_SOCKLEN_STAR(n) ((socklen_t *)n)
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
 #define OS_SSIZE_MAX SSIZE_MAX
@@ -1719,8 +1728,8 @@ int Client::sys_getaddrinfo(const char *domain, const char *port,
   return ::getaddrinfo(domain, port, hints, res);
 }
 
-int Client::sys_getnameinfo(const sockaddr *sa, SockLen salen, char *host,
-                            SockLen hostlen, char *serv, SockLen servlen,
+int Client::sys_getnameinfo(const sockaddr *sa, socklen_t salen, char *host,
+                            socklen_t hostlen, char *serv, socklen_t servlen,
                             int flags) noexcept {
   return ::getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
 }
@@ -1731,8 +1740,8 @@ Socket Client::sys_socket(int domain, int type, int protocol) noexcept {
   return (Socket)::socket(domain, type, protocol);
 }
 
-int Client::sys_connect(Socket fd, const sockaddr *sa, SockLen len) noexcept {
-  return ::connect(AS_OS_SOCKET(fd), sa, AS_OS_SOCKLEN(len));
+int Client::sys_connect(Socket fd, const sockaddr *sa, socklen_t len) noexcept {
+  return ::connect(fd, sa, len);
 }
 
 Ssize Client::sys_recv(Socket fd, void *base, Size count) noexcept {
@@ -1740,8 +1749,7 @@ Ssize Client::sys_recv(Socket fd, void *base, Size count) noexcept {
     sys_set_last_error(OS_EINVAL);
     return -1;
   }
-  return (Ssize)::recv(AS_OS_SOCKET(fd), AS_OS_BUFFER(base),
-                       AS_OS_BUFFER_LEN(count), 0);
+  return (Ssize)::recv(fd, AS_OS_BUFFER(base), AS_OS_BUFFER_LEN(count), 0);
 }
 
 Ssize Client::sys_send(Socket fd, const void *base, Size count) noexcept {
@@ -1749,19 +1757,18 @@ Ssize Client::sys_send(Socket fd, const void *base, Size count) noexcept {
     sys_set_last_error(OS_EINVAL);
     return -1;
   }
-  return (Ssize)::send(AS_OS_SOCKET(fd), AS_OS_BUFFER(base),
-                       AS_OS_BUFFER_LEN(count), 0);
+  return (Ssize)::send(fd, AS_OS_BUFFER(base), AS_OS_BUFFER_LEN(count), 0);
 }
 
 int Client::sys_shutdown(Socket fd, int shutdown_how) noexcept {
-  return ::shutdown(AS_OS_SOCKET(fd), shutdown_how);
+  return ::shutdown(fd, shutdown_how);
 }
 
 int Client::sys_closesocket(Socket fd) noexcept {
 #ifdef _WIN32
-  return ::closesocket(AS_OS_SOCKET(fd));
+  return ::closesocket(fd);
 #else
-  return ::close(AS_OS_SOCKET(fd));
+  return ::close(fd);
 #endif
 }
 
@@ -1777,22 +1784,18 @@ long long Client::sys_strtonum(const char *s, long long minval,
 
 #ifdef _WIN32
 int Client::sys_ioctlsocket(Socket s, long cmd, u_long *argp) noexcept {
-  return ::ioctlsocket(AS_OS_SOCKET(s), cmd, argp);
+  return ::ioctlsocket(s, cmd, argp);
 }
 #else
-int Client::sys_fcntl(Socket s, int cmd) noexcept {
-  return ::fcntl(AS_OS_SOCKET(s), cmd);
-}
+int Client::sys_fcntl(Socket s, int cmd) noexcept { return ::fcntl(s, cmd); }
 int Client::sys_fcntl(Socket s, int cmd, int arg) noexcept {
-  return ::fcntl(AS_OS_SOCKET(s), cmd, arg);
+  return ::fcntl(s, cmd, arg);
 }
 #endif
 
 int Client::sys_getsockopt(Socket socket, int level, int name, void *value,
-                           SockLen *len) noexcept {
-  static_assert(sizeof(*len) == sizeof(int), "invalid SockLen size");
-  return ::getsockopt(AS_OS_SOCKET(socket), level, name,
-                      AS_OS_OPTION_VALUE(value), AS_OS_SOCKLEN_STAR(len));
+                           socklen_t *len) noexcept {
+  return ::getsockopt(socket, level, name, AS_OS_OPTION_VALUE(value), len);
 }
 
 }  // namespace libndt

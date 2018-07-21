@@ -104,9 +104,19 @@ constexpr Size SizeMax = UINT64_MAX;
 
 using Ssize = int64_t;
 
-using Socket = int64_t;
+#ifdef _WIN32
+using Socket = SOCKET;
+#else
+using Socket = int;
+#endif
 
-using SockLen = socklen_t;
+constexpr bool is_socket_valid(Socket s) noexcept {
+#ifdef _WIN32
+  return s != INVALID_SOCKET;
+#else
+  return s >= 0;
+#endif
+}
 
 /// Flags to select what protocol should be used.
 using ProtocolFlags = unsigned int;
@@ -391,8 +401,8 @@ class Client {
                               const addrinfo *hints, addrinfo **res) noexcept;
 
   // getnameinfo() wrapper that can be mocked in tests.
-  virtual int sys_getnameinfo(const sockaddr *sa, SockLen salen, char *host,
-                              SockLen hostlen, char *serv, SockLen servlen,
+  virtual int sys_getnameinfo(const sockaddr *sa, socklen_t salen, char *host,
+                              socklen_t hostlen, char *serv, socklen_t servlen,
                               int flags) noexcept;
 
   // freeaddrinfo() wrapper that can be mocked in tests.
@@ -402,7 +412,7 @@ class Client {
   virtual Socket sys_socket(int domain, int type, int protocol) noexcept;
 
   // connect() wrapper that can be mocked in tests.
-  virtual int sys_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept;
+  virtual int sys_connect(Socket fd, const sockaddr *sa, socklen_t n) noexcept;
 
   // recv() wrapper that can be mocked in tests.
   virtual Ssize sys_recv(Socket fd, void *base, Size count) noexcept;
@@ -440,7 +450,7 @@ class Client {
 
   // getsockopt() wrapper that can be mocked in tests.
   virtual int sys_getsockopt(Socket socket, int level, int name, void *value,
-                             SockLen *len) noexcept;
+                             socklen_t *len) noexcept;
 
  private:
   class Impl;

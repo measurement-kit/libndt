@@ -2238,7 +2238,8 @@ class FailSetnonblocking : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::netx_dial() deals with Client::netx_setnonblocking() failure") {
+TEST_CASE(
+    "Client::netx_dial() deals with Client::netx_setnonblocking() failure") {
   FailSetnonblocking client;
   libndt::Socket sock = -1;
   REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
@@ -2248,7 +2249,7 @@ class FailSocketConnectImmediate : public libndt::Client {
  public:
   using libndt::Client::Client;
   int sys_connect(  //
-      libndt::Socket, const sockaddr *, libndt::SockLen) noexcept override {
+      libndt::Socket, const sockaddr *, socklen_t) noexcept override {
     sys_set_last_error(OS_EINVAL);
     return -1;
   }
@@ -2271,7 +2272,7 @@ class FailSocketConnectTimeout : public libndt::Client {
  public:
   using libndt::Client::Client;
   int sys_connect(  //
-      libndt::Socket, const sockaddr *, libndt::SockLen) noexcept override {
+      libndt::Socket, const sockaddr *, socklen_t) noexcept override {
     sys_set_last_error(OS_EINPROGRESS);
     return -1;
   }
@@ -2293,7 +2294,7 @@ class FailSocketConnectGetsockoptError : public libndt::Client {
  public:
   using libndt::Client::Client;
   int sys_connect(  //
-      libndt::Socket, const sockaddr *, libndt::SockLen) noexcept override {
+      libndt::Socket, const sockaddr *, socklen_t) noexcept override {
     sys_set_last_error(OS_EINPROGRESS);
     return -1;
   }
@@ -2304,7 +2305,7 @@ class FailSocketConnectGetsockoptError : public libndt::Client {
     return libndt::Err::none;
   }
   int sys_getsockopt(libndt::Socket, int, int, void *,
-                     libndt::SockLen *) noexcept override {
+                     socklen_t *) noexcept override {
     sys_set_last_error(OS_EINVAL);
     return -1;
   }
@@ -2321,7 +2322,7 @@ class FailSocketConnectSocketError : public libndt::Client {
  public:
   using libndt::Client::Client;
   int sys_connect(  //
-      libndt::Socket, const sockaddr *, libndt::SockLen) noexcept override {
+      libndt::Socket, const sockaddr *, socklen_t) noexcept override {
     sys_set_last_error(OS_EINPROGRESS);
     return -1;
   }
@@ -2332,15 +2333,14 @@ class FailSocketConnectSocketError : public libndt::Client {
     return libndt::Err::none;
   }
   virtual int sys_getsockopt(libndt::Socket, int, int, void *value,
-                             libndt::SockLen *) noexcept override {
+                             socklen_t *) noexcept override {
     int *ivalue = static_cast<int *>(value);
     *ivalue = OS_EINVAL;  // Any error would actually do here
     return 0;
   }
 };
 
-TEST_CASE(
-    "Client::netx_dial() deals with Client::connect() socket error") {
+TEST_CASE("Client::netx_dial() deals with Client::connect() socket error") {
   FailSocketConnectSocketError client{};
   libndt::Socket sock = -1;
   REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
@@ -2407,8 +2407,8 @@ class PartialNetxRecvAndThenError : public libndt::Client {
   using libndt::Client::Client;
   static constexpr libndt::Size amount = 11;
   static constexpr libndt::Size good_amount = 3;
-  libndt::Err netx_recv(libndt::Socket, void *buf,
-                        libndt::Size size, libndt::Size *rv) noexcept override {
+  libndt::Err netx_recv(libndt::Socket, void *buf, libndt::Size size,
+                        libndt::Size *rv) noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       for (size_t i = 0; i < good_amount; ++i) {
@@ -2423,7 +2423,8 @@ class PartialNetxRecvAndThenError : public libndt::Client {
 };
 
 TEST_CASE(
-    "Client::netx_recvn() deals with partial Client::netx_recv() and then error") {
+    "Client::netx_recvn() deals with partial Client::netx_recv() and then "
+    "error") {
   char buf[PartialNetxRecvAndThenError::amount] = {};
   PartialNetxRecvAndThenError client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
@@ -2608,9 +2609,8 @@ TEST_CASE("Client::netx_resolve() deals with Client::getaddrinfo() failure") {
 class FailGetnameinfo : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int sys_getnameinfo(const sockaddr *, libndt::SockLen, char *,
-                      libndt::SockLen, char *, libndt::SockLen,
-                      int) noexcept override {
+  int sys_getnameinfo(const sockaddr *, socklen_t, char *, socklen_t, char *,
+                      socklen_t, int) noexcept override {
     return EAI_AGAIN;
   }
 };
