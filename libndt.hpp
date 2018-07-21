@@ -495,6 +495,7 @@ enum class Err {
   ssl_generic,
   ssl_want_read,
   ssl_want_write,
+  internal,
   not_implemented,
 };
 
