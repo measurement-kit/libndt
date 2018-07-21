@@ -673,8 +673,8 @@ class FailRecvDuringDownload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::invalid_argument;
   }
 };
@@ -702,8 +702,8 @@ class RecvEofDuringDownload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
 };
@@ -733,8 +733,8 @@ class FailMsgReadLegacyDuringDownload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *, std::string *) noexcept override {
@@ -766,8 +766,8 @@ class RecvNonTestMsgDuringDownload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -799,8 +799,8 @@ class FailMsgWriteDuringDownload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -835,8 +835,8 @@ class FailMsgReadDuringDownload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -874,8 +874,8 @@ class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -914,8 +914,8 @@ class FailEmitResultDuringDownload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -955,8 +955,8 @@ class TooManyTestMsgsDuringDownload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -1113,8 +1113,8 @@ class FailSendDuringUpload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_send(libndt::Socket, const void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::io_error;
   }
 };
@@ -1149,8 +1149,8 @@ class FailMsgExpectDuringUpload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_send(libndt::Socket, const void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::io_error;
   }
   bool msg_expect(libndt::MsgType, std::string *) noexcept override {
@@ -1183,8 +1183,8 @@ class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
                           std::vector<libndt::Socket> *) noexcept override {
     return libndt::Err::none;
   }
-  libndt::Err netx_send(libndt::Socket, const void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+  libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
+                                    libndt::Size *) noexcept override {
     return libndt::Err::io_error;
   }
   bool msg_expect(libndt::MsgType, std::string *) noexcept override {
@@ -2230,7 +2230,21 @@ TEST_CASE("Client::netx_dial() deals with Client::socket() failure") {
   REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
 }
 
-class FailSocketConnect : public libndt::Client {
+class FailSetnonblocking : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  libndt::Err netx_setnonblocking(libndt::Socket, bool) noexcept override {
+    return libndt::Err::io_error;
+  }
+};
+
+TEST_CASE("Client::netx_dial() deals with Client::netx_setnonblocking() failure") {
+  FailSetnonblocking client;
+  libndt::Socket sock = -1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+}
+
+class FailSocketConnectImmediate : public libndt::Client {
  public:
   using libndt::Client::Client;
   int sys_connect(  //
@@ -2240,19 +2254,106 @@ class FailSocketConnect : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::netx_dial() deals with Client::connect() failure") {
-  FailSocketConnect client{};
+TEST_CASE(
+    "Client::netx_dial() deals with immediate Client::connect() failure") {
+  FailSocketConnectImmediate client{};
   libndt::Socket sock = -1;
   REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
 }
 
-// Client::netx_recv() tests
-// -------------------------
+#ifdef _WIN32
+#define OS_EINPROGRESS WSAEWOULDBLOCK
+#else
+#define OS_EINPROGRESS EINPROGRESS
+#endif
 
-TEST_CASE("Client::netx_recv() deals with zero recv correctly") {
+class FailSocketConnectTimeout : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int sys_connect(  //
+      libndt::Socket, const sockaddr *, libndt::SockLen) noexcept override {
+    sys_set_last_error(OS_EINPROGRESS);
+    return -1;
+  }
+  libndt::Err netx_select(std::vector<libndt::Socket>,
+                          std::vector<libndt::Socket>, timeval,
+                          std::vector<libndt::Socket> *,
+                          std::vector<libndt::Socket> *) noexcept override {
+    return libndt::Err::timed_out;
+  }
+};
+
+TEST_CASE("Client::netx_dial() deals with Client::connect() timeout") {
+  FailSocketConnectTimeout client{};
+  libndt::Socket sock = -1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+}
+
+class FailSocketConnectGetsockoptError : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int sys_connect(  //
+      libndt::Socket, const sockaddr *, libndt::SockLen) noexcept override {
+    sys_set_last_error(OS_EINPROGRESS);
+    return -1;
+  }
+  libndt::Err netx_select(std::vector<libndt::Socket>,
+                          std::vector<libndt::Socket>, timeval,
+                          std::vector<libndt::Socket> *,
+                          std::vector<libndt::Socket> *) noexcept override {
+    return libndt::Err::none;
+  }
+  int sys_getsockopt(libndt::Socket, int, int, void *,
+                     libndt::SockLen *) noexcept override {
+    sys_set_last_error(OS_EINVAL);
+    return -1;
+  }
+};
+
+TEST_CASE(
+    "Client::netx_dial() deals with Client::connect() getsockopt() error") {
+  FailSocketConnectGetsockoptError client{};
+  libndt::Socket sock = -1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+}
+
+class FailSocketConnectSocketError : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  int sys_connect(  //
+      libndt::Socket, const sockaddr *, libndt::SockLen) noexcept override {
+    sys_set_last_error(OS_EINPROGRESS);
+    return -1;
+  }
+  libndt::Err netx_select(std::vector<libndt::Socket>,
+                          std::vector<libndt::Socket>, timeval,
+                          std::vector<libndt::Socket> *,
+                          std::vector<libndt::Socket> *) noexcept override {
+    return libndt::Err::none;
+  }
+  virtual int sys_getsockopt(libndt::Socket, int, int, void *value,
+                             libndt::SockLen *) noexcept override {
+    int *ivalue = static_cast<int *>(value);
+    *ivalue = OS_EINVAL;  // Any error would actually do here
+    return 0;
+  }
+};
+
+TEST_CASE(
+    "Client::netx_dial() deals with Client::connect() socket error") {
+  FailSocketConnectSocketError client{};
+  libndt::Socket sock = -1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+}
+
+// Client::netx_recv_nonblocking() tests
+// -------------------------------------
+
+TEST_CASE("Client::netx_recv_nonblocking() deals with zero recv correctly") {
   libndt::Client client;
   libndt::Size n = 0;
-  REQUIRE(client.netx_recv(0, nullptr, 0, &n) == libndt::Err::invalid_argument);
+  REQUIRE(client.netx_recv_nonblocking(0, nullptr, 0, &n) ==
+          libndt::Err::invalid_argument);
 }
 
 // Client::netx_recvn() tests
@@ -2270,21 +2371,20 @@ TEST_CASE("Client::netx_recvn() deals with too-large buffer") {
           libndt::Err::invalid_argument);
 }
 
-class FailRecv : public libndt::Client {
+class FailNetxRecv : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Ssize sys_recv(libndt::Socket, void *,
-                         libndt::Size) noexcept override {
-    sys_set_last_error(OS_EWOULDBLOCK);
-    return -1;
+  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
+                        libndt::Size *) noexcept override {
+    return libndt::Err::invalid_argument;
   }
 };
 
-TEST_CASE("Client::netx_recvn() deals with Client::recv() failure") {
+TEST_CASE("Client::netx_recvn() deals with Client::netx_recv() failure") {
   char buf[1024];
-  FailRecv client;
+  FailNetxRecv client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
-          libndt::Err::operation_would_block);
+          libndt::Err::invalid_argument);
 }
 
 class RecvEof : public libndt::Client {
@@ -2302,35 +2402,36 @@ TEST_CASE("Client::netx_recvn() deals with Client::recv() EOF") {
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == libndt::Err::eof);
 }
 
-class PartialRecvAndThenError : public libndt::Client {
+class PartialNetxRecvAndThenError : public libndt::Client {
  public:
   using libndt::Client::Client;
   static constexpr libndt::Size amount = 11;
   static constexpr libndt::Size good_amount = 3;
-  libndt::Ssize sys_recv(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
+  libndt::Err netx_recv(libndt::Socket, void *buf,
+                        libndt::Size size, libndt::Size *rv) noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       for (size_t i = 0; i < good_amount; ++i) {
         ((char *)buf)[i] = 'A';
       }
-      return good_amount;
+      *rv = good_amount;
+      return libndt::Err::none;
     }
-    sys_set_last_error(OS_EWOULDBLOCK);
-    return -1;
+    *rv = 0;
+    return libndt::Err::invalid_argument;
   }
 };
 
 TEST_CASE(
-    "Client::netx_recvn() deals with partial Client::recv() and then error") {
-  char buf[PartialRecvAndThenError::amount] = {};
-  PartialRecvAndThenError client;
+    "Client::netx_recvn() deals with partial Client::netx_recv() and then error") {
+  char buf[PartialNetxRecvAndThenError::amount] = {};
+  PartialNetxRecvAndThenError client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
-          libndt::Err::operation_would_block);
+          libndt::Err::invalid_argument);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return -1, not a short read.
   for (size_t i = 0; i < sizeof(buf); ++i) {
-    if (i < PartialRecvAndThenError::good_amount) {
+    if (i < PartialNetxRecvAndThenError::good_amount) {
       REQUIRE(buf[i] == 'A');
     } else {
       REQUIRE(buf[i] == '\0');
@@ -2372,13 +2473,14 @@ TEST_CASE(
   }
 }
 
-// Client::netx_send() tests
-// -------------------------
+// Client::netx_send_nonblocking() tests
+// -------------------------------------
 
 TEST_CASE("Client::netx_send() deals with zero send correctly") {
   libndt::Client client;
   libndt::Size n = 0;
-  REQUIRE(client.netx_send(0, nullptr, 0, &n) == libndt::Err::invalid_argument);
+  REQUIRE(client.netx_send_nonblocking(0, nullptr, 0, &n) ==
+          libndt::Err::invalid_argument);
 }
 
 // Client::netx_sendn() tests
@@ -2395,7 +2497,7 @@ class FailSend : public libndt::Client {
   using libndt::Client::Client;
   libndt::Ssize sys_send(libndt::Socket, const void *,
                          libndt::Size) noexcept override {
-    sys_set_last_error(OS_EWOULDBLOCK);
+    sys_set_last_error(OS_EINVAL);
     return -1;
   }
 };
@@ -2404,7 +2506,7 @@ TEST_CASE("Client::netx_sendn() deals with Client::send() failure") {
   char buf[1024];
   FailSend client;
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
-          libndt::Err::operation_would_block);
+          libndt::Err::invalid_argument);
 }
 
 // As much as EOF should not appear on a socket when sending, be ready.
@@ -2436,7 +2538,7 @@ class PartialSendAndThenError : public libndt::Client {
       successful += good_amount;
       return good_amount;
     }
-    sys_set_last_error(OS_EWOULDBLOCK);
+    sys_set_last_error(OS_EINVAL);
     return -1;
   }
 };
@@ -2445,7 +2547,7 @@ TEST_CASE("Client::send() deals with partial Client::send() and then error") {
   char buf[PartialSendAndThenError::amount] = {};
   PartialSendAndThenError client;
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
-          libndt::Err::operation_would_block);
+          libndt::Err::invalid_argument);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return -1, not a short write.
   //

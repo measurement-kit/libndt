@@ -501,7 +501,7 @@ bool Client::run_download() noexcept {
       if (err == Err::none) {
         for (auto fd : readable) {
           Size n = 0;
-          auto err = netx_recv(fd, buf, sizeof(buf), &n);
+          auto err = netx_recv_nonblocking(fd, buf, sizeof(buf), &n);
           if (err != Err::none) {
             EMIT_WARNING(
                 "run_download: netx_recv() failed: " << sys_get_last_error());
@@ -661,7 +661,7 @@ bool Client::run_upload() noexcept {
       if (err == Err::none) {
         for (auto fd : writeable) {
           Size n = 0;
-          auto err = netx_send(fd, buf, sizeof(buf), &n);
+          auto err = netx_send_nonblocking(fd, buf, sizeof(buf), &n);
           if (err != Err::none) {
             if (err != Err::broken_pipe) {
               EMIT_WARNING(
@@ -1266,6 +1266,14 @@ Err Client::netx_map_eai(int ec) noexcept {
   return Err::ai_generic;
 }
 
+#ifdef _WIN32
+// Depending on the version of Winsock it's either EAGAIN or EINPROGRESS
+#define CONNECT_IN_PROGRESS(e) \
+  (e == Err::operation_would_block || e == Err::operation_in_progress)
+#else
+#define CONNECT_IN_PROGRESS(e) (e == Err::operation_in_progress)
+#endif
+
 Err Client::netx_dial(const std::string &hostname, const std::string &port,
                       Socket *sock) noexcept {
   assert(sock != nullptr);
@@ -1300,6 +1308,13 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         EMIT_WARNING("socket() failed: " << sys_get_last_error());
         continue;
       }
+      if (netx_setnonblocking(*sock, true) != Err::none) {
+        EMIT_WARNING("netx_setnonblocking() failed: "
+                     << sys_get_last_error());
+        sys_closesocket(*sock);
+        *sock = -1;
+        continue;
+      }
       // The following two lines ensure that casting `size_t` to
       // SockLen is safe because SockLen is `int` and the value of
       // the ai_addrlen field is always small enough.
@@ -1308,6 +1323,25 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       if (sys_connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
         EMIT_DEBUG("connect(): okay");
         break;
+      }
+      auto err = netx_map_errno(sys_get_last_error());
+      if (CONNECT_IN_PROGRESS(err)) {
+        timeval tv{};
+        tv.tv_sec = impl->settings.timeout;
+        err = netx_wait_writeable(*sock, tv);
+        if (err == Err::none) {
+          int soerr = 0;
+          SockLen soerrlen = sizeof(soerr);
+          if (sys_getsockopt(*sock, SOL_SOCKET, SO_ERROR, (void *)&soerr,
+                             &soerrlen) == 0) {
+            assert(soerrlen == sizeof (soerr));
+            if (soerr == 0) {
+              EMIT_DEBUG("connect(): okay");
+              break;
+            }
+            sys_set_last_error(soerr);
+          }
+        }
       }
       EMIT_WARNING("connect() failed: " << sys_get_last_error());
       sys_closesocket(*sock);
@@ -1322,8 +1356,25 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
   return *sock != -1 ? Err::none : Err::io_error;
 }
 
+#undef CONNECT_IN_PROGRESS  // Tidy
+
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
+  auto err = netx_recv_nonblocking(fd, base, count, actual);
+  if (err != Err::operation_would_block) {
+    return err;
+  }
+  timeval tv{};
+  tv.tv_sec = impl->settings.timeout;
+  err = netx_wait_readable(fd, tv);
+  if (err != Err::none) {
+    return err;
+  }
+  return netx_recv_nonblocking(fd, base, count, actual);
+}
+
+Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
+                                  Size *actual) noexcept {
   if (count <= 0) {
     EMIT_WARNING(
         "netx_recv: explicitly disallowing zero read; use netx_select() "
@@ -1361,6 +1412,21 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
+  auto err = netx_send_nonblocking(fd, base, count, actual);
+  if (err != Err::operation_would_block) {
+    return err;
+  }
+  timeval tv{};
+  tv.tv_sec = impl->settings.timeout;
+  err = netx_wait_writeable(fd, tv);
+  if (err != Err::none) {
+    return err;
+  }
+  return netx_send_nonblocking(fd, base, count, actual);
+}
+
+Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
+                                  Size *actual) noexcept {
   if (count <= 0) {
     EMIT_WARNING(
         "netx_send: explicitly disallowing zero send; use netx_select() "
