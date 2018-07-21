@@ -1350,9 +1350,15 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
   Size off = 0;
   while (off < count) {
     Size n = 0;
+    if ((uintptr_t) base > UINTPTR_MAX - off) {
+      return Err::value_too_large;
+    }
     Err err = netx_recv(fd, ((char *)base) + off, count - off, &n);
     if (err != Err::none) {
       return err;
+    }
+    if (off > SizeMax - n) {
+      return Err::value_too_large;
     }
     off += n;
   }
@@ -1389,9 +1395,15 @@ Err Client::netx_sendn(Socket fd, const void *base, Size count) noexcept {
   Size off = 0;
   while (off < count) {
     Size n = 0;
+    if ((uintptr_t) base > UINTPTR_MAX - off) {
+      return Err::value_too_large;
+    }
     Err err = netx_send(fd, ((char *)base) + off, count - off, &n);
     if (err != Err::none) {
       return err;
+    }
+    if (off > SizeMax - n) {
+      return Err::value_too_large;
     }
     off += n;
   }

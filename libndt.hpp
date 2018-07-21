@@ -100,6 +100,8 @@ constexpr const char *ndt_version_compat = "v3.7.0";
 
 using Size = uint64_t;
 
+constexpr Size SizeMax = UINT64_MAX;
+
 using Ssize = int64_t;
 
 using Socket = int64_t;
