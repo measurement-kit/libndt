@@ -104,7 +104,7 @@ using Ssize = int64_t;
 
 using Socket = int64_t;
 
-using SockLen = int;
+using SockLen = socklen_t;
 
 /// Flags to select what protocol should be used.
 using ProtocolFlags = unsigned int;
@@ -306,41 +306,65 @@ class Client {
   virtual bool msg_read_legacy(MsgType *code, std::string *msg) noexcept;
 
   // Networking layer
+  // ````````````````
+  //
+  // This section contains network functionality used to implement NDT.
 
+  // Connect to @p hostname and @port possibly using SOCKSv5.
   virtual Err netx_maybesocks5h_dial(const std::string &hostname,
                                      const std::string &port,
                                      Socket *sock) noexcept;
 
+  // Map errno code into a Err value.
   static Err netx_map_errno(int ec) noexcept;
 
+  // Map getaddrinfo return value into a Err value.
   Err netx_map_eai(int ec) noexcept;
 
+  // Connect to @p hostname and @p port.
   virtual Err netx_dial(const std::string &hostname, const std::string &port,
                         Socket *sock) noexcept;
 
+  // Receive from the network.
   virtual Err netx_recv(Socket fd, void *base, Size count,
                         Size *actual) noexcept;
 
+  // Receive from the network without blocking.
   virtual Err netx_recv_nonblocking(Socket fd, void *base, Size count,
                                     Size *actual) noexcept;
 
+  // Receive exactly N bytes from the network.
   virtual Err netx_recvn(Socket fd, void *base, Size count) noexcept;
 
+  // Send data to the network.
   virtual Err netx_send(Socket fd, const void *base, Size count,
                         Size *actual) noexcept;
 
+  // Send to the network without blocking.
   virtual Err netx_send_nonblocking(Socket fd, const void *base, Size count,
                                     Size *actual) noexcept;
 
+  // Send exactly N bytes to the network.
   virtual Err netx_sendn(Socket fd, const void *base, Size count) noexcept;
 
+  // Resolve hostname into a list of IP addresses.
   virtual Err netx_resolve(const std::string &hostname,
                            std::vector<std::string> *addrs) noexcept;
 
+  // Set socket non blocking.
   virtual Err netx_setnonblocking(Socket fd, bool enable) noexcept;
 
-  virtual Err netx_select(int numfd, fd_set *readset, fd_set *writeset,
-                          fd_set *exceptset, timeval *timeout) noexcept;
+  // Pauses until the socket becomes readable.
+  virtual Err netx_wait_readable(Socket, timeval timeout) noexcept;
+
+  // Pauses until the socket becomes writeable.
+  virtual Err netx_wait_writeable(Socket, timeval timeout) noexcept;
+
+  // Simplified wrapper for select that deals with EINTR and FD_SETSIZE.
+  virtual Err netx_select(std::vector<Socket> wantread,
+                          std::vector<Socket> wantwrite, timeval timeout,
+                          std::vector<Socket> *readable,
+                          std::vector<Socket> *writeable) noexcept;
 
   // Dependencies (cURL)
 
@@ -349,40 +373,72 @@ class Client {
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
 
-  // Dependencies (libc)
+  // Dependencies (system)
+  // `````````````````````
+  //
+  // This section contains wrappers for system calls used in regress tests.
 
-  virtual int get_last_system_error() noexcept;
-  virtual void set_last_system_error(int err) noexcept;
+  // Access the value of errno in a portable way.
+  virtual int sys_get_last_error() noexcept;
 
-  virtual int getaddrinfo(const char *domain, const char *port,
-                          const addrinfo *hints, addrinfo **res) noexcept;
-  virtual int getnameinfo(const sockaddr *sa, SockLen salen, char *host,
-                          SockLen hostlen, char *serv, SockLen servlen,
-                          int flags) noexcept;
-  virtual void freeaddrinfo(addrinfo *aip) noexcept;
+  // Set the value of errno in a portable way.
+  virtual void sys_set_last_error(int err) noexcept;
 
-  virtual Socket socket(int domain, int type, int protocol) noexcept;
-  virtual int connect(Socket fd, const sockaddr *sa, SockLen n) noexcept;
-  virtual Ssize recv(Socket fd, void *base, Size count) noexcept;
-  virtual Ssize send(Socket fd, const void *base, Size count) noexcept;
-  virtual int shutdown(Socket fd, int how) noexcept;
-  virtual int closesocket(Socket fd) noexcept;
+  // getaddrinfo() wrapper that can be mocked in tests.
+  virtual int sys_getaddrinfo(const char *domain, const char *port,
+                              const addrinfo *hints, addrinfo **res) noexcept;
 
-  virtual int select(int numfd, fd_set *readset, fd_set *writeset,
-                     fd_set *exceptset, timeval *timeout) noexcept;
+  // getnameinfo() wrapper that can be mocked in tests.
+  virtual int sys_getnameinfo(const sockaddr *sa, SockLen salen, char *host,
+                              SockLen hostlen, char *serv, SockLen servlen,
+                              int flags) noexcept;
 
-  virtual long long strtonum(const char *s, long long minval, long long maxval,
-                             const char **err) noexcept;
+  // freeaddrinfo() wrapper that can be mocked in tests.
+  virtual void sys_freeaddrinfo(addrinfo *aip) noexcept;
+
+  // socket() wrapper that can be mocked in tests.
+  virtual Socket sys_socket(int domain, int type, int protocol) noexcept;
+
+  // connect() wrapper that can be mocked in tests.
+  virtual int sys_connect(Socket fd, const sockaddr *sa, SockLen n) noexcept;
+
+  // recv() wrapper that can be mocked in tests.
+  virtual Ssize sys_recv(Socket fd, void *base, Size count) noexcept;
+
+  // send() wrapper that can be mocked in tests.
+  virtual Ssize sys_send(Socket fd, const void *base, Size count) noexcept;
+
+  // shutdown() wrapper that can be mocked in tests.
+  virtual int sys_shutdown(Socket fd, int shutdown_how) noexcept;
+
+  // Portable wrapper for closing a socket descriptor.
+  virtual int sys_closesocket(Socket fd) noexcept;
+
+  // select() wrapper that can be mocked in tests.
+  virtual int sys_select(int numfd, fd_set *readset, fd_set *writeset,
+                         fd_set *exceptset, timeval *timeout) noexcept;
+
+  // If strtonum() is available, wrapper that can be mocked in tests, else
+  // implementation of strtonum() borrowed from OpenBSD.
+  virtual long long sys_strtonum(const char *s, long long minval,
+                                 long long maxval, const char **err) noexcept;
 
 #ifdef _WIN32
-  virtual int ioctlsocket(Socket s, long cmd, u_long *argp) noexcept;
+  // ioctlsocket() wrapper that can be mocked in tests.
+  virtual int sys_ioctlsocket(Socket s, long cmd, u_long *argp) noexcept;
 #else
-  virtual int fcntl2(Socket s, int cmd) noexcept;
-  virtual int fcntl3i(Socket s, int cmd, int arg) noexcept;
+  // Wrapper for fcntl() taking just two arguments. Good for getting the
+  // currently value of the socket flags.
+  virtual int sys_fcntl(Socket s, int cmd) noexcept;
+
+  // Wrapper for fcntl() taking three arguments with the third argument
+  // being an integer value. Good for setting O_NONBLOCK on a socket.
+  virtual int sys_fcntl(Socket s, int cmd, int arg) noexcept;
 #endif
 
-  virtual int getsockopt(Socket socket, int level, int name, void *value,
-                         SockLen *len) noexcept;
+  // getsockopt() wrapper that can be mocked in tests.
+  virtual int sys_getsockopt(Socket socket, int level, int name, void *value,
+                             SockLen *len) noexcept;
 
  private:
   class Impl;
@@ -405,6 +461,7 @@ enum class Err {
   operation_in_progress,
   operation_would_block,
   timed_out,
+  value_too_large,
   eof,
   ai_generic,
   ai_again,

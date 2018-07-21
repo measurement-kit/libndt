@@ -182,7 +182,7 @@ SocketVector::SocketVector(Client *c) noexcept : owner{c} {}
 SocketVector::~SocketVector() noexcept {
   if (owner != nullptr) {
     for (auto &fd : sockets) {
-      owner->closesocket(fd);
+      owner->sys_closesocket(fd);
     }
   }
 }
@@ -197,7 +197,7 @@ Client::Client(Settings settings) noexcept : Client::Client() {
 
 Client::~Client() noexcept {
   if (impl->sock != -1) {
-    this->closesocket(impl->sock);
+    sys_closesocket(impl->sock);
   }
 }
 
@@ -321,8 +321,7 @@ bool Client::recv_kickoff() noexcept {
   if (err != Err::none) {
     // TODO(bassosimone): pretty print `err` not the last system error, because,
     // when we'll use also SSL, the latter will probably be inaccurate.
-    EMIT_WARNING(
-        "recv_kickoff: netx_recvn() failed: " << get_last_system_error());
+    EMIT_WARNING("recv_kickoff: netx_recvn() failed: " << sys_get_last_error());
     return false;
   }
   if (memcmp(buf, msg_kickoff, sizeof(buf)) != 0) {
@@ -365,9 +364,9 @@ bool Client::recv_tests_ids() noexcept {
   std::string cur;
   while ((std::getline(ss, cur, ' '))) {
     const char *errstr = nullptr;
-    static_assert(sizeof (NettestFlags) == sizeof (uint8_t),
+    static_assert(sizeof(NettestFlags) == sizeof(uint8_t),
                   "Invalid NettestFlags size");
-    auto tid = (uint8_t)this->strtonum(cur.data(), 1, 256, &errstr);
+    auto tid = (uint8_t)sys_strtonum(cur.data(), 1, 256, &errstr);
     if (errstr != nullptr) {
       EMIT_WARNING("recv_tests_ids: found invalid test-id: "
                    << cur.data() << " (error: " << errstr << ")");
@@ -427,25 +426,13 @@ bool Client::recv_results_and_logout() noexcept {
 }
 
 bool Client::wait_close() noexcept {
-  fd_set readset;
-  FD_ZERO(&readset);
-  // In wait_close() regress test we call wait_close() with sock
-  // equal to -1, which causes a segfault. For testability do not
-  // reject the value but rather just ignore the socket. We have
-  // an assert() below that catches other negative values.
-  if (impl->sock >= 0) {
-    FD_SET(AS_OS_SOCKET(impl->sock), &readset);
-  }
   timeval tv{};
   tv.tv_sec = 1;
-  // Note: cast to `int` safe because on Unix sockets are `int`s and on
-  // Windows instead the first argment to select() is ignored.
-  assert(impl->sock >= -1 && impl->sock < INT_MAX);
-  auto err = netx_select((int)impl->sock + 1, &readset, nullptr, nullptr, &tv);
+  auto err = netx_wait_readable(impl->sock, tv);
   if (err != Err::none) {
     EMIT_WARNING(
-        "wait_close(): netx_select() failed: " << get_last_system_error());
-    (void)this->shutdown(impl->sock, OS_SHUT_RDWR);
+        "wait_close(): netx_wait_readable() failed: " << sys_get_last_error());
+    (void)sys_shutdown(impl->sock, OS_SHUT_RDWR);
     return (err == Err::timed_out);
   }
   {
@@ -499,39 +486,30 @@ bool Client::run_download() noexcept {
     auto prev = begin;
     char buf[64000];
     for (auto done = false; !done;) {
-      Socket maxsock = -1;
-      fd_set set;
-      FD_ZERO(&set);
-      for (auto &fd : dload_socks.sockets) {
-        assert(fd >= 0);
-        FD_SET(AS_OS_SOCKET(fd), &set);
-        maxsock = (std::max)(maxsock, fd);
+      std::vector<Socket> wantread, readable;
+      for (auto fd : dload_socks.sockets) {
+        wantread.push_back(fd);
       }
       timeval tv{};
       tv.tv_usec = 250000;
-      // Cast to `int` safe as explained above.
-      assert(maxsock < INT_MAX);
-      auto err = netx_select((int)maxsock + 1, &set, nullptr, nullptr, &tv);
+      auto err = netx_select(std::move(wantread), {}, tv, &readable, nullptr);
       if (err != Err::none && err != Err::timed_out) {
         EMIT_WARNING(
-            "run_download: netx_select() failed: " << get_last_system_error());
+            "run_download: netx_select() failed: " << sys_get_last_error());
         return false;
       }
       if (err == Err::none) {
-        for (auto &fd : dload_socks.sockets) {
-          if (FD_ISSET(fd, &set)) {
-            Size n = 0;
-            auto err = netx_recv_nonblocking(fd, buf, sizeof(buf), &n);
-            if (err != Err::none) {
-              assert(err != Err::operation_would_block);  // we called select
-              EMIT_WARNING("run_download: netx_recv() failed: "
-                           << get_last_system_error());
-              done = true;
-              break;
-            }
-            recent_data += (uint64_t)n;
-            total_data += (uint64_t)n;
+        for (auto fd : readable) {
+          Size n = 0;
+          auto err = netx_recv_nonblocking(fd, buf, sizeof(buf), &n);
+          if (err != Err::none) {
+            EMIT_WARNING(
+                "run_download: netx_recv() failed: " << sys_get_last_error());
+            done = true;
+            break;
           }
+          recent_data += (uint64_t)n;
+          total_data += (uint64_t)n;
         }
       }
       auto now = std::chrono::steady_clock::now();
@@ -551,7 +529,7 @@ bool Client::run_download() noexcept {
       }
     }
     for (auto &fd : dload_socks.sockets) {
-      (void)this->shutdown(fd, OS_SHUT_RDWR);
+      (void)sys_shutdown(fd, OS_SHUT_RDWR);
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -668,41 +646,32 @@ bool Client::run_upload() noexcept {
     auto begin = std::chrono::steady_clock::now();
     auto prev = begin;
     for (auto done = false; !done;) {
-      Socket maxsock = -1;
-      fd_set set;
-      FD_ZERO(&set);
-      for (auto &fd : upload_socks.sockets) {
-        assert(fd >= 0);
-        FD_SET(AS_OS_SOCKET(fd), &set);
-        maxsock = (std::max)(maxsock, fd);
+      std::vector<Socket> wantwrite, writeable;
+      for (auto fd : upload_socks.sockets) {
+        wantwrite.push_back(fd);
       }
       timeval tv{};
       tv.tv_usec = 250000;
-      // Cast to `int` safe as explained above.
-      assert(maxsock < INT_MAX);
-      auto err = netx_select((int)maxsock + 1, nullptr, &set, nullptr, &tv);
+      auto err = netx_select({}, std::move(wantwrite), tv, nullptr, &writeable);
       if (err != Err::none && err != Err::timed_out) {
         EMIT_WARNING(
-            "run_upload: netx_select() failed: " << get_last_system_error());
+            "run_upload: netx_select() failed: " << sys_get_last_error());
         return false;
       }
       if (err == Err::none) {
-        for (auto &fd : upload_socks.sockets) {
-          if (FD_ISSET(fd, &set)) {
-            Size n = 0;
-            auto err = netx_send_nonblocking(fd, buf, sizeof(buf), &n);
-            if (err != Err::none) {
-              assert(err != Err::operation_would_block);  // we called select
-              if (err != Err::broken_pipe) {
-                EMIT_WARNING("run_upload: netx_send() failed: "
-                             << get_last_system_error());
-              }
-              done = true;
-              break;
+        for (auto fd : writeable) {
+          Size n = 0;
+          auto err = netx_send_nonblocking(fd, buf, sizeof(buf), &n);
+          if (err != Err::none) {
+            if (err != Err::broken_pipe) {
+              EMIT_WARNING(
+                  "run_upload: netx_send() failed: " << sys_get_last_error());
             }
-            recent_data += (uint64_t)n;
-            total_data += (uint64_t)n;
+            done = true;
+            break;
           }
+          recent_data += (uint64_t)n;
+          total_data += (uint64_t)n;
         }
       }
       auto now = std::chrono::steady_clock::now();
@@ -722,7 +691,7 @@ bool Client::run_upload() noexcept {
       }
     }
     for (auto &fd : upload_socks.sockets) {
-      (void)this->shutdown(fd, OS_SHUT_RDWR);
+      (void)sys_shutdown(fd, OS_SHUT_RDWR);
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -754,16 +723,19 @@ bool Client::msg_write_login(const std::string &version) noexcept {
                 "nettest_flags too large");
   MsgType code = MsgType{0};
   impl->settings.nettest_flags |= nettest_flag_status | nettest_flag_meta;
-  if ((impl->settings.nettest_flags & nettest_flag_middlebox) != NettestFlags{0}) {
+  if ((impl->settings.nettest_flags & nettest_flag_middlebox) !=
+      NettestFlags{0}) {
     EMIT_WARNING("msg_write_login(): nettest_flag_middlebox: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_middlebox;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_simple_firewall) != NettestFlags{0}) {
+  if ((impl->settings.nettest_flags & nettest_flag_simple_firewall) !=
+      NettestFlags{0}) {
     EMIT_WARNING(
         "msg_write_login(): nettest_flag_simple_firewall: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_simple_firewall;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_upload_ext) != NettestFlags{0}) {
+  if ((impl->settings.nettest_flags & nettest_flag_upload_ext) !=
+      NettestFlags{0}) {
     EMIT_WARNING("msg_write_login(): nettest_flag_upload_ext: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_upload_ext;
   }
@@ -841,7 +813,7 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
       auto err = netx_sendn(impl->sock, header, sizeof(header));
       if (err != Err::none) {
         EMIT_WARNING(
-            "msg_write_legacy: sendn() failed: " << get_last_system_error());
+            "msg_write_legacy: sendn() failed: " << sys_get_last_error());
         return false;
       }
     }
@@ -855,7 +827,7 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
     auto err = netx_sendn(impl->sock, msg.data(), msg.size());
     if (err != Err::none) {
       EMIT_WARNING(
-          "msg_write_legacy: sendn() failed: " << get_last_system_error());
+          "msg_write_legacy: sendn() failed: " << sys_get_last_error());
       return false;
     }
   }
@@ -889,7 +861,7 @@ bool Client::msg_expect_test_prepare(std::string *pport,
   std::string port;
   {
     const char *error = nullptr;
-    (void)this->strtonum(options[0].data(), 1, UINT16_MAX, &error);
+    (void)sys_strtonum(options[0].data(), 1, UINT16_MAX, &error);
     if (error != nullptr) {
       EMIT_WARNING("msg_expect_test_prepare: cannot parse port");
       return false;
@@ -905,7 +877,7 @@ bool Client::msg_expect_test_prepare(std::string *pport,
   uint8_t nflows = 1;
   if (options.size() >= 6) {
     const char *error = nullptr;
-    nflows = (uint8_t)this->strtonum(options[5].c_str(), 1, 16, &error);
+    nflows = (uint8_t)sys_strtonum(options[5].c_str(), 1, 16, &error);
     if (error != nullptr) {
       EMIT_WARNING("msg_expect_test_prepare: cannot parse num-flows");
       return false;
@@ -982,14 +954,14 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
       auto err = netx_recvn(impl->sock, header, sizeof(header));
       if (err != Err::none) {
         EMIT_WARNING(
-            "msg_read_legacy: recvn() failed: " << get_last_system_error());
+            "msg_read_legacy: recvn() failed: " << sys_get_last_error());
         return false;
       }
     }
     EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)header[0]);
     EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)header[2]);
-    static_assert(sizeof (MsgType) == sizeof (unsigned char),
+    static_assert(sizeof(MsgType) == sizeof(unsigned char),
                   "Unexpected MsgType size");
     *code = MsgType{(unsigned char)header[0]};
     memcpy(&len, &header[1], sizeof(len));
@@ -1010,8 +982,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
   {
     auto err = netx_recvn(impl->sock, buf.get(), len);
     if (err != Err::none) {
-      EMIT_WARNING(
-          "msg_read_legacy: recvn() failed: " << get_last_system_error());
+      EMIT_WARNING("msg_read_legacy: recvn() failed: " << sys_get_last_error());
       return false;
     }
   }
@@ -1044,7 +1015,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     auto err = netx_sendn(*sock, auth_request, sizeof(auth_request));
     if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot send auth_request");
-      this->closesocket(*sock);
+      sys_closesocket(*sock);
       *sock = -1;
       return err;
     }
@@ -1059,21 +1030,21 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     auto err = netx_recvn(*sock, auth_response, sizeof(auth_response));
     if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot recv auth_response");
-      this->closesocket(*sock);
+      sys_closesocket(*sock);
       *sock = -1;
       return err;
     }
     constexpr uint8_t version = 5;
     if (auth_response[0] != version) {
       EMIT_WARNING("socks5h: received unexpected version number");
-      this->closesocket(*sock);
+      sys_closesocket(*sock);
       *sock = -1;
       return Err::socks5h;
     }
     constexpr uint8_t auth_method = 0;
     if (auth_response[1] != auth_method) {
       EMIT_WARNING("socks5h: received unexpected auth_method");
-      this->closesocket(*sock);
+      sys_closesocket(*sock);
       *sock = -1;
       return Err::socks5h;
     }
@@ -1090,7 +1061,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       ss << (uint8_t)3;  // ATYPE_DOMAINNAME
       if (hostname.size() > UINT8_MAX) {
         EMIT_WARNING("socks5h: hostname is too long");
-        this->closesocket(*sock);
+        sys_closesocket(*sock);
         *sock = -1;
         return Err::invalid_argument;
       }
@@ -1099,10 +1070,10 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       uint16_t portno{};
       {
         const char *errstr = nullptr;
-        portno = (uint16_t)this->strtonum(port.c_str(), 0, UINT16_MAX, &errstr);
+        portno = (uint16_t)sys_strtonum(port.c_str(), 0, UINT16_MAX, &errstr);
         if (errstr != nullptr) {
           EMIT_WARNING("socks5h: invalid port number: " << errstr);
-          this->closesocket(*sock);
+          sys_closesocket(*sock);
           *sock = -1;
           return Err::invalid_argument;
         }
@@ -1116,7 +1087,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         *sock, connect_request.data(), connect_request.size());
     if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot send connect_request");
-      this->closesocket(*sock);
+      sys_closesocket(*sock);
       *sock = -1;
       return err;
     }
@@ -1133,7 +1104,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         *sock, connect_response_hdr, sizeof(connect_response_hdr));
     if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot recv connect_response_hdr");
-      this->closesocket(*sock);
+      sys_closesocket(*sock);
       *sock = -1;
       return err;
     }
@@ -1142,7 +1113,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     constexpr uint8_t version = 5;
     if (connect_response_hdr[0] != version) {
       EMIT_WARNING("socks5h: invalid message version");
-      this->closesocket(*sock);
+      sys_closesocket(*sock);
       *sock = -1;
       return Err::socks5h;
     }
@@ -1150,13 +1121,13 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       // TODO(bassosimone): map the socks5 error to a system error
       EMIT_WARNING("socks5h: connect() failed: "
                    << (unsigned)(uint8_t)connect_response_hdr[1]);
-      this->closesocket(*sock);
+      sys_closesocket(*sock);
       *sock = -1;
       return Err::io_error;
     }
     if (connect_response_hdr[2] != 0) {
       EMIT_WARNING("socks5h: invalid reserved field");
-      this->closesocket(*sock);
+      sys_closesocket(*sock);
       *sock = -1;
       return Err::socks5h;
     }
@@ -1169,7 +1140,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         auto err = netx_recvn(*sock, buf, sizeof(buf));
         if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv ipv4 address");
-          this->closesocket(*sock);
+          sys_closesocket(*sock);
           *sock = -1;
           return err;
         }
@@ -1183,7 +1154,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         auto err = netx_recvn(*sock, &len, sizeof(len));
         if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv domain length");
-          this->closesocket(*sock);
+          sys_closesocket(*sock);
           *sock = -1;
           return err;
         }
@@ -1191,7 +1162,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         err = netx_recvn(*sock, domain, len);
         if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv domain");
-          this->closesocket(*sock);
+          sys_closesocket(*sock);
           *sock = -1;
           return err;
         }
@@ -1206,7 +1177,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         auto err = netx_recvn(*sock, buf, sizeof(buf));
         if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv ipv6 address");
-          this->closesocket(*sock);
+          sys_closesocket(*sock);
           *sock = -1;
           return err;
         }
@@ -1216,7 +1187,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       }
       default:
         EMIT_WARNING("socks5h: invalid address type");
-        this->closesocket(*sock);
+        sys_closesocket(*sock);
         *sock = -1;
         return Err::socks5h;
     }
@@ -1226,7 +1197,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       auto err = netx_recvn(*sock, &port, sizeof(port));
       if (err != Err::none) {
         EMIT_WARNING("socks5h: cannot recv port");
-        this->closesocket(*sock);
+        sys_closesocket(*sock);
         *sock = -1;
         return err;
       }
@@ -1287,7 +1258,7 @@ Err Client::netx_map_eai(int ec) noexcept {
     case EAI_NONAME: return Err::ai_noname;
 #ifdef EAI_SYSTEM
     case EAI_SYSTEM: {
-      return netx_map_errno(get_last_system_error());
+      return netx_map_errno(sys_get_last_error());
     }
 #endif
   }
@@ -1324,23 +1295,23 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
     addrinfo *rp = nullptr;
-    int rv = this->getaddrinfo(addr.data(), port.data(), &hints, &rp);
+    int rv = sys_getaddrinfo(addr.data(), port.data(), &hints, &rp);
     if (rv != 0) {
       EMIT_WARNING("unexpected getaddrinfo() failure");
       return netx_map_eai(rv);
     }
     assert(rp);
     for (auto aip = rp; (aip); aip = aip->ai_next) {
-      set_last_system_error(0);
-      *sock = this->socket(aip->ai_family, aip->ai_socktype, 0);
+      sys_set_last_error(0);
+      *sock = sys_socket(aip->ai_family, aip->ai_socktype, 0);
       if (*sock == -1) {
-        EMIT_WARNING("socket() failed: " << get_last_system_error());
+        EMIT_WARNING("socket() failed: " << sys_get_last_error());
         continue;
       }
       if (netx_setnonblocking(*sock, true) != Err::none) {
         EMIT_WARNING("netx_setnonblocking() failed: "
-                     << get_last_system_error());
-        this->closesocket(*sock);
+                     << sys_get_last_error());
+        sys_closesocket(*sock);
         *sock = -1;
         continue;
       }
@@ -1349,39 +1320,34 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       // the ai_addrlen field is always small enough.
       static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
       assert(aip->ai_addrlen <= INT_MAX);
-      if (this->connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
+      if (sys_connect(*sock, aip->ai_addr, (SockLen)aip->ai_addrlen) == 0) {
         EMIT_DEBUG("connect(): okay");
         break;
       }
-      auto err = netx_map_errno(get_last_system_error());
+      auto err = netx_map_errno(sys_get_last_error());
       if (CONNECT_IN_PROGRESS(err)) {
-        assert(*sock >= 0 && *sock < INT_MAX);
-        fd_set writeset;
-        FD_ZERO(&writeset);
-        FD_SET(AS_OS_SOCKET(*sock), &writeset);
         timeval tv{};
         tv.tv_sec = impl->settings.timeout;
-        // Cast to `int` safe here as explained elsewhere.
-        err = netx_select((int)*sock + 1, nullptr, &writeset, nullptr, &tv);
+        err = netx_wait_writeable(*sock, tv);
         if (err == Err::none) {
           int soerr = 0;
           SockLen soerrlen = sizeof(soerr);
-          if (this->getsockopt(*sock, SOL_SOCKET, SO_ERROR, (void *)&soerr,
-                               &soerrlen) == 0) {
+          if (sys_getsockopt(*sock, SOL_SOCKET, SO_ERROR, (void *)&soerr,
+                             &soerrlen) == 0) {
             assert(soerrlen == sizeof (soerr));
             if (soerr == 0) {
               EMIT_DEBUG("connect(): okay");
               break;
             }
-            set_last_system_error(soerr);
+            sys_set_last_error(soerr);
           }
         }
       }
-      EMIT_WARNING("connect() failed: " << get_last_system_error());
-      this->closesocket(*sock);
+      EMIT_WARNING("connect() failed: " << sys_get_last_error());
+      sys_closesocket(*sock);
       *sock = -1;
     }
-    this->freeaddrinfo(rp);
+    sys_freeaddrinfo(rp);
     if (*sock != -1) {
       break;  // we have a connection!
     }
@@ -1398,14 +1364,9 @@ Err Client::netx_recv(Socket fd, void *base, Size count,
   if (err != Err::operation_would_block) {
     return err;
   }
-  assert(fd >= 0 && fd < INT_MAX);
-  fd_set readset;
-  FD_ZERO(&readset);
-  FD_SET(AS_OS_SOCKET(fd), &readset);
   timeval tv{};
   tv.tv_sec = impl->settings.timeout;
-  // As explained elsewhere cast to int is safe here.
-  err = netx_select((int)fd + 1, &readset, nullptr, nullptr, &tv);
+  err = netx_wait_readable(fd, tv);
   if (err != Err::none) {
     return err;
   }
@@ -1420,12 +1381,12 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
         "to check the state of a socket");
     return Err::invalid_argument;
   }
-  set_last_system_error(0);
-  auto rv = this->recv(fd, base, count);
+  sys_set_last_error(0);
+  auto rv = sys_recv(fd, base, count);
   if (rv < 0) {
     assert(rv == -1);
     *actual = 0;
-    return netx_map_errno(get_last_system_error());
+    return netx_map_errno(sys_get_last_error());
   }
   if (rv == 0) {
     assert(count > 0);  // guaranteed by the above check
@@ -1455,14 +1416,9 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
   if (err != Err::operation_would_block) {
     return err;
   }
-  assert(fd >= 0 && fd < INT_MAX);
-  fd_set writeset;
-  FD_ZERO(&writeset);
-  FD_SET(AS_OS_SOCKET(fd), &writeset);
   timeval tv{};
   tv.tv_sec = impl->settings.timeout;
-  // As explained elsewhere cast to int is safe here.
-  err = netx_select((int)fd + 1, nullptr, &writeset, nullptr, &tv);
+  err = netx_wait_writeable(fd, tv);
   if (err != Err::none) {
     return err;
   }
@@ -1477,12 +1433,12 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
         "to check the state of a socket");
     return Err::invalid_argument;
   }
-  set_last_system_error(0);
-  auto rv = this->send(fd, base, count);
+  sys_set_last_error(0);
+  auto rv = sys_send(fd, base, count);
   if (rv < 0) {
     assert(rv == -1);
     *actual = 0;
-    return netx_map_errno(get_last_system_error());
+    return netx_map_errno(sys_get_last_error());
   }
   // Send() should not return zero unless count is zero. So consider a zero
   // return value as an I/O error rather than EOF.
@@ -1517,10 +1473,10 @@ Err Client::netx_resolve(const std::string &hostname,
   hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
   addrinfo *rp = nullptr;
   constexpr const char *portno = "80";  // any port would do
-  int rv = this->getaddrinfo(hostname.data(), portno, &hints, &rp);
+  int rv = sys_getaddrinfo(hostname.data(), portno, &hints, &rp);
   if (rv != 0) {
     hints.ai_flags &= ~AI_NUMERICHOST;
-    rv = this->getaddrinfo(hostname.data(), portno, &hints, &rp);
+    rv = sys_getaddrinfo(hostname.data(), portno, &hints, &rp);
     if (rv != 0) {
       EMIT_WARNING("getaddrinfo() failed: " << gai_strerror(rv));
       return netx_map_eai(rv);
@@ -1537,9 +1493,9 @@ Err Client::netx_resolve(const std::string &hostname,
     // the ai_addrlen field is always small enough.
     static_assert(sizeof(SockLen) == sizeof(int), "Wrong SockLen size");
     assert(sizeof(address) <= INT_MAX && sizeof(port) <= INT_MAX);
-    if (this->getnameinfo(aip->ai_addr, (SockLen)aip->ai_addrlen, address,
-                          (SockLen)sizeof(address), port, (SockLen)sizeof(port),
-                          NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
+    if (sys_getnameinfo(aip->ai_addr, (SockLen)aip->ai_addrlen, address,
+                        (SockLen)sizeof(address), port, (SockLen)sizeof(port),
+                        NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
       EMIT_WARNING("unexpected getnameinfo() failure");
       result = Err::ai_generic;
       break;
@@ -1547,51 +1503,143 @@ Err Client::netx_resolve(const std::string &hostname,
     addrs->push_back(address);  // we only care about address
     EMIT_DEBUG("- " << address);
   }
-  this->freeaddrinfo(rp);
+  sys_freeaddrinfo(rp);
   return result;
 }
 
 Err Client::netx_setnonblocking(Socket fd, bool enable) noexcept {
 #ifdef _WIN32
   u_long lv = (enable) ? 1UL : 0UL;
-  if (this->ioctlsocket(fd, FIONBIO, &lv) != 0) {
-    return netx_map_errno(get_last_system_error());
+  if (sys_ioctlsocket(fd, FIONBIO, &lv) != 0) {
+    return netx_map_errno(sys_get_last_error());
   }
 #else
-  auto flags = fcntl2(fd, F_GETFL);
+  auto flags = sys_fcntl(fd, F_GETFL);
   if (flags < 0) {
     assert(flags == -1);
-    return netx_map_errno(get_last_system_error());
+    return netx_map_errno(sys_get_last_error());
   }
   if (enable) {
     flags |= O_NONBLOCK;
   } else {
     flags &= ~O_NONBLOCK;
   }
-  if (fcntl3i(fd, F_SETFL, flags) != 0) {
-    return netx_map_errno(get_last_system_error());
+  if (sys_fcntl(fd, F_SETFL, flags) != 0) {
+    return netx_map_errno(sys_get_last_error());
   }
 #endif
   return Err::none;
 }
 
-Err Client::netx_select(int numfd, fd_set *readset, fd_set *writeset,
-                        fd_set *exceptset, timeval *tvp) noexcept {
-  auto rv = 0;
-  auto err = Err::none;
-again:
-  set_last_system_error(0);
-  rv = this->select(numfd, readset, writeset, exceptset, tvp);
-  if (rv < 0) {
-    assert(rv == -1);
-    err = netx_map_errno(get_last_system_error());
-    if (err == Err::interrupted) {
-      goto again;
-    }
-    return err;
+Err Client::netx_wait_readable(Socket fd, timeval tv) noexcept {
+  std::vector<Socket> v, vv;
+  v.push_back(fd);
+  auto err = netx_select(std::move(v), {}, tv, nullptr, &vv);
+  assert((err == Err::none && vv.size() == 1) || vv.size() <= 0);
+  return err;
+}
+
+Err Client::netx_wait_writeable(Socket fd, timeval tv) noexcept {
+  std::vector<Socket> v, vv;
+  v.push_back(fd);
+  auto err = netx_select({}, std::move(v), tv, nullptr, &vv);
+  assert((err == Err::none && vv.size() == 1) || vv.size() <= 0);
+  return err;
+}
+
+Err Client::netx_select(std::vector<Socket> wantread, std::vector<Socket> wantwrite,
+                        timeval tv, std::vector<Socket> *readable,
+                        std::vector<Socket> *writeable) noexcept {
+  if (readable != nullptr) {
+    readable->clear();
   }
-  if (rv == 0) {
-    return Err::timed_out;
+  if (writeable != nullptr) {
+    writeable->clear();
+  }
+  for (;;) {
+    // add_descriptor() safely adds @p fd to @p set.
+#ifdef _WIN32
+    size_t total = 0;
+    auto add_descriptor = [this, &total](Socket fd, fd_set *set) noexcept {
+      if (fd == -1) {
+        EMIT_WARNING("netx_select(): invalid file descriptor");
+        return false;
+      }
+      if (total++ >= FD_SETSIZE) {
+        EMIT_WARNING("netx_select(): too many descriptors");
+        return false;
+      }
+      FD_SET(AS_OS_SOCKET(fd), set);
+      return true;
+    };
+#else
+    auto add_descriptor = [this](Socket fd, fd_set *set) noexcept {
+      if (fd < 0) {
+        EMIT_WARNING("netx_select(): invalid file descriptor");
+        return false;
+      }
+      if (fd >= FD_SETSIZE) {
+        EMIT_WARNING("netx_select(): too many descriptors");
+        return false;
+      }
+      FD_SET(AS_OS_SOCKET(fd), set);
+      return true;
+    };
+#endif
+    Socket maxfd = -1;
+    fd_set readset;
+    FD_ZERO(&readset);
+    fd_set writeset;
+    FD_ZERO(&writeset);
+    for (auto fd : wantread) {
+      if (!add_descriptor(fd, &readset)) {
+        return Err::invalid_argument;
+      }
+      maxfd = (std::max)(maxfd, fd);
+    }
+    for (auto fd : wantwrite) {
+      if (!add_descriptor(fd, &writeset)) {
+        return Err::invalid_argument;
+      }
+      maxfd = (std::max)(maxfd, fd);
+    }
+    assert(maxfd >= -1);
+    if (maxfd == -1) {
+      EMIT_WARNING("netx_select: you did not pass me any descriptor");
+      return Err::invalid_argument;
+    }
+    sys_set_last_error(0);
+    // Implementation note: cast to `int` is safe because on Windows the first
+    // argument to select() is ignored and on Unix sockets are ints. However, on
+    // Unix we should also make sure that we don't overflow.
+#ifndef _WIN32
+    if (maxfd > INT_MAX - 1) {
+      return Err::value_too_large;
+    }
+#endif
+    int rv = sys_select((int)(maxfd + 1), &readset, &writeset, nullptr, &tv);
+    if (rv < 0) {
+      assert(rv == -1);
+      auto err = netx_map_errno(sys_get_last_error());
+      if (err == Err::interrupted) {
+        continue;
+      }
+      return err;
+    }
+    if (rv == 0) {
+      return Err::timed_out;
+    }
+    for (auto fd : wantread) {
+      if (FD_ISSET(fd, &readset) && readable != nullptr) {
+        readable->push_back(fd);
+      }
+    }
+    for (auto fd : wantwrite) {
+      if (FD_ISSET(fd, &writeset) && writeable != nullptr) {
+        writeable->push_back(fd);
+      }
+    }
+    break;
   }
   return Err::none;
 }
@@ -1638,7 +1686,7 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 #define AS_OS_OPTION_VALUE(x) ((void *)x)
 #endif
 
-int Client::get_last_system_error() noexcept {
+int Client::sys_get_last_error() noexcept {
 #ifdef _WIN32
   return GetLastError();
 #else
@@ -1646,7 +1694,7 @@ int Client::get_last_system_error() noexcept {
 #endif
 }
 
-void Client::set_last_system_error(int err) noexcept {
+void Client::sys_set_last_error(int err) noexcept {
 #ifdef _WIN32
   SetLastError(err);
 #else
@@ -1654,50 +1702,50 @@ void Client::set_last_system_error(int err) noexcept {
 #endif
 }
 
-int Client::getaddrinfo(const char *domain, const char *port,
-                        const addrinfo *hints, addrinfo **res) noexcept {
+int Client::sys_getaddrinfo(const char *domain, const char *port,
+                            const addrinfo *hints, addrinfo **res) noexcept {
   return ::getaddrinfo(domain, port, hints, res);
 }
 
-int Client::getnameinfo(const sockaddr *sa, SockLen salen, char *host,
-                        SockLen hostlen, char *serv, SockLen servlen,
-                        int flags) noexcept {
+int Client::sys_getnameinfo(const sockaddr *sa, SockLen salen, char *host,
+                            SockLen hostlen, char *serv, SockLen servlen,
+                            int flags) noexcept {
   return ::getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
 }
 
-void Client::freeaddrinfo(addrinfo *aip) noexcept { ::freeaddrinfo(aip); }
+void Client::sys_freeaddrinfo(addrinfo *aip) noexcept { ::freeaddrinfo(aip); }
 
-Socket Client::socket(int domain, int type, int protocol) noexcept {
+Socket Client::sys_socket(int domain, int type, int protocol) noexcept {
   return (Socket)::socket(domain, type, protocol);
 }
 
-int Client::connect(Socket fd, const sockaddr *sa, SockLen len) noexcept {
+int Client::sys_connect(Socket fd, const sockaddr *sa, SockLen len) noexcept {
   return ::connect(AS_OS_SOCKET(fd), sa, AS_OS_SOCKLEN(len));
 }
 
-Ssize Client::recv(Socket fd, void *base, Size count) noexcept {
+Ssize Client::sys_recv(Socket fd, void *base, Size count) noexcept {
   if (count > OS_SSIZE_MAX) {
-    set_last_system_error(OS_EINVAL);
+    sys_set_last_error(OS_EINVAL);
     return -1;
   }
   return (Ssize)::recv(AS_OS_SOCKET(fd), AS_OS_BUFFER(base),
                        AS_OS_BUFFER_LEN(count), 0);
 }
 
-Ssize Client::send(Socket fd, const void *base, Size count) noexcept {
+Ssize Client::sys_send(Socket fd, const void *base, Size count) noexcept {
   if (count > OS_SSIZE_MAX) {
-    set_last_system_error(OS_EINVAL);
+    sys_set_last_error(OS_EINVAL);
     return -1;
   }
   return (Ssize)::send(AS_OS_SOCKET(fd), AS_OS_BUFFER(base),
                        AS_OS_BUFFER_LEN(count), 0);
 }
 
-int Client::shutdown(Socket fd, int how) noexcept {
-  return ::shutdown(AS_OS_SOCKET(fd), how);
+int Client::sys_shutdown(Socket fd, int shutdown_how) noexcept {
+  return ::shutdown(AS_OS_SOCKET(fd), shutdown_how);
 }
 
-int Client::closesocket(Socket fd) noexcept {
+int Client::sys_closesocket(Socket fd) noexcept {
 #ifdef _WIN32
   return ::closesocket(AS_OS_SOCKET(fd));
 #else
@@ -1705,31 +1753,31 @@ int Client::closesocket(Socket fd) noexcept {
 #endif
 }
 
-int Client::select(int numfd, fd_set *readset, fd_set *writeset,
-                   fd_set *exceptset, timeval *timeout) noexcept {
+int Client::sys_select(int numfd, fd_set *readset, fd_set *writeset,
+                       fd_set *exceptset, timeval *timeout) noexcept {
   return ::select(numfd, readset, writeset, exceptset, timeout);
 }
 
-long long Client::strtonum(const char *s, long long minval, long long maxval,
-                           const char **errp) noexcept {
+long long Client::sys_strtonum(const char *s, long long minval,
+                               long long maxval, const char **errp) noexcept {
   return ::strtonum(s, minval, maxval, errp);
 }
 
 #ifdef _WIN32
-int Client::ioctlsocket(Socket s, long cmd, u_long *argp) noexcept {
+int Client::sys_ioctlsocket(Socket s, long cmd, u_long *argp) noexcept {
   return ::ioctlsocket(AS_OS_SOCKET(s), cmd, argp);
 }
 #else
-int Client::fcntl2(Socket s, int cmd) noexcept {
+int Client::sys_fcntl(Socket s, int cmd) noexcept {
   return ::fcntl(AS_OS_SOCKET(s), cmd);
 }
-int Client::fcntl3i(Socket s, int cmd, int arg) noexcept {
+int Client::sys_fcntl(Socket s, int cmd, int arg) noexcept {
   return ::fcntl(AS_OS_SOCKET(s), cmd, arg);
 }
 #endif
 
-int Client::getsockopt(Socket socket, int level, int name, void *value,
-                       SockLen *len) noexcept {
+int Client::sys_getsockopt(Socket socket, int level, int name, void *value,
+                           SockLen *len) noexcept {
   static_assert(sizeof(*len) == sizeof(int), "invalid SockLen size");
   return ::getsockopt(AS_OS_SOCKET(socket), level, name,
                       AS_OS_OPTION_VALUE(value), AS_OS_SOCKLEN_STAR(len));
