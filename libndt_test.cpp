@@ -2497,7 +2497,7 @@ class FailSend : public libndt::Client {
   using libndt::Client::Client;
   libndt::Ssize sys_send(libndt::Socket, const void *,
                          libndt::Size) noexcept override {
-    sys_set_last_error(OS_EWOULDBLOCK);
+    sys_set_last_error(OS_EINVAL);
     return -1;
   }
 };
@@ -2506,7 +2506,7 @@ TEST_CASE("Client::netx_sendn() deals with Client::send() failure") {
   char buf[1024];
   FailSend client;
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
-          libndt::Err::operation_would_block);
+          libndt::Err::invalid_argument);
 }
 
 // As much as EOF should not appear on a socket when sending, be ready.
@@ -2538,7 +2538,7 @@ class PartialSendAndThenError : public libndt::Client {
       successful += good_amount;
       return good_amount;
     }
-    sys_set_last_error(OS_EWOULDBLOCK);
+    sys_set_last_error(OS_EINVAL);
     return -1;
   }
 };
@@ -2547,7 +2547,7 @@ TEST_CASE("Client::send() deals with partial Client::send() and then error") {
   char buf[PartialSendAndThenError::amount] = {};
   PartialSendAndThenError client;
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
-          libndt::Err::operation_would_block);
+          libndt::Err::invalid_argument);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return -1, not a short write.
   //
