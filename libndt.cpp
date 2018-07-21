@@ -1504,7 +1504,7 @@ Err Client::netx_resolve(const std::string &hostname,
     char address[NI_MAXHOST], port[NI_MAXSERV];
     // The following casts from `size_t` to `socklen_t` are safe for sure
     // because NI_MAXHOST and NI_MAXSERV are small values. To make sure this
-    // assumption is correct, deploy the following static cast. Here I am
+    // assumption is correct, deploy the following static assertion. Here I am
     // using INT_MAX as upper bound since socklen_t SHOULD be `int`.
     static_assert(sizeof(address) <= INT_MAX && sizeof(port) <= INT_MAX,
                   "Wrong assumption about NI_MAXHOST or NI_MAXSERV");
