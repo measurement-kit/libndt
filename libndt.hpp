@@ -331,12 +331,20 @@ class Client {
   virtual Err netx_recv(Socket fd, void *base, Size count,
                         Size *actual) noexcept;
 
+  // Receive from the network without blocking.
+  virtual Err netx_recv_nonblocking(Socket fd, void *base, Size count,
+                                    Size *actual) noexcept;
+
   // Receive exactly N bytes from the network.
   virtual Err netx_recvn(Socket fd, void *base, Size count) noexcept;
 
   // Send data to the network.
   virtual Err netx_send(Socket fd, const void *base, Size count,
                         Size *actual) noexcept;
+
+  // Send to the network without blocking.
+  virtual Err netx_send_nonblocking(Socket fd, const void *base, Size count,
+                                    Size *actual) noexcept;
 
   // Send exactly N bytes to the network.
   virtual Err netx_sendn(Socket fd, const void *base, Size count) noexcept;
