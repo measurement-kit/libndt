@@ -500,10 +500,10 @@ bool Client::run_download() noexcept {
     for (auto done = false; !done;) {
       timeval tv{};
       tv.tv_usec = 250000;
-      // Implementation note: we move both wantread and wantwrite such that they
-      // become empty. Also, netx_select() clears readable and writeable.
-      auto err = netx_select(std::move(wantread), std::move(wantwrite), tv,
-                             &readable, &writeable);
+      // Implementation note: we copy both `wantread` and `wantwrite` rather
+      // than moving because in case of timeout we want to reuse them. Also
+      // remember that netx_select() clears `readable` and `writeable`.
+      auto err = netx_select(wantread, wantwrite, tv, &readable, &writeable);
       if (err != Err::none && err != Err::timed_out) {
         EMIT_WARNING(
             "run_download: netx_select() failed: " << sys_get_last_error());
@@ -516,6 +516,8 @@ bool Client::run_download() noexcept {
         active.insert(readable.begin(), readable.end());
         active.insert(writeable.begin(), writeable.end());
         for (auto fd : active) {
+          // Implementation note: if a socket is active, we need to remove it
+          // from our pollset to most likely re-add it later on EAGAIN.
           Size n = 0;
           auto err = netx_recv_nonblocking(fd, buf, sizeof(buf), &n);
           switch (err) {
@@ -1601,7 +1603,7 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
   tv.tv_sec = impl->settings.timeout;
 again:
   if ((err = netx_send_nonblocking(fd, base, count, actual)) == Err::none) {
-      return Err::none;
+    return Err::none;
   }
   if (err == Err::ssl_want_read) {
     err = netx_wait_readable(fd, tv);
