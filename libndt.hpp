@@ -26,7 +26,6 @@
 /// ```
 
 #ifndef _WIN32
-#include <sys/select.h>
 #include <sys/socket.h>
 #else
 #include <winsock2.h>
@@ -35,6 +34,7 @@
 
 #ifndef _WIN32
 #include <netdb.h>
+#include <poll.h>
 #endif
 #include <stddef.h>
 #include <stdint.h>  // IWYU pragma: export
@@ -373,16 +373,13 @@ class Client {
   virtual Err netx_setnonblocking(Socket fd, bool enable) noexcept;
 
   // Pauses until the socket becomes readable.
-  virtual Err netx_wait_readable(Socket, timeval timeout) noexcept;
+  virtual Err netx_wait_readable(Socket, Timeout timeout) noexcept;
 
   // Pauses until the socket becomes writeable.
-  virtual Err netx_wait_writeable(Socket, timeval timeout) noexcept;
+  virtual Err netx_wait_writeable(Socket, Timeout timeout) noexcept;
 
-  // Simplified wrapper for select that deals with EINTR and FD_SETSIZE.
-  virtual Err netx_select(std::set<Socket> wantread,
-                          std::set<Socket> wantwrite, timeval timeout,
-                          std::set<Socket> *readable,
-                          std::set<Socket> *writeable) noexcept;
+  // Main function for dealing with I/O patterned after poll(2).
+  virtual Err netx_poll(std::vector<pollfd> *fds, int timeout_msec) noexcept;
 
   // Shutdown both ends of a socket.
   virtual Err netx_shutdown_both(Socket fd) noexcept;
@@ -438,9 +435,12 @@ class Client {
   // Portable wrapper for closing a socket descriptor.
   virtual int sys_closesocket(Socket fd) noexcept;
 
-  // select() wrapper that can be mocked in tests.
-  virtual int sys_select(int numfd, fd_set *readset, fd_set *writeset,
-                         fd_set *exceptset, timeval *timeout) noexcept;
+  // poll() wrapper that can be mocked in tests.
+#ifdef _WIN32
+  virtual int sys_poll(LPWSAPOLLFD fds, ULONG nfds, INT timeout) noexcept;
+#else
+  virtual int sys_poll(pollfd *fds, nfds_t nfds, int timeout) noexcept;
+#endif
 
   // If strtonum() is available, wrapper that can be mocked in tests, else
   // implementation of strtonum() borrowed from OpenBSD.
