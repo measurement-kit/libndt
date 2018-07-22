@@ -2684,7 +2684,6 @@ TEST_CASE("Client::netx_poll() deals with EINTR") {
   std::vector<pollfd> pfds;
   pfds.push_back(pfd);
   InterruptPoll client;
-  timeval tv{};
   constexpr int timeout = 100;
   REQUIRE(client.netx_poll(&pfds, timeout) == libndt::Err::io_error);
   REQUIRE(client.count == 2);

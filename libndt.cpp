@@ -1582,20 +1582,26 @@ Err Client::netx_wait_writeable(Socket fd, Timeout timeout) noexcept {
 
 Err Client::netx_poll(std::vector<pollfd> *pfds, int timeout_msec) noexcept {
   if (pfds == nullptr) {
-    EMIT_WARNING("netx_wait_io: passed a null vector of descriptors");
+    EMIT_WARNING("netx_poll: passed a null vector of descriptors");
     return Err::invalid_argument;
   }
+  // The second argument to poll(2) is nfds_t (an unsigned integer with size no
+  // greater than sizeof(long) according to IEEE Std 1003.1) on Unix. It's
+  // instead `unsigned long` on Windows. The compiler complains on Windows 64
+  // about the conversion from `size_t` to the second argument. Since we
+  // use a very small number of file descriptors, artificially limit the max
+  // number of descriptors to unsigned short and let the compiler then
+  // promote the unsigned short to the proper type.
+  if (pfds->size() > USHRT_MAX) {
+    EMIT_WARNING("netx_poll: passed too many file descriptors");
+    return Err::value_too_large;
+  }
+  unsigned short numfds = (unsigned short)pfds->size();
   int rv = 0;
-  // The second argument to poll(2) is nfds_t (an unsigned integer no greater
-  // than sizeof(long) according to IEEE Std 1003.1) on Unix. It's instead
-  // `unsigned long` on Windows. In libndt we use a very small number of
-  // sockets. In any case, even if that was to change, since in all cases
-  // we're using unsigned numbers, the worst that can happen is that the
-  // number of descriptors to poll is truncated, which is okayish.
 #ifndef _WIN32
 again:
 #endif
-  rv = sys_poll(pfds->data(), pfds->size(), timeout_msec);
+  rv = sys_poll(pfds->data(), numfds, timeout_msec);
 #ifdef _WIN32
   if (rv == SOCKET_ERROR) {
     return netx_map_errno(sys_get_last_error());
