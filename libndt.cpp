@@ -1043,13 +1043,15 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     EMIT_DEBUG("SSL created");
     ::SSL_CTX_free(ctx);  // Referenced by `ssl` so safe to free here
     assert(impl->fd_to_ssl.count(*sock) == 0);
+    // Implementation note: after this point closing `*sock` will imply
+    // that ::SSL_free() is also called to delete `ssl`.
     impl->fd_to_ssl[*sock] = ssl;
   }
   // TODO(bassosimone): make sure that here we don't own the socket.
   if (!::SSL_set_fd(ssl, *sock)) {
     EMIT_WARNING("SSL_set_fd() failed");
     netx_closesocket(*sock);
-    ::SSL_free(ssl);
+    //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
     return Err::ssl_generic;
   }
   ::SSL_set_connect_state(ssl);
@@ -1082,7 +1084,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   if (err != Err::none) {
     EMIT_WARNING("SSL handshake failed");
     netx_closesocket(*sock);
-    SSL_free(ssl);
+    //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
     return Err::ssl_generic;
   }
   return Err::none;
@@ -1502,19 +1504,20 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
     int ret = ::SSL_read(ssl, base, count);
     if (ret <= 0) {
-      switch (::SSL_get_error(ssl, ret)) {
+      auto ssl_err = ::SSL_get_error(ssl, ret);
+      switch (ssl_err) {
         case SSL_ERROR_ZERO_RETURN:
           // TODO(bassosimone): consider the issue of dirty shutdown.
           EMIT_DEBUG("netx_recv_nonblocking: zero return");
           return Err::eof;
         case SSL_ERROR_WANT_READ:
-          EMIT_DEBUG("netx_recv_nonblocking: want read");
+          //EMIT_DEBUG("netx_recv_nonblocking: want read"); // Too noisy
           return Err::ssl_want_read;
         case SSL_ERROR_WANT_WRITE:
-          EMIT_DEBUG("netx_recv_nonblocking: want write");
+          //EMIT_DEBUG("netx_recv_nonblocking: want write"); // Too noisy
           return Err::ssl_want_write;
         default:
-          EMIT_DEBUG("netx_recv_nonblocking: default");
+          EMIT_DEBUG("netx_recv_nonblocking: default case: " << ssl_err);
           return Err::ssl_generic;
       }
     }
@@ -1798,6 +1801,7 @@ Err Client::netx_shutdown_both(Socket fd) noexcept {
     }
     auto ssl = impl->fd_to_ssl.at(fd);
     if (::SSL_shutdown(ssl) != 1) {
+      // TODO(bassosimone): shutdown should be made async.
       // TODO(bassosimone): correctly process SSL error here.
       EMIT_WARNING("shutdown: SSL_shutdown: ");
       ERR_print_errors_fp(stderr);
