@@ -483,6 +483,7 @@ bool Client::run_download() noexcept {
   if (!msg_expect_empty(msg_test_start)) {
     return false;
   }
+  EMIT_DEBUG("run download: got the test_start message");
 
   double client_side_speed = 0.0;
   {
@@ -1050,9 +1051,11 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
 Err Client::netx_maybessl_dial(const std::string &hostname,
                                const std::string &port, Socket *sock) noexcept {
   auto err = netx_maybesocks5h_dial(hostname, port, sock);
-  if ((impl->settings.protocol_flags & protocol_flag_tls) == 0 ||
-      err != Err::none) {
+  if (err != Err::none) {
     return err;
+  }
+  if ((impl->settings.protocol_flags & protocol_flag_tls) == 0) {
+    return Err::none;
   }
 #ifdef HAVE_OPENSSL
   SSL *ssl = nullptr;
@@ -1076,14 +1079,48 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     assert(impl->fd_to_ssl.count(*sock) == 0);
     impl->fd_to_ssl[*sock] = ssl;
   }
-  if (!SSL_set_fd(ssl, *sock)) {
+  // TODO(bassosimone): make sure that here we don't own the socket.
+  if (!::SSL_set_fd(ssl, *sock)) {
     EMIT_WARNING("SSL_set_fd() failed");
+    netx_closesocket(*sock);
+    ::SSL_free(ssl);
+    return Err::ssl_generic;
+  }
+  ::SSL_set_connect_state(ssl);
+  EMIT_DEBUG("SSL bound to socket");
+  auto handshake = [this](SSL * ssl, Socket fd, Timeout timeout) noexcept {
+    auto err = Err::none;
+    timeval tv{};
+    tv.tv_sec = timeout;
+    auto ret = 0;
+  again:
+    ret = ::SSL_do_handshake(ssl);
+    if (ret == 1) {
+      return Err::none;
+    }
+    assert(ret <= 0);
+    auto reason = ::SSL_get_error(ssl, ret);
+    if (reason == SSL_ERROR_ZERO_RETURN) {
+      err = Err::eof;
+    } else if (reason == SSL_ERROR_WANT_READ) {
+      err = netx_wait_readable(fd, tv);
+    } else if (reason == SSL_ERROR_WANT_WRITE) {
+      err = netx_wait_writeable(fd, tv);
+    } else {
+      err = Err::ssl_generic;
+    }
+    if (err == Err::none) {
+      goto again;
+    }
+    return err;
+  };
+  err = handshake(ssl, *sock, impl->settings.timeout);
+  if (err != Err::none) {
+    EMIT_WARNING("SSL handshake failed");
     netx_closesocket(*sock);
     SSL_free(ssl);
     return Err::ssl_generic;
   }
-  SSL_set_connect_state(ssl);
-  EMIT_DEBUG("SSL bound to socket");
   return Err::none;
 #else
   return Err::not_implemented;
@@ -1464,24 +1501,22 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
+  auto err = Err::none;
   timeval tv{};
   tv.tv_sec = impl->settings.timeout;
-  for (;;) {
-    auto err = netx_recv_nonblocking(fd, base, count, actual);
-    switch (err) {
-      case Err::operation_would_block:
-      case Err::ssl_want_read:
-        err = netx_wait_readable(fd, tv);
-        break;
-      case Err::ssl_want_write:
-        err = netx_wait_writeable(fd, tv);
-        break;
-      case Err::none:
-      default:
-        return err;
-    }
+again:
+  if ((err = netx_recv_nonblocking(fd, base, count, actual)) == Err::none) {
+    return Err::none;
   }
-  return Err::internal;
+  if (err == Err::operation_would_block || err == Err::ssl_want_read) {
+    err = netx_wait_readable(fd, tv);
+  } else if (err == Err::ssl_want_write) {
+    err = netx_wait_writeable(fd, tv);
+  }
+  if (err == Err::none) {
+    goto again;
+  }
+  return err;
 }
 
 Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
@@ -1510,12 +1545,16 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
       switch (::SSL_get_error(ssl, ret)) {
         case SSL_ERROR_ZERO_RETURN:
           // TODO(bassosimone): consider the issue of dirty shutdown.
+          EMIT_DEBUG("netx_recv_nonblocking: zero return");
           return Err::eof;
         case SSL_ERROR_WANT_READ:
+          EMIT_DEBUG("netx_recv_nonblocking: want read");
           return Err::ssl_want_read;
         case SSL_ERROR_WANT_WRITE:
+          EMIT_DEBUG("netx_recv_nonblocking: want write");
           return Err::ssl_want_write;
         default:
+          EMIT_DEBUG("netx_recv_nonblocking: default");
           return Err::ssl_generic;
       }
     }
@@ -1557,24 +1596,22 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
+  auto err = Err::none;
   timeval tv{};
   tv.tv_sec = impl->settings.timeout;
-  for (;;) {
-    auto err = netx_send_nonblocking(fd, base, count, actual);
-    switch (err) {
-      case Err::ssl_want_read:
-        err = netx_wait_readable(fd, tv);
-        break;
-      case Err::operation_would_block:
-      case Err::ssl_want_write:
-        err = netx_wait_writeable(fd, tv);
-        break;
-      case Err::none:
-      default:
-        return err;
-    }
+again:
+  if ((err = netx_send_nonblocking(fd, base, count, actual)) == Err::none) {
+      return Err::none;
   }
-  return Err::internal;
+  if (err == Err::ssl_want_read) {
+    err = netx_wait_readable(fd, tv);
+  } else if (err == Err::operation_would_block || err == Err::ssl_want_write) {
+    err = netx_wait_writeable(fd, tv);
+  }
+  if (err == Err::none) {
+    goto again;
+  }
+  return err;
 }
 
 Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
