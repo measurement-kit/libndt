@@ -99,7 +99,7 @@ elseif("${MSVC}")
 endif()
 
 if(${WIN32})
-  add_definitions(-D_WIN32_WINNT=0x0600) # for NI_NUMERICSERV
+  add_definitions(-D_WIN32_WINNT=0x0600) # for NI_NUMERICSERV and WSAPoll
 endif()
 
 # Library

@@ -422,9 +422,8 @@ bool Client::recv_results_and_logout() noexcept {
 }
 
 bool Client::wait_close() noexcept {
-  timeval tv{};
-  tv.tv_sec = 1;
-  auto err = netx_wait_readable(impl->sock, tv);
+  constexpr Timeout wait_for_close = 1;
+  auto err = netx_wait_readable(impl->sock, wait_for_close);
   if (err != Err::none) {
     EMIT_WARNING(
         "wait_close(): netx_wait_readable() failed: " << sys_get_last_error());
@@ -482,31 +481,34 @@ bool Client::run_download() noexcept {
     auto prev = begin;
     char buf[64000];
     for (auto done = false; !done;) {
-      std::vector<Socket> wantread, readable;
+      std::vector<pollfd> pfds;
       for (auto fd : dload_socks.sockets) {
-        wantread.push_back(fd);
+        pollfd pfd{};
+        pfd.fd = fd;
+        pfd.events |= POLLIN;
+        pfds.push_back(pfd);
       }
-      timeval tv{};
-      tv.tv_usec = 250000;
-      auto err = netx_select(std::move(wantread), {}, tv, &readable, nullptr);
+      constexpr int timeout_msec = 250;
+      auto err = netx_poll(&pfds, timeout_msec);
       if (err != Err::none && err != Err::timed_out) {
         EMIT_WARNING(
-            "run_download: netx_select() failed: " << sys_get_last_error());
+            "run_download: netx_poll() failed: " << sys_get_last_error());
         return false;
       }
-      if (err == Err::none) {
-        for (auto fd : readable) {
-          Size n = 0;
-          auto err = netx_recv_nonblocking(fd, buf, sizeof(buf), &n);
-          if (err != Err::none) {
-            EMIT_WARNING(
-                "run_download: netx_recv() failed: " << sys_get_last_error());
-            done = true;
-            break;
-          }
-          recent_data += (uint64_t)n;
-          total_data += (uint64_t)n;
+      for (auto fd : pfds) {
+        if ((fd.revents & POLLIN) == 0) {
+          continue;
         }
+        Size n = 0;
+        auto err = netx_recv_nonblocking(fd.fd, buf, sizeof(buf), &n);
+        if (err != Err::none) {
+          EMIT_WARNING(
+              "run_download: netx_recv() failed: " << sys_get_last_error());
+          done = true;
+          break;
+        }
+        recent_data += (uint64_t)n;
+        total_data += (uint64_t)n;
       }
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> measurement_interval = now - prev;
@@ -642,33 +644,36 @@ bool Client::run_upload() noexcept {
     auto begin = std::chrono::steady_clock::now();
     auto prev = begin;
     for (auto done = false; !done;) {
-      std::vector<Socket> wantwrite, writeable;
+      std::vector<pollfd> pfds;
       for (auto fd : upload_socks.sockets) {
-        wantwrite.push_back(fd);
+        pollfd pfd;
+        pfd.fd = fd;
+        pfd.events |= POLLOUT;
+        pfds.push_back(pfd);
       }
-      timeval tv{};
-      tv.tv_usec = 250000;
-      auto err = netx_select({}, std::move(wantwrite), tv, nullptr, &writeable);
+      constexpr int timeout_msec = 250;
+      auto err = netx_poll(&pfds, timeout_msec);
       if (err != Err::none && err != Err::timed_out) {
         EMIT_WARNING(
-            "run_upload: netx_select() failed: " << sys_get_last_error());
+            "run_upload: netx_poll() failed: " << sys_get_last_error());
         return false;
       }
-      if (err == Err::none) {
-        for (auto fd : writeable) {
-          Size n = 0;
-          auto err = netx_send_nonblocking(fd, buf, sizeof(buf), &n);
-          if (err != Err::none) {
-            if (err != Err::broken_pipe) {
-              EMIT_WARNING(
-                  "run_upload: netx_send() failed: " << sys_get_last_error());
-            }
-            done = true;
-            break;
-          }
-          recent_data += (uint64_t)n;
-          total_data += (uint64_t)n;
+      for (auto fd : pfds) {
+        if ((fd.revents & POLLOUT) == 0) {
+          continue;
         }
+        Size n = 0;
+        auto err = netx_send_nonblocking(fd.fd, buf, sizeof(buf), &n);
+        if (err != Err::none) {
+          if (err != Err::broken_pipe) {
+            EMIT_WARNING(
+                "run_upload: netx_send() failed: " << sys_get_last_error());
+          }
+          done = true;
+          break;
+        }
+        recent_data += (uint64_t)n;
+        total_data += (uint64_t)n;
       }
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> measurement_interval = now - prev;
@@ -1328,9 +1333,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       }
       auto err = netx_map_errno(sys_get_last_error());
       if (CONNECT_IN_PROGRESS(err)) {
-        timeval tv{};
-        tv.tv_sec = impl->settings.timeout;
-        err = netx_wait_writeable(*sock, tv);
+        err = netx_wait_writeable(*sock, impl->settings.timeout);
         if (err == Err::none) {
           int soerr = 0;
           socklen_t soerrlen = sizeof(soerr);
@@ -1366,9 +1369,7 @@ Err Client::netx_recv(Socket fd, void *base, Size count,
   if (err != Err::operation_would_block) {
     return err;
   }
-  timeval tv{};
-  tv.tv_sec = impl->settings.timeout;
-  err = netx_wait_readable(fd, tv);
+  err = netx_wait_readable(fd, impl->settings.timeout);
   if (err != Err::none) {
     return err;
   }
@@ -1424,9 +1425,7 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
   if (err != Err::operation_would_block) {
     return err;
   }
-  timeval tv{};
-  tv.tv_sec = impl->settings.timeout;
-  err = netx_wait_writeable(fd, tv);
+  err = netx_wait_writeable(fd, impl->settings.timeout);
   if (err != Err::none) {
     return err;
   }
@@ -1556,126 +1555,63 @@ Err Client::netx_setnonblocking(Socket fd, bool enable) noexcept {
   return Err::none;
 }
 
-Err Client::netx_wait_readable(Socket fd, timeval tv) noexcept {
-  std::vector<Socket> v, vv;
-  v.push_back(fd);
-  auto err = netx_select(std::move(v), {}, tv, nullptr, &vv);
-  assert((err == Err::none && vv.size() == 1) || vv.size() <= 0);
+static Err netx_wait(Client *client, Socket fd, Timeout timeout,
+                     short expected_events) noexcept {
+  pollfd pfd{};
+  pfd.fd = fd;
+  pfd.events |= expected_events;
+  std::vector<pollfd> pfds;
+  pfds.push_back(pfd);
+  static_assert(sizeof(timeout) == sizeof(int), "Unexpected Timeout size");
+  if (timeout > INT_MAX / 1000) {
+    timeout = INT_MAX / 1000;
+  }
+  auto err = client->netx_poll(&pfds, timeout * 1000);
+  assert((err == Err::none && (pfds[0].revents & expected_events) != 0) ||
+         (err != Err::none && pfds[0].revents == 0));
   return err;
 }
 
-Err Client::netx_wait_writeable(Socket fd, timeval tv) noexcept {
-  std::vector<Socket> v, vv;
-  v.push_back(fd);
-  auto err = netx_select({}, std::move(v), tv, nullptr, &vv);
-  assert((err == Err::none && vv.size() == 1) || vv.size() <= 0);
-  return err;
+Err Client::netx_wait_readable(Socket fd, Timeout timeout) noexcept {
+  return netx_wait(this, fd, timeout, POLLIN);
 }
 
-Err Client::netx_select(std::vector<Socket> wantread,
-                        std::vector<Socket> wantwrite, timeval tv,
-                        std::vector<Socket> *readable,
-                        std::vector<Socket> *writeable) noexcept {
-  if (wantread.size() <= 0 && wantwrite.size() <= 0) {
-    EMIT_WARNING("netx_select: you did not pass me any descriptor");
+Err Client::netx_wait_writeable(Socket fd, Timeout timeout) noexcept {
+  return netx_wait(this, fd, timeout, POLLOUT);
+}
+
+Err Client::netx_poll(std::vector<pollfd> *pfds, int timeout_msec) noexcept {
+  if (pfds == nullptr) {
+    EMIT_WARNING("netx_wait_io: passed a null vector of descriptors");
     return Err::invalid_argument;
   }
-  if (readable != nullptr) {
-    readable->clear();
-  }
-  if (writeable != nullptr) {
-    writeable->clear();
-  }
-  for (;;) {
-    // add_descriptor() safely adds @p fd to @p set.
-#ifdef _WIN32
-    size_t total = 0;
-    auto add_descriptor = [ this, &total ](Socket fd, fd_set * set) noexcept {
-      if (fd == INVALID_SOCKET) {
-        EMIT_WARNING("netx_select(): invalid file descriptor");
-        return false;
-      }
-      if (total++ >= FD_SETSIZE) {
-        EMIT_WARNING("netx_select(): too many descriptors");
-        return false;
-      }
-      FD_SET(fd, set);
-      return true;
-    };
-#else
-    auto add_descriptor = [this](Socket fd, fd_set * set) noexcept {
-      if (fd < 0) {
-        EMIT_WARNING("netx_select(): invalid file descriptor");
-        return false;
-      }
-      if (fd >= FD_SETSIZE) {
-        EMIT_WARNING("netx_select(): too many descriptors");
-        return false;
-      }
-      FD_SET(fd, set);
-      return true;
-    };
-#endif
-    Socket maxfd = -1;
-    fd_set readset;
-    FD_ZERO(&readset);
-    fd_set writeset;
-    FD_ZERO(&writeset);
-    for (auto fd : wantread) {
-      if (!add_descriptor(fd, &readset)) {
-        return Err::invalid_argument;
-      }
-      maxfd = (std::max)(maxfd, fd);
-    }
-    for (auto fd : wantwrite) {
-      if (!add_descriptor(fd, &writeset)) {
-        return Err::invalid_argument;
-      }
-      maxfd = (std::max)(maxfd, fd);
-    }
-    // Important: on Windows sockets are unsigned while on Unix they are signed
-    // hence here we'll get `maxfd == -1` on Windows and `maxfd == max(fd)` on
-    // Unix because of the way in which unsigned values work. To make sure this
-    // understanding is current, here is an assert to validate it. Note that,
-    // as mentioned also below, we don't care about the first argument to
-    // select() on Windows systems, since it's not used.
-#ifdef _WIN32
-    assert(maxfd == -1);
-#else
-    assert(maxfd > -1);
-#endif
-    sys_set_last_error(0);
-    // Implementation note: cast to `int` is safe because on Windows the first
-    // argument to select() is ignored and on Unix sockets are ints. However, on
-    // Unix we should also make sure that we don't overflow.
+  int rv = 0;
+  // The second argument to poll(2) is nfds_t (an unsigned integer no greater
+  // than sizeof(long) according to IEEE Std 1003.1) on Unix. It's instead
+  // `unsigned long` on Windows. In libndt we use a very small number of
+  // sockets. In any case, even if that was to change, since in all cases
+  // we're using unsigned numbers, the worst that can happen is that the
+  // number of descriptors to poll is truncated, which is okayish.
 #ifndef _WIN32
-    if (maxfd > INT_MAX - 1) {
-      return Err::value_too_large;
-    }
+again:
 #endif
-    int rv = sys_select((int)(maxfd + 1), &readset, &writeset, nullptr, &tv);
-    if (rv < 0) {
-      assert(rv == -1);
-      auto err = netx_map_errno(sys_get_last_error());
-      if (err == Err::interrupted) {
-        continue;
-      }
-      return err;
+  rv = sys_poll(pfds->data(), pfds->size(), timeout_msec);
+#ifdef _WIN32
+  if (rv == SOCKET_ERROR) {
+    return netx_map_errno(sys_get_last_error());
+  }
+#else
+  if (rv < 0) {
+    assert(rv == -1);
+    auto err = netx_map_errno(sys_get_last_error());
+    if (err == Err::interrupted) {
+      goto again;
     }
-    if (rv == 0) {
-      return Err::timed_out;
-    }
-    for (auto fd : wantread) {
-      if (FD_ISSET(fd, &readset) && readable != nullptr) {
-        readable->push_back(fd);
-      }
-    }
-    for (auto fd : wantwrite) {
-      if (FD_ISSET(fd, &writeset) && writeable != nullptr) {
-        writeable->push_back(fd);
-      }
-    }
-    break;
+    return err;
+  }
+#endif
+  if (rv == 0) {
+    return Err::timed_out;
   }
   return Err::none;
 }
@@ -1783,10 +1719,15 @@ int Client::sys_closesocket(Socket fd) noexcept {
 #endif
 }
 
-int Client::sys_select(int numfd, fd_set *readset, fd_set *writeset,
-                       fd_set *exceptset, timeval *timeout) noexcept {
-  return ::select(numfd, readset, writeset, exceptset, timeout);
+#ifdef _WIN32
+int Client::sys_poll(LPWSAPOLLFD fds, ULONG nfds, INT timeout) noexcept {
+  return ::WSAPoll(fds, nfds, timeout);
 }
+#else
+int Client::sys_poll(pollfd *fds, nfds_t nfds, int timeout) noexcept {
+  return ::poll(fds, nfds, timeout);
+}
+#endif
 
 long long Client::sys_strtonum(const char *s, long long minval,
                                long long maxval, const char **errp) noexcept {
