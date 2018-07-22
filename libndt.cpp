@@ -646,7 +646,7 @@ bool Client::run_upload() noexcept {
     for (auto done = false; !done;) {
       std::vector<pollfd> pfds;
       for (auto fd : upload_socks.sockets) {
-        pollfd pfd;
+        pollfd pfd{};
         pfd.fd = fd;
         pfd.events |= POLLOUT;
         pfds.push_back(pfd);
