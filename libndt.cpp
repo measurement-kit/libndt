@@ -678,7 +678,7 @@ bool Client::run_upload() noexcept {
           continue;
         }
         Size n = 0;
-        auto err = netx_send_nonblocking(fd, buf, sizeof(buf), &n);
+        auto err = netx_send_nonblocking(fd.fd, buf, sizeof(buf), &n);
         if (err == Err::ssl_want_read) {
           fd.events = POLLIN;
         } else if (err == Err::operation_would_block ||
@@ -1056,8 +1056,6 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   EMIT_DEBUG("SSL bound to socket");
   auto handshake = [this](SSL * ssl, Socket fd, Timeout timeout) noexcept {
     auto err = Err::none;
-    timeval tv{};
-    tv.tv_sec = timeout;
     auto ret = 0;
   again:
     ret = ::SSL_do_handshake(ssl);
@@ -1069,9 +1067,9 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     if (reason == SSL_ERROR_ZERO_RETURN) {
       err = Err::eof;
     } else if (reason == SSL_ERROR_WANT_READ) {
-      err = netx_wait_readable(fd, tv);
+      err = netx_wait_readable(fd, timeout);
     } else if (reason == SSL_ERROR_WANT_WRITE) {
-      err = netx_wait_writeable(fd, tv);
+      err = netx_wait_writeable(fd, timeout);
     } else {
       err = Err::ssl_generic;
     }
@@ -1466,16 +1464,14 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
   auto err = Err::none;
-  timeval tv{};
-  tv.tv_sec = impl->settings.timeout;
 again:
   if ((err = netx_recv_nonblocking(fd, base, count, actual)) == Err::none) {
     return Err::none;
   }
   if (err == Err::operation_would_block || err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, tv);
+    err = netx_wait_readable(fd, impl->settings.timeout);
   } else if (err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, tv);
+    err = netx_wait_writeable(fd, impl->settings.timeout);
   }
   if (err == Err::none) {
     goto again;
@@ -1561,16 +1557,14 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
   auto err = Err::none;
-  timeval tv{};
-  tv.tv_sec = impl->settings.timeout;
 again:
   if ((err = netx_send_nonblocking(fd, base, count, actual)) == Err::none) {
     return Err::none;
   }
   if (err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, tv);
+    err = netx_wait_readable(fd, impl->settings.timeout);
   } else if (err == Err::operation_would_block || err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, tv);
+    err = netx_wait_writeable(fd, impl->settings.timeout);
   }
   if (err == Err::none) {
     goto again;
