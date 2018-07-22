@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -441,15 +442,17 @@ bool Client::wait_close() noexcept {
     return (err == Err::timed_out);
   }
   {
-    char data;
-    Size n = 0;
-    auto err = netx_recv(impl->sock, &data, sizeof(data), &n);
-    if (err == Err::none) {
+    // Implementation note: here we use sys_recv() because we want to act
+    // at the networking layer rather than possibly at the SSL layer.
+    char data{};
+    Ssize n = sys_recv(impl->sock, &data, sizeof (data));
+    if (n > 0) {
       EMIT_WARNING("wait_close(): unexpected data recv'd when waiting for EOF");
       return false;
     }
-    if (err != Err::eof) {
-      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF");
+    if (n != 0) {
+      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF: "
+                   << sys_get_last_error());
       return false;
     }
   }
@@ -1014,6 +1017,47 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
 
 // Networking layer
 
+#ifdef HAVE_OPENSSL
+
+static Err map_ssl_error(SSL *ssl, int ret) noexcept {
+  auto reason = ::SSL_get_error(ssl, ret);
+  switch (reason) {
+    case SSL_ERROR_NONE:
+      return Err::none;
+    case SSL_ERROR_ZERO_RETURN:
+      // TODO(bassosimone): consider the issue of dirty shutdown.
+      return Err::eof;
+    case SSL_ERROR_WANT_READ:
+      return Err::ssl_want_read;
+    case SSL_ERROR_WANT_WRITE:
+      return Err::ssl_want_write;
+  }
+  return Err::ssl_generic;
+}
+
+static Err ssl_retry(Client *client, SSL *ssl, Socket fd, Timeout timeout,
+                     std::function<int(SSL *)> operation) noexcept {
+  auto err = Err::none;
+again:
+  err = map_ssl_error(ssl, operation(ssl));
+  // Retry if needed
+  if (err == Err::ssl_want_read) {
+    err = client->netx_wait_readable(fd, timeout);
+    if (err == Err::none) {
+      goto again;
+    }
+  } else if (err == Err::ssl_want_write) {
+    err = client->netx_wait_writeable(fd, timeout);
+    if (err == Err::none) {
+      goto again;
+    }
+  }
+  // Otherwise let the caller know
+  return err;
+}
+
+#endif  // HAVE_OPENSSL
+
 Err Client::netx_maybessl_dial(const std::string &hostname,
                                const std::string &port, Socket *sock) noexcept {
   auto err = netx_maybesocks5h_dial(hostname, port, sock);
@@ -1056,31 +1100,8 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   }
   ::SSL_set_connect_state(ssl);
   EMIT_DEBUG("SSL bound to socket");
-  auto handshake = [this](SSL * ssl, Socket fd, Timeout timeout) noexcept {
-    auto err = Err::none;
-    auto ret = 0;
-  again:
-    ret = ::SSL_do_handshake(ssl);
-    if (ret == 1) {
-      return Err::none;
-    }
-    assert(ret <= 0);
-    auto reason = ::SSL_get_error(ssl, ret);
-    if (reason == SSL_ERROR_ZERO_RETURN) {
-      err = Err::eof;
-    } else if (reason == SSL_ERROR_WANT_READ) {
-      err = netx_wait_readable(fd, timeout);
-    } else if (reason == SSL_ERROR_WANT_WRITE) {
-      err = netx_wait_writeable(fd, timeout);
-    } else {
-      err = Err::ssl_generic;
-    }
-    if (err == Err::none) {
-      goto again;
-    }
-    return err;
-  };
-  err = handshake(ssl, *sock, impl->settings.timeout);
+  err = ssl_retry(this, ssl, *sock, impl->settings.timeout,
+                  [](SSL *ssl) -> int { return ::SSL_do_handshake(ssl); });
   if (err != Err::none) {
     EMIT_WARNING("SSL handshake failed");
     netx_closesocket(*sock);
@@ -1504,22 +1525,7 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
     int ret = ::SSL_read(ssl, base, count);
     if (ret <= 0) {
-      auto ssl_err = ::SSL_get_error(ssl, ret);
-      switch (ssl_err) {
-        case SSL_ERROR_ZERO_RETURN:
-          // TODO(bassosimone): consider the issue of dirty shutdown.
-          EMIT_DEBUG("netx_recv_nonblocking: zero return");
-          return Err::eof;
-        case SSL_ERROR_WANT_READ:
-          //EMIT_DEBUG("netx_recv_nonblocking: want read"); // Too noisy
-          return Err::ssl_want_read;
-        case SSL_ERROR_WANT_WRITE:
-          //EMIT_DEBUG("netx_recv_nonblocking: want write"); // Too noisy
-          return Err::ssl_want_write;
-        default:
-          EMIT_DEBUG("netx_recv_nonblocking: default case: " << ssl_err);
-          return Err::ssl_generic;
-      }
+      return map_ssl_error(ssl, ret);
     }
     *actual = (Size)ret;
     return Err::none;
@@ -1598,19 +1604,7 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
     int ret = ::SSL_write(ssl, base, count);
     if (ret <= 0) {
-      ERR_print_errors_fp(stderr);
-      fflush(stderr);
-      switch (::SSL_get_error(ssl, ret)) {
-        case SSL_ERROR_ZERO_RETURN:
-          // TODO(bassosimone): consider the issue of dirty shutdown.
-          return Err::eof;
-        case SSL_ERROR_WANT_READ:
-          return Err::ssl_want_read;
-        case SSL_ERROR_WANT_WRITE:
-          return Err::ssl_want_write;
-        default:
-          return Err::ssl_generic;
-      }
+      return map_ssl_error(ssl, ret);
     }
     *actual = (Size)ret;
     return Err::none;
@@ -1800,12 +1794,11 @@ Err Client::netx_shutdown_both(Socket fd) noexcept {
       return Err::invalid_argument;
     }
     auto ssl = impl->fd_to_ssl.at(fd);
-    if (::SSL_shutdown(ssl) != 1) {
-      // TODO(bassosimone): shutdown should be made async.
-      // TODO(bassosimone): correctly process SSL error here.
-      EMIT_WARNING("shutdown: SSL_shutdown: ");
-      ERR_print_errors_fp(stderr);
-      return Err::ssl_generic;
+    auto err = ssl_retry(this, ssl, fd, impl->settings.timeout,
+                         [](SSL *ssl) -> int { return ::SSL_shutdown(ssl); });
+    if (err != Err::none) {
+      EMIT_WARNING("SSL_shutdown() failed");
+      return err;
     }
   }
 #endif
