@@ -1585,23 +1585,21 @@ Err Client::netx_poll(std::vector<pollfd> *pfds, int timeout_msec) noexcept {
     EMIT_WARNING("netx_poll: passed a null vector of descriptors");
     return Err::invalid_argument;
   }
-  // The second argument to poll(2) is nfds_t (an unsigned integer with size no
-  // greater than sizeof(long) according to IEEE Std 1003.1) on Unix. It's
-  // instead `unsigned long` on Windows. The compiler complains on Windows 64
-  // about the conversion from `size_t` to the second argument. Since we
-  // use a very small number of file descriptors, artificially limit the max
-  // number of descriptors to unsigned short and let the compiler then
-  // promote the unsigned short to the proper type.
-  if (pfds->size() > USHRT_MAX) {
-    EMIT_WARNING("netx_poll: passed too many file descriptors");
-    return Err::value_too_large;
-  }
-  unsigned short numfds = (unsigned short)pfds->size();
   int rv = 0;
 #ifndef _WIN32
 again:
 #endif
-  rv = sys_poll(pfds->data(), numfds, timeout_msec);
+#ifdef _WIN64
+  // When compiling for Windows 64 we have the issue that WSAPoll second
+  // argument is unsigned long but pfds->size() is size_t.
+  if (pfds->size() > ULONG_MAX) {
+    EMIT_WARNING("netx_poll: avoiding overflow");
+    return Err::value_too_large;
+  }
+  rv = sys_poll(pfds->data(), (unsigned long)pfds->size(), timeout_msec);
+#else
+  rv = sys_poll(pfds->data(), pfds->size(), timeout_msec);
+#endif
 #ifdef _WIN32
   if (rv == SOCKET_ERROR) {
     return netx_map_errno(sys_get_last_error());
