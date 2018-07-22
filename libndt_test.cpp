@@ -499,16 +499,12 @@ TEST_CASE("Client::recv_results_and_logout() deals with too many results") {
 class NetxSelectHardFailure : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::io_error;
   }
 };
 
-TEST_CASE(
-    "Client::wait_close() deals with Client::netx_select() hard failure") {
+TEST_CASE("Client::wait_close() deals with Client::netx_poll() hard failure") {
   NetxSelectHardFailure client;
   REQUIRE(client.wait_close() == false);
 }
@@ -516,15 +512,12 @@ TEST_CASE(
 class NetxSelectTimeout : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::timed_out;
   }
 };
 
-TEST_CASE("Client::wait_close() deals with Client::netx_select() timeout") {
+TEST_CASE("Client::wait_close() deals with Client::netx_poll() timeout") {
   NetxSelectTimeout client;
   REQUIRE(client.wait_close() == true /* Being tolerant */);
 }
@@ -532,10 +525,10 @@ TEST_CASE("Client::wait_close() deals with Client::netx_select() timeout") {
 class NotEofAfterGoodNetxSelect : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *pfds, int) noexcept override {
+    for (auto &fd : *pfds) {
+      fd.revents = fd.events;
+    }
     return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
@@ -554,10 +547,10 @@ TEST_CASE(
 class SuccessAfterGoodNetxSelect : public libndt::Client {
  public:
   using libndt::Client::Client;
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *pfds, int) noexcept override {
+    for (auto &fd : *pfds) {
+      fd.revents = fd.events;
+    }
     return libndt::Err::none;
   }
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size size,
@@ -642,15 +635,12 @@ class FailNetxSelectDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::io_error;
   }
 };
 
-TEST_CASE("Client::run_download() deals with Client::netx_select() failure") {
+TEST_CASE("Client::run_download() deals with Client::netx_poll() failure") {
   FailNetxSelectDuringDownload client;
   REQUIRE(client.run_download() == false);
 }
@@ -667,10 +657,7 @@ class FailRecvDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
@@ -696,10 +683,7 @@ class RecvEofDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
@@ -727,10 +711,7 @@ class FailMsgReadLegacyDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
@@ -760,10 +741,7 @@ class RecvNonTestMsgDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
@@ -793,10 +771,7 @@ class FailMsgWriteDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
@@ -829,10 +804,7 @@ class FailMsgReadDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
@@ -868,10 +840,7 @@ class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
@@ -908,10 +877,7 @@ class FailEmitResultDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
@@ -949,10 +915,7 @@ class TooManyTestMsgsDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
@@ -1090,7 +1053,7 @@ TEST_CASE(
   REQUIRE(client.run_upload() == false);
 }
 
-TEST_CASE("Client::run_upload() deals with Client::netx_select() failure") {
+TEST_CASE("Client::run_upload() deals with Client::netx_poll() failure") {
   FailNetxSelectDuringDownload client;  // Works also for upload phase
   REQUIRE(client.run_upload() == false);
 }
@@ -1107,10 +1070,7 @@ class FailSendDuringUpload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
@@ -1143,10 +1103,7 @@ class FailMsgExpectDuringUpload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
@@ -1177,10 +1134,7 @@ class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
   bool msg_expect_empty(libndt::MsgType code) noexcept override {
     return code != libndt::msg_test_finalize;
   }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
@@ -2276,10 +2230,7 @@ class FailSocketConnectTimeout : public libndt::Client {
     sys_set_last_error(OS_EINPROGRESS);
     return -1;
   }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
     return libndt::Err::timed_out;
   }
 };
@@ -2298,10 +2249,10 @@ class FailSocketConnectGetsockoptError : public libndt::Client {
     sys_set_last_error(OS_EINPROGRESS);
     return -1;
   }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *pfds, int) noexcept override {
+    for (auto &fd : *pfds) {
+      fd.revents = fd.events;
+    }
     return libndt::Err::none;
   }
   int sys_getsockopt(libndt::Socket, int, int, void *,
@@ -2326,10 +2277,10 @@ class FailSocketConnectSocketError : public libndt::Client {
     sys_set_last_error(OS_EINPROGRESS);
     return -1;
   }
-  libndt::Err netx_select(std::vector<libndt::Socket>,
-                          std::vector<libndt::Socket>, timeval,
-                          std::vector<libndt::Socket> *,
-                          std::vector<libndt::Socket> *) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *pfds, int) noexcept override {
+    for (auto &fd : *pfds) {
+      fd.revents = fd.events;
+    }
     return libndt::Err::none;
   }
   virtual int sys_getsockopt(libndt::Socket, int, int, void *value,
@@ -2706,17 +2657,16 @@ TEST_CASE(
 
 #endif  // _WIN32
 
-// Client::netx_select() tests
+// Client::netx_poll() tests
 // ---------------------------
 
 #ifndef _WIN32
 
-class InterruptSelect : public libndt::Client {
+class InterruptPoll : public libndt::Client {
  public:
   using libndt::Client::Client;
   unsigned int count = 0;
-  int sys_select(int, fd_set *, fd_set *, fd_set *,
-                 timeval *) noexcept override {
+  int sys_poll(pollfd *, nfds_t, int) noexcept override {
     if (count++ == 0) {
       sys_set_last_error(EINTR);
     } else {
@@ -2726,37 +2676,44 @@ class InterruptSelect : public libndt::Client {
   }
 };
 
-TEST_CASE("Client::netx_select() deals with EINTR") {
-  libndt::Socket maxfd = 17;
-  std::vector<libndt::Socket> wantread;
-  wantread.push_back(maxfd);
-  InterruptSelect client;
-  timeval tv{};
-  REQUIRE(client.netx_select(  //
-              std::move(wantread), {}, tv, nullptr, nullptr) ==
-          libndt::Err::io_error);
+TEST_CASE("Client::netx_poll() deals with EINTR") {
+  pollfd pfd{};
+  constexpr libndt::Socket sock = 17;
+  pfd.fd = sock;
+  pfd.events |= POLLIN;
+  std::vector<pollfd> pfds;
+  pfds.push_back(pfd);
+  InterruptPoll client;
+  constexpr int timeout = 100;
+  REQUIRE(client.netx_poll(&pfds, timeout) == libndt::Err::io_error);
   REQUIRE(client.count == 2);
 }
 
 #endif  // !_WIN32
 
-class TimeoutSelect : public libndt::Client {
+class TimeoutPoll : public libndt::Client {
  public:
   using libndt::Client::Client;
-  int sys_select(int, fd_set *, fd_set *, fd_set *,
-                 timeval *) noexcept override {
+#ifdef _WIN32
+  int sys_poll(LPWSAPOLLFD, ULONG, INT) noexcept override
+#else
+  int sys_poll(pollfd *, nfds_t, int) noexcept override
+#endif
+  {
     return 0;
   }
 };
 
-TEST_CASE("Client::netx_select() deals with timeout") {
-  libndt::Socket maxfd = 17;
-  std::vector<libndt::Socket> wantread;
-  wantread.push_back(maxfd);
-  TimeoutSelect client;
-  REQUIRE(client.netx_select(  //
-              std::move(wantread), {}, {}, nullptr, nullptr) ==
-          libndt::Err::timed_out);
+TEST_CASE("Client::netx_poll() deals with timeout") {
+  pollfd pfd{};
+  constexpr libndt::Socket sock = 17;
+  pfd.fd = sock;
+  pfd.events |= POLLIN;
+  std::vector<pollfd> pfds;
+  pfds.push_back(pfd);
+  TimeoutPoll client;
+  constexpr int timeout = 100;
+  REQUIRE(client.netx_poll(&pfds, timeout) == libndt::Err::timed_out);
 }
 
 // Client::query_mlabns_curl() tests
