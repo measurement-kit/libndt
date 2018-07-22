@@ -41,7 +41,6 @@
 
 #include <map>
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -475,6 +474,7 @@ enum class Err {
   connection_aborted,
   connection_refused,
   connection_reset,
+  function_not_supported,
   host_unreachable,
   interrupted,
   invalid_argument,
@@ -495,8 +495,6 @@ enum class Err {
   ssl_generic,
   ssl_want_read,
   ssl_want_write,
-  internal,
-  not_implemented,
 };
 
 constexpr MsgType msg_comm_failure = MsgType{0};

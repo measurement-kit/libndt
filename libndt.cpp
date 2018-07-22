@@ -1076,6 +1076,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
       netx_closesocket(*sock);
       return Err::ssl_generic;
     }
+    // TODO(bassosimone): add support for CA and hostname validation.
     EMIT_DEBUG("SSL_CTX created");
     ssl = ::SSL_new(ctx);
     if (ssl == nullptr) {
@@ -1110,7 +1111,8 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   }
   return Err::none;
 #else
-  return Err::not_implemented;
+  EMIT_WARNING("SSL support not compiled in");
+  return Err::function_not_supported;
 #endif
 }
 
