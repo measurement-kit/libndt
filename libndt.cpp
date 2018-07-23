@@ -24,13 +24,21 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <random>
 #include <sstream>
 #include <utility>
 #include <vector>
+
+#ifdef HAVE_OPENSSL
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+#endif
 
 #include "curlx.hpp"
 #include "json.hpp"
@@ -85,6 +93,9 @@ class Client::Impl {
   Socket sock = -1;
   std::vector<NettestFlags> granted_suite;
   Settings settings;
+#ifdef HAVE_OPENSSL
+  std::map<Socket, SSL *> fd_to_ssl;
+#endif
 };
 
 static void random_printable_fill(char *buffer, size_t length) noexcept {
@@ -178,7 +189,7 @@ SocketVector::SocketVector(Client *c) noexcept : owner{c} {}
 SocketVector::~SocketVector() noexcept {
   if (owner != nullptr) {
     for (auto &fd : sockets) {
-      owner->sys_closesocket(fd);
+      owner->netx_closesocket(fd);
     }
   }
 }
@@ -193,7 +204,7 @@ Client::Client(Settings settings) noexcept : Client::Client() {
 
 Client::~Client() noexcept {
   if (impl->sock != -1) {
-    sys_closesocket(impl->sock);
+    netx_closesocket(impl->sock);
   }
 }
 
@@ -280,9 +291,17 @@ bool Client::query_mlabns() noexcept {
     EMIT_DEBUG("no need to query mlab-ns; we have hostname");
     return true;
   }
+  std::string mlabns_url = impl->settings.mlabns_base_url;
+  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    mlabns_url += "/ndt_ssl";
+  } else {
+    mlabns_url += "/ndt";
+  }
+  if ((impl->settings.mlabns_flags & mlabns_flag_random) != 0) {
+    mlabns_url += "?policy=random";
+  }
   std::string body;
-  if (!query_mlabns_curl(  //
-          impl->settings.mlabns_url, impl->settings.timeout, &body)) {
+  if (!query_mlabns_curl(mlabns_url, impl->settings.timeout, &body)) {
     return false;
   }
   nlohmann::json json;
@@ -303,8 +322,16 @@ bool Client::query_mlabns() noexcept {
 }
 
 bool Client::connect() noexcept {
-  return netx_maybesocks5h_dial(impl->settings.hostname, impl->settings.port,
-                                &impl->sock) == Err::none;
+  std::string port;
+  if (!impl->settings.port.empty()) {
+    port = impl->settings.port;
+  } else if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    port = "3010";
+  } else {
+    port = "3001";
+  }
+  return netx_maybessl_dial(  //
+             impl->settings.hostname, port, &impl->sock) == Err::none;
 }
 
 bool Client::send_login() noexcept {
@@ -427,19 +454,21 @@ bool Client::wait_close() noexcept {
   if (err != Err::none) {
     EMIT_WARNING(
         "wait_close(): netx_wait_readable() failed: " << sys_get_last_error());
-    (void)sys_shutdown(impl->sock, OS_SHUT_RDWR);
+    (void)netx_shutdown_both(impl->sock);
     return (err == Err::timed_out);
   }
   {
-    char data;
-    Size n = 0;
-    auto err = netx_recv(impl->sock, &data, sizeof(data), &n);
-    if (err == Err::none) {
+    // Implementation note: here we use sys_recv() because we want to act
+    // at the networking layer rather than possibly at the SSL layer.
+    char data{};
+    Ssize n = sys_recv(impl->sock, &data, sizeof(data));
+    if (n > 0) {
       EMIT_WARNING("wait_close(): unexpected data recv'd when waiting for EOF");
       return false;
     }
-    if (err != Err::eof) {
-      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF");
+    if (n != 0) {
+      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF: "
+                   << sys_get_last_error());
       return false;
     }
   }
@@ -458,7 +487,7 @@ bool Client::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
-    Err err = netx_maybesocks5h_dial(impl->settings.hostname, port, &sock);
+    Err err = netx_maybessl_dial(impl->settings.hostname, port, &sock);
     if (err != Err::none) {
       break;
     }
@@ -472,6 +501,7 @@ bool Client::run_download() noexcept {
   if (!msg_expect_empty(msg_test_start)) {
     return false;
   }
+  EMIT_DEBUG("run download: got the test_start message");
 
   double client_side_speed = 0.0;
   {
@@ -480,14 +510,14 @@ bool Client::run_download() noexcept {
     auto begin = std::chrono::steady_clock::now();
     auto prev = begin;
     char buf[64000];
+    std::vector<pollfd> pfds;
+    for (auto fd : dload_socks.sockets) {
+      pollfd pfd{};
+      pfd.events = POLLIN;  // start in want-read state
+      pfd.fd = fd;
+      pfds.push_back(pfd);
+    }
     for (auto done = false; !done;) {
-      std::vector<pollfd> pfds;
-      for (auto fd : dload_socks.sockets) {
-        pollfd pfd{};
-        pfd.fd = fd;
-        pfd.events |= POLLIN;
-        pfds.push_back(pfd);
-      }
       constexpr int timeout_msec = 250;
       auto err = netx_poll(&pfds, timeout_msec);
       if (err != Err::none && err != Err::timed_out) {
@@ -496,12 +526,16 @@ bool Client::run_download() noexcept {
         return false;
       }
       for (auto fd : pfds) {
-        if ((fd.revents & POLLIN) == 0) {
+        if ((fd.revents & (POLLIN | POLLOUT)) == 0) {
           continue;
         }
         Size n = 0;
         auto err = netx_recv_nonblocking(fd.fd, buf, sizeof(buf), &n);
-        if (err != Err::none) {
+        if (err == Err::operation_would_block || err == Err::ssl_want_read) {
+          fd.events = POLLIN;
+        } else if (err == Err::ssl_want_write) {
+          fd.events = POLLOUT;
+        } else if (err != Err::none) {
           EMIT_WARNING(
               "run_download: netx_recv() failed: " << sys_get_last_error());
           done = true;
@@ -527,7 +561,7 @@ bool Client::run_download() noexcept {
       }
     }
     for (auto &fd : dload_socks.sockets) {
-      (void)sys_shutdown(fd, OS_SHUT_RDWR);
+      (void)netx_shutdown_both(fd);
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -626,7 +660,7 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = -1;
-    Err err = netx_maybesocks5h_dial(impl->settings.hostname, port, &sock);
+    Err err = netx_maybessl_dial(impl->settings.hostname, port, &sock);
     if (err != Err::none) {
       return false;
     }
@@ -643,14 +677,14 @@ bool Client::run_upload() noexcept {
     uint64_t total_data = 0;
     auto begin = std::chrono::steady_clock::now();
     auto prev = begin;
+    std::vector<pollfd> pfds;
+    for (auto fd : upload_socks.sockets) {
+      pollfd pfd{};
+      pfd.events = POLLOUT;  // start in want-write state
+      pfd.fd = fd;
+      pfds.push_back(pfd);
+    }
     for (auto done = false; !done;) {
-      std::vector<pollfd> pfds;
-      for (auto fd : upload_socks.sockets) {
-        pollfd pfd{};
-        pfd.fd = fd;
-        pfd.events |= POLLOUT;
-        pfds.push_back(pfd);
-      }
       constexpr int timeout_msec = 250;
       auto err = netx_poll(&pfds, timeout_msec);
       if (err != Err::none && err != Err::timed_out) {
@@ -659,12 +693,17 @@ bool Client::run_upload() noexcept {
         return false;
       }
       for (auto fd : pfds) {
-        if ((fd.revents & POLLOUT) == 0) {
+        if ((fd.revents & (POLLIN | POLLOUT)) == 0) {
           continue;
         }
         Size n = 0;
         auto err = netx_send_nonblocking(fd.fd, buf, sizeof(buf), &n);
-        if (err != Err::none) {
+        if (err == Err::ssl_want_read) {
+          fd.events = POLLIN;
+        } else if (err == Err::operation_would_block ||
+                   err == Err::ssl_want_write) {
+          fd.events = POLLOUT;
+        } else if (err != Err::none) {
           if (err != Err::broken_pipe) {
             EMIT_WARNING(
                 "run_upload: netx_send() failed: " << sys_get_last_error());
@@ -692,7 +731,7 @@ bool Client::run_upload() noexcept {
       }
     }
     for (auto &fd : upload_socks.sockets) {
-      (void)sys_shutdown(fd, OS_SHUT_RDWR);
+      (void)netx_shutdown_both(fd);
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -994,6 +1033,181 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
 
 // Networking layer
 
+#ifdef HAVE_OPENSSL
+
+// Common function to map OpenSSL errors to Err.
+static Err map_ssl_error(SSL *ssl, int ret) noexcept {
+  auto reason = ::SSL_get_error(ssl, ret);
+  switch (reason) {
+    case SSL_ERROR_NONE:
+      return Err::none;
+    case SSL_ERROR_ZERO_RETURN:
+      // TODO(bassosimone): consider the issue of dirty shutdown.
+      return Err::eof;
+    case SSL_ERROR_WANT_READ:
+      return Err::ssl_want_read;
+    case SSL_ERROR_WANT_WRITE:
+      return Err::ssl_want_write;
+  }
+  // TODO(bassosimone): in this case it may be nice to print the error queue
+  // so to give the user a better understanding of what has happened.
+  return Err::ssl_generic;
+}
+
+// Retry simple, nonblocking OpenSSL operations such as handshake or shutdown.
+static Err  //
+ssl_retry_unary_op(Client *client, SSL *ssl, Socket fd, Timeout timeout,
+                   std::function<int(SSL *)> unary_op) noexcept {
+  auto err = Err::none;
+again:
+  err = map_ssl_error(ssl, unary_op(ssl));
+  // Retry if needed
+  if (err == Err::ssl_want_read) {
+    err = client->netx_wait_readable(fd, timeout);
+    if (err == Err::none) {
+      goto again;
+    }
+  } else if (err == Err::ssl_want_write) {
+    err = client->netx_wait_writeable(fd, timeout);
+    if (err == Err::none) {
+      goto again;
+    }
+  }
+  // Otherwise let the caller know
+  return err;
+}
+
+static std::string ssl_format_error() noexcept {
+  std::stringstream ss;
+  for (unsigned short i = 0; i < USHRT_MAX; ++i) {
+    unsigned long err = ERR_get_error();
+    if (err == 0) {
+      break;
+    }
+    ss << ((i > 0) ? ": " : "") << ERR_reason_error_string(err);
+  }
+  return ss.str();
+}
+
+#endif  // HAVE_OPENSSL
+
+Err Client::netx_maybessl_dial(const std::string &hostname,
+                               const std::string &port, Socket *sock) noexcept {
+  auto err = netx_maybesocks5h_dial(hostname, port, sock);
+  if (err != Err::none) {
+    return err;
+  }
+  if ((impl->settings.protocol_flags & protocol_flag_tls) == 0) {
+    return Err::none;
+  }
+#ifdef HAVE_OPENSSL
+  if (impl->settings.ca_bundle_path.empty()) {
+#ifndef _WIN32
+    // See <https://serverfault.com/a/722646>
+    std::vector<std::string> candidates{
+        "/etc/ssl/cert.pem",                   // macOS
+        "/etc/ssl/certs/ca-certificates.crt",  // Debian
+    };
+    for (auto &candidate : candidates) {
+      if (access(candidate.c_str(), R_OK) == 0) {
+        EMIT_DEBUG("Using '" << candidate.c_str() << "' as CA");
+        impl->settings.ca_bundle_path = candidate;
+        break;
+      }
+    }
+    if (impl->settings.ca_bundle_path.empty()) {
+#endif
+      EMIT_WARNING(
+          "You did not provide me with a CA bundle path. Without this "
+          "information I cannot validate the other TLS endpoint. So, "
+          "I will not continue to run this test.");
+      return Err::invalid_argument;
+#ifndef _WIN32
+    }
+#endif
+  }
+  SSL *ssl = nullptr;
+  {
+    // TODO(bassosimone): understand whether we can remove old SSL versions
+    // taking into account that the NDT server runs on very old code.
+    SSL_CTX *ctx = ::SSL_CTX_new(SSLv23_client_method());
+    if (ctx == nullptr) {
+      EMIT_WARNING("SSL_CTX_new() failed");
+      netx_closesocket(*sock);
+      return Err::ssl_generic;
+    }
+    EMIT_DEBUG("SSL_CTX created");
+    if (!::SSL_CTX_load_verify_locations(  //
+            ctx, impl->settings.ca_bundle_path.c_str(), nullptr)) {
+      EMIT_WARNING("Cannot load the CA bundle path from the file system");
+      ::SSL_CTX_free(ctx);
+      netx_closesocket(*sock);
+      return Err::ssl_generic;
+    }
+    EMIT_DEBUG("Loaded the CA bundle path");
+    ssl = ::SSL_new(ctx);
+    if (ssl == nullptr) {
+      EMIT_WARNING("SSL_new() failed");
+      ::SSL_CTX_free(ctx);
+      netx_closesocket(*sock);
+      return Err::ssl_generic;
+    }
+    EMIT_DEBUG("SSL created");
+    ::SSL_CTX_free(ctx);  // Referenced by `ssl` so safe to free here
+    assert(impl->fd_to_ssl.count(*sock) == 0);
+    // Implementation note: after this point `netx_closesocket(*sock)` will
+    // imply that `::SSL_free(ssl)` is also called.
+    impl->fd_to_ssl[*sock] = ssl;
+  }
+  // Note: OpenSSL uses the BIO_NOCLOSE flag when a file descriptor is set
+  // using SSL_set_fd(). That is, we still own the file descriptor. Also, it
+  // is interesting to note that SSL_set_fd() takes an `int` rather than a
+  // `SOCKET` as its second argument. This is safe for internal non documented
+  // reasons: even on Windows 64 kernel handles uses only 24 bits. See also
+  // this Stack Overflow post: <https://stackoverflow.com/a/1953738>.
+  if (!::SSL_set_fd(ssl, *sock)) {
+    EMIT_WARNING("SSL_set_fd() failed");
+    netx_closesocket(*sock);
+    //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
+    return Err::ssl_generic;
+  }
+  ::SSL_set_connect_state(ssl);
+  EMIT_DEBUG("Socket added to SSL context");
+  {
+    // This approach for validating the hostname should work with versions
+    // of OpenSSL greater than v1.0.2 and with LibreSSL. Code taken from the
+    // wiki: <https://wiki.openssl.org/index.php/Hostname_validation>.
+    X509_VERIFY_PARAM *p = SSL_get0_param(ssl);
+    assert(p != nullptr);
+    X509_VERIFY_PARAM_set_hostflags(p, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+    if (!::X509_VERIFY_PARAM_set1_host(p, hostname.data(), hostname.size())) {
+      EMIT_WARNING("Cannot set the hostname for hostname validation");
+      netx_closesocket(*sock);
+      //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
+      return Err::ssl_generic;
+    }
+    SSL_set_verify(ssl, SSL_VERIFY_PEER, nullptr);
+    EMIT_DEBUG("SSL_VERIFY_PEER configured");
+  }
+  err = ssl_retry_unary_op(this, ssl, *sock, impl->settings.timeout,
+                           [](SSL *ssl) -> int {
+                             ERR_clear_error();
+                             return ::SSL_do_handshake(ssl);
+                           });
+  if (err != Err::none) {
+    EMIT_WARNING("SSL handshake failed: " << ssl_format_error());
+    netx_closesocket(*sock);
+    //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
+    return Err::ssl_generic;
+  }
+  EMIT_DEBUG("SSL handshake complete");
+  return Err::none;
+#else
+  EMIT_WARNING("SSL support not compiled in");
+  return Err::function_not_supported;
+#endif
+}
+
 Err Client::netx_maybesocks5h_dial(const std::string &hostname,
                                    const std::string &port,
                                    Socket *sock) noexcept {
@@ -1016,7 +1230,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     auto err = netx_sendn(*sock, auth_request, sizeof(auth_request));
     if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot send auth_request");
-      sys_closesocket(*sock);
+      netx_closesocket(*sock);
       *sock = -1;
       return err;
     }
@@ -1031,21 +1245,21 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     auto err = netx_recvn(*sock, auth_response, sizeof(auth_response));
     if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot recv auth_response");
-      sys_closesocket(*sock);
+      netx_closesocket(*sock);
       *sock = -1;
       return err;
     }
     constexpr uint8_t version = 5;
     if (auth_response[0] != version) {
       EMIT_WARNING("socks5h: received unexpected version number");
-      sys_closesocket(*sock);
+      netx_closesocket(*sock);
       *sock = -1;
       return Err::socks5h;
     }
     constexpr uint8_t auth_method = 0;
     if (auth_response[1] != auth_method) {
       EMIT_WARNING("socks5h: received unexpected auth_method");
-      sys_closesocket(*sock);
+      netx_closesocket(*sock);
       *sock = -1;
       return Err::socks5h;
     }
@@ -1062,7 +1276,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       ss << (uint8_t)3;  // ATYPE_DOMAINNAME
       if (hostname.size() > UINT8_MAX) {
         EMIT_WARNING("socks5h: hostname is too long");
-        sys_closesocket(*sock);
+        netx_closesocket(*sock);
         *sock = -1;
         return Err::invalid_argument;
       }
@@ -1074,7 +1288,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         portno = (uint16_t)sys_strtonum(port.c_str(), 0, UINT16_MAX, &errstr);
         if (errstr != nullptr) {
           EMIT_WARNING("socks5h: invalid port number: " << errstr);
-          sys_closesocket(*sock);
+          netx_closesocket(*sock);
           *sock = -1;
           return Err::invalid_argument;
         }
@@ -1088,7 +1302,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         *sock, connect_request.data(), connect_request.size());
     if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot send connect_request");
-      sys_closesocket(*sock);
+      netx_closesocket(*sock);
       *sock = -1;
       return err;
     }
@@ -1105,7 +1319,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         *sock, connect_response_hdr, sizeof(connect_response_hdr));
     if (err != Err::none) {
       EMIT_WARNING("socks5h: cannot recv connect_response_hdr");
-      sys_closesocket(*sock);
+      netx_closesocket(*sock);
       *sock = -1;
       return err;
     }
@@ -1114,7 +1328,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     constexpr uint8_t version = 5;
     if (connect_response_hdr[0] != version) {
       EMIT_WARNING("socks5h: invalid message version");
-      sys_closesocket(*sock);
+      netx_closesocket(*sock);
       *sock = -1;
       return Err::socks5h;
     }
@@ -1122,13 +1336,13 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       // TODO(bassosimone): map the socks5 error to a system error
       EMIT_WARNING("socks5h: connect() failed: "
                    << (unsigned)(uint8_t)connect_response_hdr[1]);
-      sys_closesocket(*sock);
+      netx_closesocket(*sock);
       *sock = -1;
       return Err::io_error;
     }
     if (connect_response_hdr[2] != 0) {
       EMIT_WARNING("socks5h: invalid reserved field");
-      sys_closesocket(*sock);
+      netx_closesocket(*sock);
       *sock = -1;
       return Err::socks5h;
     }
@@ -1141,7 +1355,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         auto err = netx_recvn(*sock, buf, sizeof(buf));
         if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv ipv4 address");
-          sys_closesocket(*sock);
+          netx_closesocket(*sock);
           *sock = -1;
           return err;
         }
@@ -1155,7 +1369,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         auto err = netx_recvn(*sock, &len, sizeof(len));
         if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv domain length");
-          sys_closesocket(*sock);
+          netx_closesocket(*sock);
           *sock = -1;
           return err;
         }
@@ -1163,7 +1377,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         err = netx_recvn(*sock, domain, len);
         if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv domain");
-          sys_closesocket(*sock);
+          netx_closesocket(*sock);
           *sock = -1;
           return err;
         }
@@ -1178,7 +1392,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         auto err = netx_recvn(*sock, buf, sizeof(buf));
         if (err != Err::none) {
           EMIT_WARNING("socks5h: cannot recv ipv6 address");
-          sys_closesocket(*sock);
+          netx_closesocket(*sock);
           *sock = -1;
           return err;
         }
@@ -1188,7 +1402,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       }
       default:
         EMIT_WARNING("socks5h: invalid address type");
-        sys_closesocket(*sock);
+        netx_closesocket(*sock);
         *sock = -1;
         return Err::socks5h;
     }
@@ -1198,7 +1412,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       auto err = netx_recvn(*sock, &port, sizeof(port));
       if (err != Err::none) {
         EMIT_WARNING("socks5h: cannot recv port");
-        sys_closesocket(*sock);
+        netx_closesocket(*sock);
         *sock = -1;
         return err;
       }
@@ -1348,6 +1562,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
           }
         }
       }
+      // TODO(bassosimone): print not only system error but also SSL error.
       EMIT_WARNING("connect() failed: " << sys_get_last_error());
       sys_closesocket(*sock);
       *sock = -1;
@@ -1365,19 +1580,27 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
-  auto err = netx_recv_nonblocking(fd, base, count, actual);
-  if (err != Err::operation_would_block) {
-    return err;
+  auto err = Err::none;
+again:
+  err = netx_recv_nonblocking(fd, base, count, actual);
+  if (err == Err::none) {
+    return Err::none;
   }
-  err = netx_wait_readable(fd, impl->settings.timeout);
-  if (err != Err::none) {
-    return err;
+  if (err == Err::operation_would_block || err == Err::ssl_want_read) {
+    err = netx_wait_readable(fd, impl->settings.timeout);
+  } else if (err == Err::ssl_want_write) {
+    err = netx_wait_writeable(fd, impl->settings.timeout);
   }
-  return netx_recv_nonblocking(fd, base, count, actual);
+  if (err == Err::none) {
+    goto again;
+  }
+  return err;
 }
 
 Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
                                   Size *actual) noexcept {
+  assert(base != nullptr && actual != nullptr);
+  *actual = 0;
   if (count <= 0) {
     EMIT_WARNING(
         "netx_recv: explicitly disallowing zero read; use netx_select() "
@@ -1385,15 +1608,32 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
     return Err::invalid_argument;
   }
   sys_set_last_error(0);
+#ifdef HAVE_OPENSSL
+  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if (count > INT_MAX) {
+      return Err::invalid_argument;
+    }
+    if (impl->fd_to_ssl.count(fd) != 1) {
+      return Err::invalid_argument;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    // TODO(bassosimone): add mocks and regress tests for OpenSSL.
+    ERR_clear_error();
+    int ret = ::SSL_read(ssl, base, count);
+    if (ret <= 0) {
+      return map_ssl_error(ssl, ret);
+    }
+    *actual = (Size)ret;
+    return Err::none;
+  }
+#endif
   auto rv = sys_recv(fd, base, count);
   if (rv < 0) {
     assert(rv == -1);
-    *actual = 0;
     return netx_map_errno(sys_get_last_error());
   }
   if (rv == 0) {
     assert(count > 0);  // guaranteed by the above check
-    *actual = 0;
     return Err::eof;
   }
   *actual = (Size)rv;
@@ -1421,19 +1661,27 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
-  auto err = netx_send_nonblocking(fd, base, count, actual);
-  if (err != Err::operation_would_block) {
-    return err;
+  auto err = Err::none;
+again:
+  err = netx_send_nonblocking(fd, base, count, actual);
+  if (err == Err::none) {
+    return Err::none;
   }
-  err = netx_wait_writeable(fd, impl->settings.timeout);
-  if (err != Err::none) {
-    return err;
+  if (err == Err::ssl_want_read) {
+    err = netx_wait_readable(fd, impl->settings.timeout);
+  } else if (err == Err::operation_would_block || err == Err::ssl_want_write) {
+    err = netx_wait_writeable(fd, impl->settings.timeout);
   }
-  return netx_send_nonblocking(fd, base, count, actual);
+  if (err == Err::none) {
+    goto again;
+  }
+  return err;
 }
 
 Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
                                   Size *actual) noexcept {
+  assert(base != nullptr && actual != nullptr);
+  *actual = 0;
   if (count <= 0) {
     EMIT_WARNING(
         "netx_send: explicitly disallowing zero send; use netx_select() "
@@ -1441,17 +1689,34 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
     return Err::invalid_argument;
   }
   sys_set_last_error(0);
+#ifdef HAVE_OPENSSL
+  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if (count > INT_MAX) {
+      return Err::invalid_argument;
+    }
+    if (impl->fd_to_ssl.count(fd) != 1) {
+      return Err::invalid_argument;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    ERR_clear_error();
+    // TODO(bassosimone): add mocks and regress tests for OpenSSL.
+    int ret = ::SSL_write(ssl, base, count);
+    if (ret <= 0) {
+      return map_ssl_error(ssl, ret);
+    }
+    *actual = (Size)ret;
+    return Err::none;
+  }
+#endif
   auto rv = sys_send(fd, base, count);
   if (rv < 0) {
     assert(rv == -1);
-    *actual = 0;
     return netx_map_errno(sys_get_last_error());
   }
   // Send() should not return zero unless count is zero. So consider a zero
   // return value as an I/O error rather than EOF.
   if (rv == 0) {
     assert(count > 0);  // guaranteed by the above check
-    *actual = 0;
     return Err::io_error;
   }
   *actual = (Size)rv;
@@ -1585,6 +1850,9 @@ Err Client::netx_poll(std::vector<pollfd> *pfds, int timeout_msec) noexcept {
     EMIT_WARNING("netx_poll: passed a null vector of descriptors");
     return Err::invalid_argument;
   }
+  for (auto &pfd : *pfds) {
+    pfd.revents = 0;  // clear unconditionally
+  }
   int rv = 0;
 #ifndef _WIN32
 again:
@@ -1616,6 +1884,46 @@ again:
 #endif
   if (rv == 0) {
     return Err::timed_out;
+  }
+  return Err::none;
+}
+
+Err Client::netx_shutdown_both(Socket fd) noexcept {
+#ifdef HAVE_OPENSSL
+  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if (impl->fd_to_ssl.count(fd) != 1) {
+      return Err::invalid_argument;
+    }
+    auto ssl = impl->fd_to_ssl.at(fd);
+    auto err = ssl_retry_unary_op(  //
+        this, ssl, fd, impl->settings.timeout, [](SSL *ssl) -> int {
+          ERR_clear_error();
+          return ::SSL_shutdown(ssl);
+        });
+    if (err != Err::none) {
+      EMIT_WARNING("SSL_shutdown() failed");
+      return err;
+    }
+  }
+#endif
+  if (sys_shutdown(fd, OS_SHUT_RDWR) != 0) {
+    return netx_map_errno(sys_get_last_error());
+  }
+  return Err::none;
+}
+
+Err Client::netx_closesocket(Socket fd) noexcept {
+#if HAVE_OPENSSL
+  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if (impl->fd_to_ssl.count(fd) != 1) {
+      return Err::invalid_argument;
+    }
+    ::SSL_free(impl->fd_to_ssl.at(fd));
+    impl->fd_to_ssl.erase(fd);
+  }
+#endif
+  if (sys_closesocket(fd) != 0) {
+    return netx_map_errno(sys_get_last_error());
   }
   return Err::none;
 }

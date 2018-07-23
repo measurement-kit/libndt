@@ -138,13 +138,23 @@ enum class Err;  // Forward declaration (see bottom of this file)
 /// Timeout expressed in seconds.
 using Timeout = unsigned int;
 
+/// Flags modifying the behavior of mlab-ns.
+using MlabnsFlags = unsigned short;
+
+/// Request for a random NDT server.
+constexpr MlabnsFlags mlabns_flag_random = MlabnsFlags{1 << 0};
+
 /// NDT client settings. If you do not customize the settings when creating
 /// a Client, the defaults listed below will be used instead.
 class Settings {
  public:
-  /// URL to be used to query the mlab-ns service. If you specify an explicit
-  /// hostname, mlab-ns won't be used.
-  std::string mlabns_url = "https://mlab-ns.appspot.com/ndt";
+  /// Base URL to be used to query the mlab-ns service. If you specify an
+  /// explicit hostname, mlab-ns won't be used. Note that the URL specified
+  /// here MUST NOT end with a final slash.
+  std::string mlabns_base_url = "https://mlab-ns.appspot.com";
+
+  /// Flags that modify the behavior of mlabn-ns.
+  MlabnsFlags mlabns_flags = MlabnsFlags{0};
 
   /// Timeout used for I/O operations. \bug in v0.23.0 this timeout is only
   /// used for cURL operations, but this will be fixed in v0.25.0.
@@ -154,8 +164,9 @@ class Settings {
   /// we will use mlab-ns to discover a nearby server.
   std::string hostname;
 
-  /// Port of the NDT server to use.
-  std::string port = "3001";
+  /// Port of the NDT server to use. If this is not specified, we will use
+  /// the most correct port depending on the configuration.
+  std::string port;
 
   /// The tests you want to run with the NDT server.
   NettestFlags nettest_flags = nettest_flag_download;
@@ -185,6 +196,11 @@ class Settings {
   /// SOCKSv5h port to use for tunnelling traffic using, e.g., Tor. If non
   /// empty, all DNS and TCP traffic should be tunnelled over such port.
   std::string socks5h_port;
+
+  /// CA bundle path to be used to verify TLS connections. If you do not
+  /// set this variable and you're on Unix, we'll attempt to use some reasonable
+  /// default value. Otherwise, the test will fail.
+  std::string ca_bundle_path;
 };
 
 using MsgType = unsigned char;
@@ -320,7 +336,12 @@ class Client {
   // Networking layer
   // ````````````````
   //
-  // This section contains network functionality used to implement NDT.
+  // This section contains network functionality used by NDT.
+
+  // Connect to @p hostname and @p port possibly using SSL and SOCKSv5.
+  virtual Err netx_maybessl_dial(const std::string &hostname,
+                                 const std::string &port,
+                                 Socket *sock) noexcept;
 
   // Connect to @p hostname and @port possibly using SOCKSv5.
   virtual Err netx_maybesocks5h_dial(const std::string &hostname,
@@ -374,6 +395,12 @@ class Client {
 
   // Main function for dealing with I/O patterned after poll(2).
   virtual Err netx_poll(std::vector<pollfd> *fds, int timeout_msec) noexcept;
+
+  // Shutdown both ends of a socket.
+  virtual Err netx_shutdown_both(Socket fd) noexcept;
+
+  // Close a socket.
+  virtual Err netx_closesocket(Socket fd) noexcept;
 
   // Dependencies (cURL)
 
@@ -463,6 +490,7 @@ enum class Err {
   connection_aborted,
   connection_refused,
   connection_reset,
+  function_not_supported,
   host_unreachable,
   interrupted,
   invalid_argument,
@@ -480,6 +508,9 @@ enum class Err {
   ai_fail,
   ai_noname,
   socks5h,
+  ssl_generic,
+  ssl_want_read,
+  ssl_want_write,
 };
 
 constexpr MsgType msg_comm_failure = MsgType{0};

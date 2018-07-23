@@ -13,20 +13,23 @@
 #include "argh.h"
 
 static void usage() {
+  // clang-format off
   std::clog << "\n";
   std::clog << "Usage: libndt-client [options] [<hostname>]\n";
   std::clog << "\n";
-  std::clog << "  --download            : run download test\n";
-  std::clog << "  --download-ext        : run multi-stream download test\n";
-  std::clog << "  --json                : use the JSON protocol\n";
-  std::clog << "  --port <port>         : use the specified port\n";
-  std::clog
-      << "  --socks5h <port>      : use socks5h proxy at 127.0.0.1:<port>\n";
-  std::clog << "  --upload              : run upload test\n";
-  std::clog << "  --verbose             : be verbose\n";
+  std::clog << "  --ca-bundle-path <path> : path to OpenSSL CA bundle\n";
+  std::clog << "  --download              : run download test\n";
+  std::clog << "  --download-ext          : run multi-stream download test\n";
+  std::clog << "  --json                  : use the JSON protocol\n";
+  std::clog << "  --port <port>           : use the specified port\n";
+  std::clog << "  --tls                   : use transport layer security\n";
+  std::clog << "  --socks5h <port>        : use socks5h proxy at 127.0.0.1:<port>\n";
+  std::clog << "  --upload                : run upload test\n";
+  std::clog << "  --verbose               : be verbose\n";
   std::clog << "\n";
   std::clog << "If <hostname> is omitted, we pick a random server.\n";
   std::clog << std::endl;
+  // clang-format on
 }
 
 int main(int, char **argv) {
@@ -36,6 +39,7 @@ int main(int, char **argv) {
 
   {
     argh::parser cmdline;
+    cmdline.add_param("ca-bundle-path");
     cmdline.add_param("port");
     cmdline.add_param("socks5h");
     cmdline.parse(argv);
@@ -49,6 +53,9 @@ int main(int, char **argv) {
       } else if (flag == "json") {
         settings.protocol_flags = libndt::protocol_flag_json;
         std::clog << "will use json" << std::endl;
+      } else if (flag == "tls") {
+        settings.protocol_flags = libndt::protocol_flag_tls;
+        std::clog << "will use TLS" << std::endl;
       } else if (flag == "upload") {
         settings.nettest_flags |= libndt::nettest_flag_upload;
         std::clog << "will run upload" << std::endl;
@@ -62,7 +69,10 @@ int main(int, char **argv) {
       }
     }
     for (auto &param : cmdline.params()) {
-      if (param.first == "port") {
+      if (param.first == "ca-bundle-path") {
+        settings.ca_bundle_path = param.second;
+        std::clog << "will use CA bundle path: " << param.second << std::endl;
+      } else if (param.first == "port") {
         settings.port = param.second;
         std::clog << "will use port: " << param.second << std::endl;
       } else if (param.first == "socks5h") {
@@ -85,7 +95,7 @@ int main(int, char **argv) {
       std::clog << "will use host: " << cmdline.pos_args()[1] << std::endl;
     } else {
       std::clog << "will find a suitable server" << std::endl;
-      settings.mlabns_url += "?policy=random";
+      settings.mlabns_flags |= libndt::mlabns_flag_random;
     }
   }
 

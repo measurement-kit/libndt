@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.1.0)
 project(libndt LANGUAGES C CXX)
 
+# Settings
+
+set(LIBNDT_OPENSSL "${LIBNDT_OPENSSL}" CACHE PATH
+    "Path where OpenSSL is installed")
+if(NOT ("${LIBNDT_OPENSSL}" STREQUAL ""))
+  list(APPEND CMAKE_REQUIRED_INCLUDES "${LIBNDT_OPENSSL}/include")
+  list(APPEND CMAKE_LIBRARY_PATH "${LIBNDT_OPENSSL}/lib")
+endif()
+
 # Download header only dependencies
 
 message(STATUS "Downloading adishavit/argh")
@@ -64,9 +73,26 @@ endif()
 # Checks
 
 include(CheckFunctionExists)
+include(CheckIncludeFiles)
+
 check_function_exists(strtonum HAVE_STRTONUM)
 if(${HAVE_STRTONUM})
   add_definitions(-DHAVE_STRTONUM)
+endif()
+
+check_include_files(openssl/ssl.h HAVE_OPENSSL_SSL_H)
+find_library(CRYPTO_LIBRARY crypto)
+find_library(SSL_LIBRARY ssl)
+if (NOT ("${HAVE_OPENSSL_SSL_H}" STREQUAL "") AND NOT
+    ("${CRYPTO_LIBRARY}" STREQUAL "CRYPTO_LIBRARY-NOTFOUND") AND NOT
+    ("${SSL_LIBRARY}" STREQUAL "SSL_LIBRARY-NOTFOUND"))
+  message(STATUS "crypto library: ${CRYPTO_LIBRARY}")
+  list(APPEND _EXTRA_LIBS "${CRYPTO_LIBRARY}")
+  message(STATUS "ssl library: ${SSL_LIBRARY}")
+  list(APPEND _EXTRA_LIBS "${SSL_LIBRARY}")
+  add_definitions(-DHAVE_OPENSSL)
+else()
+  message(WARNING "OpenSSL not found; will disable TLS support")
 endif()
 
 if(${LIBNDT_ENABLE_CURL})
@@ -115,7 +141,7 @@ add_library(
 )
 target_include_directories(
   ndt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
-  ${CURL_INCLUDE_DIRS}
+  ${CURL_INCLUDE_DIRS} ${CMAKE_REQUIRED_INCLUDES}
 )
 target_link_libraries(ndt ${CURL_LIBRARIES})
 add_executable(libndt-client libndt-client.cpp)
@@ -139,11 +165,12 @@ install(
   bin
 )
 if("${WIN32}" OR "${MINGW}")
-  target_link_libraries(ndt ws2_32 "${_EXTRA_LIBS}")
+  list(APPEND _EXTRA_LIBS "ws2_32")
   if ("${MINGW}")
     target_link_libraries(ndt -static-libgcc -static-libstdc++)
   endif()
 endif()
+target_link_libraries(ndt "${_EXTRA_LIBS}")
 
 # Testing
 # -------
@@ -175,7 +202,25 @@ if(${BUILD_TESTING} AND ${LIBNDT_ENABLE_TESTS})
     )
     add_test(
       NAME simple_upload_test
+      COMMAND libndt-client --verbose --upload
+    )
+    add_test(
+      NAME json_download_test
+      COMMAND libndt-client --verbose --json --download
+    )
+    add_test(
+      NAME json_upload_test
       COMMAND libndt-client --verbose --json --upload
     )
+    if(${UNIX})  # On UNIX We auto-discover the CA bundle path
+      add_test(
+        NAME tls_json_download_test
+        COMMAND libndt-client --verbose --download --tls --json
+      )
+      add_test(
+        NAME tls_json_upload_test
+        COMMAND libndt-client --verbose --upload --tls --json
+      )
+    endif()
   endif()
 endif()

@@ -2302,8 +2302,9 @@ TEST_CASE("Client::netx_dial() deals with Client::connect() socket error") {
 
 TEST_CASE("Client::netx_recv_nonblocking() deals with zero recv correctly") {
   libndt::Client client;
+  char buf{};
   libndt::Size n = 0;
-  REQUIRE(client.netx_recv_nonblocking(0, nullptr, 0, &n) ==
+  REQUIRE(client.netx_recv_nonblocking(0, &buf, 0, &n) ==
           libndt::Err::invalid_argument);
 }
 
@@ -2318,7 +2319,8 @@ TEST_CASE("Client::netx_recv_nonblocking() deals with zero recv correctly") {
 
 TEST_CASE("Client::netx_recvn() deals with too-large buffer") {
   libndt::Client client;
-  REQUIRE(client.netx_recvn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) ==
+  char buf{};
+  REQUIRE(client.netx_recvn(0, &buf, (unsigned long long)OS_SSIZE_MAX + 1) ==
           libndt::Err::invalid_argument);
 }
 
@@ -2431,7 +2433,8 @@ TEST_CASE(
 TEST_CASE("Client::netx_send() deals with zero send correctly") {
   libndt::Client client;
   libndt::Size n = 0;
-  REQUIRE(client.netx_send_nonblocking(0, nullptr, 0, &n) ==
+  char buf{};
+  REQUIRE(client.netx_send_nonblocking(0, &buf, 0, &n) ==
           libndt::Err::invalid_argument);
 }
 
@@ -2440,7 +2443,8 @@ TEST_CASE("Client::netx_send() deals with zero send correctly") {
 
 TEST_CASE("Client::netx_sendn() deals with too-large buffer") {
   libndt::Client client;
-  REQUIRE(client.netx_sendn(0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) ==
+  char buf{};
+  REQUIRE(client.netx_sendn(0, &buf, (unsigned long long)OS_SSIZE_MAX + 1) ==
           libndt::Err::invalid_argument);
 }
 
