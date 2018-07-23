@@ -138,13 +138,23 @@ enum class Err;  // Forward declaration (see bottom of this file)
 /// Timeout expressed in seconds.
 using Timeout = unsigned int;
 
+/// Flags modifying the behavior of mlab-ns.
+using MlabnsFlags = unsigned short;
+
+/// Request for a random NDT server.
+constexpr MlabnsFlags mlabns_flag_random = MlabnsFlags{1 << 0};
+
 /// NDT client settings. If you do not customize the settings when creating
 /// a Client, the defaults listed below will be used instead.
 class Settings {
  public:
-  /// URL to be used to query the mlab-ns service. If you specify an explicit
-  /// hostname, mlab-ns won't be used.
-  std::string mlabns_url = "https://mlab-ns.appspot.com/ndt";
+  /// Base URL to be used to query the mlab-ns service. If you specify an
+  /// explicit hostname, mlab-ns won't be used. Note that the URL specified
+  /// here MUST NOT end with a final slash.
+  std::string mlabns_base_url = "https://mlab-ns.appspot.com";
+
+  /// Flags that modify the behavior of mlabn-ns.
+  MlabnsFlags mlabns_flags = MlabnsFlags{0};
 
   /// Timeout used for I/O operations. \bug in v0.23.0 this timeout is only
   /// used for cURL operations, but this will be fixed in v0.25.0.

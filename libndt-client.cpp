@@ -95,7 +95,7 @@ int main(int, char **argv) {
       std::clog << "will use host: " << cmdline.pos_args()[1] << std::endl;
     } else {
       std::clog << "will find a suitable server" << std::endl;
-      settings.mlabns_url += "?policy=random";
+      settings.mlabns_flags |= libndt::mlabns_flag_random;
     }
   }
 

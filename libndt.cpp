@@ -291,9 +291,17 @@ bool Client::query_mlabns() noexcept {
     EMIT_DEBUG("no need to query mlab-ns; we have hostname");
     return true;
   }
+  std::string mlabns_url = impl->settings.mlabns_base_url;
+  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    mlabns_url += "/ndt_ssl";
+  } else {
+    mlabns_url += "/ndt";
+  }
+  if ((impl->settings.mlabns_flags & mlabns_flag_random) != 0) {
+    mlabns_url += "?policy=random";
+  }
   std::string body;
-  if (!query_mlabns_curl(  //
-          impl->settings.mlabns_url, impl->settings.timeout, &body)) {
+  if (!query_mlabns_curl(mlabns_url, impl->settings.timeout, &body)) {
     return false;
   }
   nlohmann::json json;
