@@ -1061,6 +1061,18 @@ again:
   return err;
 }
 
+static std::string ssl_format_error() noexcept {
+  std::stringstream ss;
+  for (unsigned short i = 0; i < USHRT_MAX; ++i) {
+    unsigned long err = ERR_get_error();
+    if (err == 0) {
+      break;
+    }
+    ss << ((i > 0) ? ": " : "") << ERR_reason_error_string(err);
+  }
+  return ss.str();
+}
+
 #endif  // HAVE_OPENSSL
 
 Err Client::netx_maybessl_dial(const std::string &hostname,
@@ -1073,6 +1085,13 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     return Err::none;
   }
 #ifdef HAVE_OPENSSL
+  if (impl->settings.ca_bundle_path.empty()) {
+    EMIT_WARNING(
+        "You did not provide me with a CA bundle path. Without this "
+        "information I cannot validate the other TLS endpoint. So, "
+        "I will not continue to run this test.");
+    return Err::invalid_argument;
+  }
   SSL *ssl = nullptr;
   {
     SSL_CTX *ctx = ::SSL_CTX_new(SSLv23_client_method());
@@ -1081,8 +1100,15 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
       netx_closesocket(*sock);
       return Err::ssl_generic;
     }
-    // TODO(bassosimone): add support for CA and hostname validation.
     EMIT_DEBUG("SSL_CTX created");
+    if (!::SSL_CTX_load_verify_locations(  //
+            ctx, impl->settings.ca_bundle_path.c_str(), nullptr)) {
+      EMIT_WARNING("Cannot load the CA bundle path from the file system");
+      ::SSL_CTX_free(ctx);
+      netx_closesocket(*sock);
+      return Err::ssl_generic;
+    }
+    EMIT_DEBUG("Loaded the CA bundle path");
     ssl = ::SSL_new(ctx);
     if (ssl == nullptr) {
       EMIT_WARNING("SSL_new() failed");
@@ -1111,11 +1137,29 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   }
   ::SSL_set_connect_state(ssl);
   EMIT_DEBUG("Socket added to SSL context");
-  err = ssl_retry_unary_op(
-      this, ssl, *sock, impl->settings.timeout,
-      [](SSL *ssl) -> int { return ::SSL_do_handshake(ssl); });
+  {
+    // This approach for validating the hostname should work with versions
+    // of OpenSSL greater than v1.0.2 and with LibreSSL. Code taken from the
+    // wiki: <https://wiki.openssl.org/index.php/Hostname_validation>.
+    X509_VERIFY_PARAM *p = SSL_get0_param(ssl);
+    assert(p != nullptr);
+    X509_VERIFY_PARAM_set_hostflags(p, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+    if (!::X509_VERIFY_PARAM_set1_host(p, hostname.data(), hostname.size())) {
+      EMIT_WARNING("Cannot set the hostname for hostname validation");
+      netx_closesocket(*sock);
+      //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
+      return Err::ssl_generic;
+    }
+    SSL_set_verify(ssl, SSL_VERIFY_PEER, nullptr);
+    EMIT_DEBUG("SSL_VERIFY_PEER configured");
+  }
+  err = ssl_retry_unary_op(this, ssl, *sock, impl->settings.timeout,
+                           [](SSL *ssl) -> int {
+                             ERR_clear_error();
+                             return ::SSL_do_handshake(ssl);
+                           });
   if (err != Err::none) {
-    EMIT_WARNING("SSL handshake failed");
+    EMIT_WARNING("SSL handshake failed: " << ssl_format_error());
     netx_closesocket(*sock);
     //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
     return Err::ssl_generic;
@@ -1538,6 +1582,7 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
     }
     auto ssl = impl->fd_to_ssl.at(fd);
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
+    ERR_clear_error();
     int ret = ::SSL_read(ssl, base, count);
     if (ret <= 0) {
       return map_ssl_error(ssl, ret);
@@ -1617,6 +1662,7 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
       return Err::invalid_argument;
     }
     auto ssl = impl->fd_to_ssl.at(fd);
+    ERR_clear_error();
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
     int ret = ::SSL_write(ssl, base, count);
     if (ret <= 0) {
@@ -1811,8 +1857,10 @@ Err Client::netx_shutdown_both(Socket fd) noexcept {
     }
     auto ssl = impl->fd_to_ssl.at(fd);
     auto err = ssl_retry_unary_op(  //
-        this, ssl, fd, impl->settings.timeout,
-        [](SSL *ssl) -> int { return ::SSL_shutdown(ssl); });
+        this, ssl, fd, impl->settings.timeout, [](SSL *ssl) -> int {
+          ERR_clear_error();
+          return ::SSL_shutdown(ssl);
+        });
     if (err != Err::none) {
       EMIT_WARNING("SSL_shutdown() failed");
       return err;

@@ -17,14 +17,15 @@ static void usage() {
   std::clog << "\n";
   std::clog << "Usage: libndt-client [options] [<hostname>]\n";
   std::clog << "\n";
-  std::clog << "  --download            : run download test\n";
-  std::clog << "  --download-ext        : run multi-stream download test\n";
-  std::clog << "  --json                : use the JSON protocol\n";
-  std::clog << "  --port <port>         : use the specified port\n";
-  std::clog << "  --tls                 : use transport layer security\n";
-  std::clog << "  --socks5h <port>      : use socks5h proxy at 127.0.0.1:<port>\n";
-  std::clog << "  --upload              : run upload test\n";
-  std::clog << "  --verbose             : be verbose\n";
+  std::clog << "  --ca-bundle-path <path> : path to OpenSSL CA bundle\n";
+  std::clog << "  --download              : run download test\n";
+  std::clog << "  --download-ext          : run multi-stream download test\n";
+  std::clog << "  --json                  : use the JSON protocol\n";
+  std::clog << "  --port <port>           : use the specified port\n";
+  std::clog << "  --tls                   : use transport layer security\n";
+  std::clog << "  --socks5h <port>        : use socks5h proxy at 127.0.0.1:<port>\n";
+  std::clog << "  --upload                : run upload test\n";
+  std::clog << "  --verbose               : be verbose\n";
   std::clog << "\n";
   std::clog << "If <hostname> is omitted, we pick a random server.\n";
   std::clog << std::endl;
@@ -38,6 +39,7 @@ int main(int, char **argv) {
 
   {
     argh::parser cmdline;
+    cmdline.add_param("ca-bundle-path");
     cmdline.add_param("port");
     cmdline.add_param("socks5h");
     cmdline.parse(argv);
@@ -67,7 +69,10 @@ int main(int, char **argv) {
       }
     }
     for (auto &param : cmdline.params()) {
-      if (param.first == "port") {
+      if (param.first == "ca-bundle-path") {
+        settings.ca_bundle_path = param.second;
+        std::clog << "will use CA bundle path: " << param.second << std::endl;
+      } else if (param.first == "port") {
         settings.port = param.second;
         std::clog << "will use port: " << param.second << std::endl;
       } else if (param.first == "socks5h") {

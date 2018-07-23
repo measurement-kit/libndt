@@ -185,6 +185,10 @@ class Settings {
   /// SOCKSv5h port to use for tunnelling traffic using, e.g., Tor. If non
   /// empty, all DNS and TCP traffic should be tunnelled over such port.
   std::string socks5h_port;
+
+  /// CA bundle path to be used to verify TLS connections. If you do not
+  /// set this variable this library will fail to make TLS based tests.
+  std::string ca_bundle_path;
 };
 
 using MsgType = unsigned char;
