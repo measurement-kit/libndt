@@ -526,7 +526,10 @@ bool Client::run_download() noexcept {
         return false;
       }
       for (auto fd : pfds) {
-        if ((fd.revents & (POLLIN | POLLOUT)) == 0) {
+        if (fd.revents == 0) {
+          // Implementation note: the only case in which we do not attempt to
+          // perform a recv is when _no event_ occurred. Otherwise try to recv
+          // either to get data back or possibly an error or EOF.
           continue;
         }
         Size n = 0;
@@ -693,7 +696,10 @@ bool Client::run_upload() noexcept {
         return false;
       }
       for (auto fd : pfds) {
-        if ((fd.revents & (POLLIN | POLLOUT)) == 0) {
+        if (fd.revents == 0) {
+          // Implementation note: the only case in which we do not attempt to
+          // perform a send is when _no event_ occurred. Otherwise try to send
+          // either to get data back or possibly an error or EOF.
           continue;
         }
         Size n = 0;
@@ -1832,7 +1838,14 @@ static Err netx_wait(Client *client, Socket fd, Timeout timeout,
     timeout = INT_MAX / 1000;
   }
   auto err = client->netx_poll(&pfds, timeout * 1000);
-  assert((err == Err::none && (pfds[0].revents & expected_events) != 0) ||
+  // Either it's success and something happened or we failed and nothing
+  // must have happened on the socket. We previously checked whether we had
+  // `expected_events` set however that the flags actually set by poll are
+  // dependent on the system and file descriptor type. Hence it is more
+  // robust to only make sure that some flag is actually set.
+  //
+  // See also Stack Overflow: <https://stackoverflow.com/a/25249958>.
+  assert((err == Err::none && pfds[0].revents != 0) ||
          (err != Err::none && pfds[0].revents == 0));
   return err;
 }
