@@ -202,7 +202,25 @@ if(${BUILD_TESTING} AND ${LIBNDT_ENABLE_TESTS})
     )
     add_test(
       NAME simple_upload_test
+      COMMAND libndt-client --verbose --upload
+    )
+    add_test(
+      NAME json_download_test
+      COMMAND libndt-client --verbose --json --download
+    )
+    add_test(
+      NAME json_upload_test
       COMMAND libndt-client --verbose --json --upload
     )
+    if(${UNIX})  # On UNIX We auto-discover the CA bundle path
+      add_test(
+        NAME tls_json_download_test
+        COMMAND libndt-client --verbose --download --tls --json
+      )
+      add_test(
+        NAME tls_json_upload_test
+        COMMAND libndt-client --verbose --upload --tls --json
+      )
+    endif()
   endif()
 endif()
