@@ -445,7 +445,7 @@ bool Client::wait_close() noexcept {
     // Implementation note: here we use sys_recv() because we want to act
     // at the networking layer rather than possibly at the SSL layer.
     char data{};
-    Ssize n = sys_recv(impl->sock, &data, sizeof (data));
+    Ssize n = sys_recv(impl->sock, &data, sizeof(data));
     if (n > 0) {
       EMIT_WARNING("wait_close(): unexpected data recv'd when waiting for EOF");
       return false;
@@ -497,8 +497,8 @@ bool Client::run_download() noexcept {
     std::vector<pollfd> pfds;
     for (auto fd : dload_socks.sockets) {
       pollfd pfd{};
+      pfd.events = POLLIN;  // start in want-read state
       pfd.fd = fd;
-      pfd.events |= POLLIN;
       pfds.push_back(pfd);
     }
     for (auto done = false; !done;) {
@@ -510,7 +510,7 @@ bool Client::run_download() noexcept {
         return false;
       }
       for (auto fd : pfds) {
-        if ((fd.revents & (POLLIN|POLLOUT)) == 0) {
+        if ((fd.revents & (POLLIN | POLLOUT)) == 0) {
           continue;
         }
         Size n = 0;
@@ -664,8 +664,8 @@ bool Client::run_upload() noexcept {
     std::vector<pollfd> pfds;
     for (auto fd : upload_socks.sockets) {
       pollfd pfd{};
+      pfd.events = POLLOUT;  // start in want-write state
       pfd.fd = fd;
-      pfd.events |= POLLOUT;
       pfds.push_back(pfd);
     }
     for (auto done = false; !done;) {
@@ -677,7 +677,7 @@ bool Client::run_upload() noexcept {
         return false;
       }
       for (auto fd : pfds) {
-        if ((fd.revents & (POLLIN|POLLOUT)) == 0) {
+        if ((fd.revents & (POLLIN | POLLOUT)) == 0) {
           continue;
         }
         Size n = 0;
@@ -1019,6 +1019,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
 
 #ifdef HAVE_OPENSSL
 
+// Common function to map OpenSSL errors to Err.
 static Err map_ssl_error(SSL *ssl, int ret) noexcept {
   auto reason = ::SSL_get_error(ssl, ret);
   switch (reason) {
@@ -1032,14 +1033,18 @@ static Err map_ssl_error(SSL *ssl, int ret) noexcept {
     case SSL_ERROR_WANT_WRITE:
       return Err::ssl_want_write;
   }
+  // TODO(bassosimone): in this case it may be nice to print the error queue
+  // so to give the user a better understanding of what has happened.
   return Err::ssl_generic;
 }
 
-static Err ssl_retry(Client *client, SSL *ssl, Socket fd, Timeout timeout,
-                     std::function<int(SSL *)> operation) noexcept {
+// Retry simple, nonblocking OpenSSL operations such as handshake or shutdown.
+static Err  //
+ssl_retry_unary_op(Client *client, SSL *ssl, Socket fd, Timeout timeout,
+                   std::function<int(SSL *)> unary_op) noexcept {
   auto err = Err::none;
 again:
-  err = map_ssl_error(ssl, operation(ssl));
+  err = map_ssl_error(ssl, unary_op(ssl));
   // Retry if needed
   if (err == Err::ssl_want_read) {
     err = client->netx_wait_readable(fd, timeout);
@@ -1088,11 +1093,16 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     EMIT_DEBUG("SSL created");
     ::SSL_CTX_free(ctx);  // Referenced by `ssl` so safe to free here
     assert(impl->fd_to_ssl.count(*sock) == 0);
-    // Implementation note: after this point closing `*sock` will imply
-    // that ::SSL_free() is also called to delete `ssl`.
+    // Implementation note: after this point `netx_closesocket(*sock)` will
+    // imply that `::SSL_free(ssl)` is also called.
     impl->fd_to_ssl[*sock] = ssl;
   }
-  // TODO(bassosimone): make sure that here we don't own the socket.
+  // Note: OpenSSL uses the BIO_NOCLOSE flag when a file descriptor is set
+  // using SSL_set_fd(). That is, we still own the file descriptor. Also, it
+  // is interesting to note that SSL_set_fd() takes an `int` rather than a
+  // `SOCKET` as its second argument. This is safe for internal non documented
+  // reasons: even on Windows 64 kernel handles uses only 24 bits. See also
+  // this Stack Overflow post: <https://stackoverflow.com/a/1953738>.
   if (!::SSL_set_fd(ssl, *sock)) {
     EMIT_WARNING("SSL_set_fd() failed");
     netx_closesocket(*sock);
@@ -1100,15 +1110,17 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     return Err::ssl_generic;
   }
   ::SSL_set_connect_state(ssl);
-  EMIT_DEBUG("SSL bound to socket");
-  err = ssl_retry(this, ssl, *sock, impl->settings.timeout,
-                  [](SSL *ssl) -> int { return ::SSL_do_handshake(ssl); });
+  EMIT_DEBUG("Socket added to SSL context");
+  err = ssl_retry_unary_op(
+      this, ssl, *sock, impl->settings.timeout,
+      [](SSL *ssl) -> int { return ::SSL_do_handshake(ssl); });
   if (err != Err::none) {
     EMIT_WARNING("SSL handshake failed");
     netx_closesocket(*sock);
     //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
     return Err::ssl_generic;
   }
+  EMIT_DEBUG("SSL handshake complete");
   return Err::none;
 #else
   EMIT_WARNING("SSL support not compiled in");
@@ -1490,7 +1502,8 @@ Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
   auto err = Err::none;
 again:
-  if ((err = netx_recv_nonblocking(fd, base, count, actual)) == Err::none) {
+  err = netx_recv_nonblocking(fd, base, count, actual);
+  if (err == Err::none) {
     return Err::none;
   }
   if (err == Err::operation_would_block || err == Err::ssl_want_read) {
@@ -1569,7 +1582,8 @@ Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
   auto err = Err::none;
 again:
-  if ((err = netx_send_nonblocking(fd, base, count, actual)) == Err::none) {
+  err = netx_send_nonblocking(fd, base, count, actual);
+  if (err == Err::none) {
     return Err::none;
   }
   if (err == Err::ssl_want_read) {
@@ -1796,8 +1810,9 @@ Err Client::netx_shutdown_both(Socket fd) noexcept {
       return Err::invalid_argument;
     }
     auto ssl = impl->fd_to_ssl.at(fd);
-    auto err = ssl_retry(this, ssl, fd, impl->settings.timeout,
-                         [](SSL *ssl) -> int { return ::SSL_shutdown(ssl); });
+    auto err = ssl_retry_unary_op(  //
+        this, ssl, fd, impl->settings.timeout,
+        [](SSL *ssl) -> int { return ::SSL_shutdown(ssl); });
     if (err != Err::none) {
       EMIT_WARNING("SSL_shutdown() failed");
       return err;
