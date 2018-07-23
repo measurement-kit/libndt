@@ -198,7 +198,8 @@ class Settings {
   std::string socks5h_port;
 
   /// CA bundle path to be used to verify TLS connections. If you do not
-  /// set this variable this library will fail to make TLS based tests.
+  /// set this variable and you're on Unix, we'll attempt to use some reasonable
+  /// default value. Otherwise, the test will fail.
   std::string ca_bundle_path;
 };
 

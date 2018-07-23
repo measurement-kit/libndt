@@ -1128,6 +1128,8 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   }
   SSL *ssl = nullptr;
   {
+    // TODO(bassosimone): understand whether we can remove old SSL versions
+    // taking into account that the NDT server runs on very old code.
     SSL_CTX *ctx = ::SSL_CTX_new(SSLv23_client_method());
     if (ctx == nullptr) {
       EMIT_WARNING("SSL_CTX_new() failed");
