@@ -27,7 +27,7 @@ static void usage() {
   std::clog << "  --upload                : run upload test\n";
   std::clog << "  --verbose               : be verbose\n";
   std::clog << "\n";
-  std::clog << "If <hostname> is omitted, we pick a random server.\n";
+  std::clog << "If <hostname> is omitted, we pick a nearby server.\n";
   std::clog << std::endl;
   // clang-format on
 }
@@ -95,7 +95,7 @@ int main(int, char **argv) {
       std::clog << "will use host: " << cmdline.pos_args()[1] << std::endl;
     } else {
       std::clog << "will find a suitable server" << std::endl;
-      settings.mlabns_flags |= libndt::mlabns_flag_random;
+      settings.mlabns_policy = libndt::mlabns_policy_geo_options;
     }
   }
 

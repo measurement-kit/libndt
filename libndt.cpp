@@ -211,46 +211,57 @@ Client::~Client() noexcept {
 // Top-level API
 
 bool Client::run() noexcept {
-  if (!query_mlabns()) {
+  std::vector<std::string> fqdns;
+  if (!query_mlabns(&fqdns)) {
     return false;
   }
-  if (!connect()) {
-    return false;
+  for (auto &fqdn : fqdns) {
+    EMIT_INFO("trying to connect to " << fqdn);
+    impl->settings.hostname = fqdn;
+    if (!connect()) {
+      EMIT_WARNING("cannot connect to remote host; trying another one");
+      continue;
+    }
+    EMIT_INFO("connected to remote host");
+    if (!send_login()) {
+      EMIT_WARNING("cannot send login; trying another host");
+      continue;
+    }
+    EMIT_INFO("sent login message");
+    if (!recv_kickoff()) {
+      EMIT_WARNING("failed to receive kickoff; trying another host");
+      continue;
+    }
+    EMIT_INFO("received kickoff message");
+    if (!wait_in_queue()) {
+      continue;
+    }
+    EMIT_INFO("authorized to run test");
+    // From this point on we fail the test in case of error.
+    if (!recv_version()) {
+      return false;
+    }
+    EMIT_INFO("received server version");
+    if (!recv_tests_ids()) {
+      return false;
+    }
+    EMIT_INFO("received tests ids");
+    if (!run_tests()) {
+      return false;
+    }
+    EMIT_INFO("finished running tests; now reading summary data:");
+    if (!recv_results_and_logout()) {
+      return false;
+    }
+    EMIT_INFO("received logout message");
+    if (!wait_close()) {
+      return false;
+    }
+    EMIT_INFO("connection closed");
+    return true;
   }
-  EMIT_INFO("connected to remote host");
-  if (!send_login()) {
-    return false;
-  }
-  EMIT_INFO("sent login message");
-  if (!recv_kickoff()) {
-    return false;
-  }
-  EMIT_INFO("received kickoff message");
-  if (!wait_in_queue()) {
-    return false;
-  }
-  EMIT_INFO("authorized to run test");
-  if (!recv_version()) {
-    return false;
-  }
-  EMIT_INFO("received server version");
-  if (!recv_tests_ids()) {
-    return false;
-  }
-  EMIT_INFO("received tests ids");
-  if (!run_tests()) {
-    return false;
-  }
-  EMIT_INFO("finished running tests; now reading summary data:");
-  if (!recv_results_and_logout()) {
-    return false;
-  }
-  EMIT_INFO("received logout message");
-  if (!wait_close()) {
-    return false;
-  }
-  EMIT_INFO("connection closed");
-  return true;
+  EMIT_WARNING("no more hosts to try; failing the test");
+  return false;
 }
 
 void Client::on_warning(const std::string &msg) {
@@ -286,9 +297,11 @@ void Client::on_server_busy(std::string msg) {
 
 // High-level API
 
-bool Client::query_mlabns() noexcept {
+bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
+  assert(fqdns != nullptr);
   if (!impl->settings.hostname.empty()) {
     EMIT_DEBUG("no need to query mlab-ns; we have hostname");
+    fqdns->push_back(std::move(impl->settings.hostname));
     return true;
   }
   std::string mlabns_url = impl->settings.mlabns_base_url;
@@ -297,13 +310,16 @@ bool Client::query_mlabns() noexcept {
   } else {
     mlabns_url += "/ndt";
   }
-  if ((impl->settings.mlabns_flags & mlabns_flag_random) != 0) {
+  if (impl->settings.mlabns_policy == mlabns_policy_random) {
     mlabns_url += "?policy=random";
+  } else if (impl->settings.mlabns_policy == mlabns_policy_geo_options) {
+    mlabns_url += "?policy=geo_options";
   }
   std::string body;
   if (!query_mlabns_curl(mlabns_url, impl->settings.timeout, &body)) {
     return false;
   }
+  EMIT_DEBUG("mlabns reply: " << body);
   nlohmann::json json;
   try {
     json = nlohmann::json::parse(body);
@@ -311,13 +327,25 @@ bool Client::query_mlabns() noexcept {
     EMIT_WARNING("cannot parse JSON: " << exc.what());
     return false;
   }
-  try {
-    impl->settings.hostname = json.at("fqdn");
-  } catch (const nlohmann::json::exception &exc) {
-    EMIT_WARNING("cannot access FQDN field: " << exc.what());
-    return false;
+  // In some cases mlab-ns returns a single object but in other cases (e.g.
+  // with the `geo_options` policy) it returns an array. Always make an
+  // array so that we can write uniform code for processing mlab-ns response.
+  if (json.is_object()) {
+    auto array = nlohmann::json::array();
+    array.push_back(json);
+    std::swap(json, array);
   }
-  EMIT_INFO("discovered host: " << impl->settings.hostname);
+  for (auto &json : json) {
+    std::string fqdn;
+    try {
+      fqdn = json.at("fqdn");
+    } catch (const nlohmann::json::exception &exc) {
+      EMIT_WARNING("cannot access FQDN field: " << exc.what());
+      return false;
+    }
+    EMIT_INFO("discovered host: " << fqdn);
+    fqdns->push_back(std::move(fqdn));
+  }
   return true;
 }
 
@@ -329,6 +357,13 @@ bool Client::connect() noexcept {
     port = "3010";
   } else {
     port = "3001";
+  }
+  // We may be called more than once when looping over the list returned by
+  // geo_options. Therefore, the socket may already be open. In such case we
+  // want to close it such that we don't leak resources.
+  if (is_socket_valid(impl->sock)) {
+    (void)netx_closesocket(impl->sock);
+    impl->sock = (Socket)-1;
   }
   return netx_maybessl_dial(  //
              impl->settings.hostname, port, &impl->sock) == Err::none;
