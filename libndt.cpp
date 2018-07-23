@@ -322,8 +322,16 @@ bool Client::query_mlabns() noexcept {
 }
 
 bool Client::connect() noexcept {
-  return netx_maybessl_dial(impl->settings.hostname, impl->settings.port,
-                            &impl->sock) == Err::none;
+  std::string port;
+  if (!impl->settings.port.empty()) {
+    port = impl->settings.port;
+  } else if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    port = "3010";
+  } else {
+    port = "3001";
+  }
+  return netx_maybessl_dial(  //
+             impl->settings.hostname, port, &impl->sock) == Err::none;
 }
 
 bool Client::send_login() noexcept {
@@ -1094,11 +1102,29 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   }
 #ifdef HAVE_OPENSSL
   if (impl->settings.ca_bundle_path.empty()) {
-    EMIT_WARNING(
-        "You did not provide me with a CA bundle path. Without this "
-        "information I cannot validate the other TLS endpoint. So, "
-        "I will not continue to run this test.");
-    return Err::invalid_argument;
+#ifndef _WIN32
+    // See <https://serverfault.com/a/722646>
+    std::vector<std::string> candidates{
+        "/etc/ssl/cert.pem",                   // macOS
+        "/etc/ssl/certs/ca-certificates.crt",  // Debian
+    };
+    for (auto &candidate : candidates) {
+      if (access(candidate.c_str(), R_OK) == 0) {
+        EMIT_DEBUG("Using '" << candidate.c_str() << "' as CA");
+        impl->settings.ca_bundle_path = candidate;
+        break;
+      }
+    }
+    if (impl->settings.ca_bundle_path.empty()) {
+#endif
+      EMIT_WARNING(
+          "You did not provide me with a CA bundle path. Without this "
+          "information I cannot validate the other TLS endpoint. So, "
+          "I will not continue to run this test.");
+      return Err::invalid_argument;
+#ifndef _WIN32
+    }
+#endif
   }
   SSL *ssl = nullptr;
   {
@@ -1821,6 +1847,9 @@ Err Client::netx_poll(std::vector<pollfd> *pfds, int timeout_msec) noexcept {
   if (pfds == nullptr) {
     EMIT_WARNING("netx_poll: passed a null vector of descriptors");
     return Err::invalid_argument;
+  }
+  for (auto &pfd : *pfds) {
+    pfd.revents = 0;  // clear unconditionally
   }
   int rv = 0;
 #ifndef _WIN32

@@ -164,8 +164,9 @@ class Settings {
   /// we will use mlab-ns to discover a nearby server.
   std::string hostname;
 
-  /// Port of the NDT server to use.
-  std::string port = "3001";
+  /// Port of the NDT server to use. If this is not specified, we will use
+  /// the most correct port depending on the configuration.
+  std::string port;
 
   /// The tests you want to run with the NDT server.
   NettestFlags nettest_flags = nettest_flag_download;
