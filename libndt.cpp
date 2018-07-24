@@ -234,10 +234,14 @@ bool Client::run() noexcept {
     }
     EMIT_INFO("received kickoff message");
     if (!wait_in_queue()) {
+      EMIT_WARNING("failed to wait in queue; trying another host");
       continue;
     }
     EMIT_INFO("authorized to run test");
-    // From this point on we fail the test in case of error.
+    // From this point on we fail the test in case of error rather than
+    // trying with another host. The rationale of trying with another host
+    // above is that sometimes NDT servers are busy and we would like to
+    // use another one rather than creating queue at the busy one.
     if (!recv_version()) {
       return false;
     }
@@ -301,6 +305,8 @@ bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
   assert(fqdns != nullptr);
   if (!impl->settings.hostname.empty()) {
     EMIT_DEBUG("no need to query mlab-ns; we have hostname");
+    // When we already know the hostname that we want to use just fake out the
+    // result of a mlabns query as like mlabns returned that hostname.
     fqdns->push_back(std::move(impl->settings.hostname));
     return true;
   }
@@ -362,6 +368,7 @@ bool Client::connect() noexcept {
   // geo_options. Therefore, the socket may already be open. In such case we
   // want to close it such that we don't leak resources.
   if (is_socket_valid(impl->sock)) {
+    EMIT_DEBUG("closing socket openned in previous attempt");
     (void)netx_closesocket(impl->sock);
     impl->sock = (Socket)-1;
   }
