@@ -139,10 +139,16 @@ enum class Err;  // Forward declaration (see bottom of this file)
 using Timeout = unsigned int;
 
 /// Flags modifying the behavior of mlab-ns.
-using MlabnsFlags = unsigned short;
+using MlabnsPolicy = unsigned short;
+
+/// Request just the closest NDT server.
+constexpr MlabnsPolicy mlabns_policy_closest = MlabnsPolicy{0};
 
 /// Request for a random NDT server.
-constexpr MlabnsFlags mlabns_flag_random = MlabnsFlags{1 << 0};
+constexpr MlabnsPolicy mlabns_policy_random = MlabnsPolicy{1};
+
+/// Return a list of nearby NDT servers.
+constexpr MlabnsPolicy mlabns_policy_geo_options = MlabnsPolicy{2};
 
 /// NDT client settings. If you do not customize the settings when creating
 /// a Client, the defaults listed below will be used instead.
@@ -153,8 +159,9 @@ class Settings {
   /// here MUST NOT end with a final slash.
   std::string mlabns_base_url = "https://mlab-ns.appspot.com";
 
-  /// Flags that modify the behavior of mlabn-ns.
-  MlabnsFlags mlabns_flags = MlabnsFlags{0};
+  /// Flags that modify the behavior of mlabn-ns. By default we use the
+  /// geo_options policy that is the most robust to random server failures.
+  MlabnsPolicy mlabns_policy = mlabns_policy_geo_options;
 
   /// Timeout used for I/O operations. \bug in v0.23.0 this timeout is only
   /// used for cURL operations, but this will be fixed in v0.25.0.
@@ -297,7 +304,7 @@ class Client {
  private:
 #endif
 
-  virtual bool query_mlabns() noexcept;
+  virtual bool query_mlabns(std::vector<std::string> *) noexcept;
   virtual bool connect() noexcept;
   virtual bool send_login() noexcept;
   virtual bool recv_kickoff() noexcept;

@@ -44,7 +44,9 @@
 class FailQueryMlabns : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns() noexcept override { return false; }
+  bool query_mlabns(std::vector<std::string> *) noexcept override {
+    return false;
+  }
 };
 
 TEST_CASE("Client::run() deals with Client::query_mlabns() failure") {
@@ -55,7 +57,9 @@ TEST_CASE("Client::run() deals with Client::query_mlabns() failure") {
 class FailConnect : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns() noexcept override { return true; }
+  bool query_mlabns(std::vector<std::string> *) noexcept override {
+    return true;
+  }
   bool connect() noexcept override { return false; }
 };
 
@@ -67,7 +71,9 @@ TEST_CASE("Client::run() deals with Client::connect() failure") {
 class FailSendLogin : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns() noexcept override { return true; }
+  bool query_mlabns(std::vector<std::string> *) noexcept override {
+    return true;
+  }
   bool connect() noexcept override { return true; }
   bool send_login() noexcept override { return false; }
 };
@@ -80,7 +86,9 @@ TEST_CASE("Client::run() deals with Client::send_login() failure") {
 class FailRecvKickoff : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns() noexcept override { return true; }
+  bool query_mlabns(std::vector<std::string> *) noexcept override {
+    return true;
+  }
   bool connect() noexcept override { return true; }
   bool send_login() noexcept override { return true; }
   bool recv_kickoff() noexcept override { return false; }
@@ -94,7 +102,9 @@ TEST_CASE("Client::run() deals with Client::recv_kickoff() failure") {
 class FailWaitInQueue : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns() noexcept override { return true; }
+  bool query_mlabns(std::vector<std::string> *) noexcept override {
+    return true;
+  }
   bool connect() noexcept override { return true; }
   bool send_login() noexcept override { return true; }
   bool recv_kickoff() noexcept override { return true; }
@@ -109,7 +119,9 @@ TEST_CASE("Client::run() deals with Client::wait_in_queue() failure") {
 class FailRecvVersion : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns() noexcept override { return true; }
+  bool query_mlabns(std::vector<std::string> *) noexcept override {
+    return true;
+  }
   bool connect() noexcept override { return true; }
   bool send_login() noexcept override { return true; }
   bool recv_kickoff() noexcept override { return true; }
@@ -125,7 +137,9 @@ TEST_CASE("Client::run() deals with Client::recv_version() failure") {
 class FailRecvTestsId : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns() noexcept override { return true; }
+  bool query_mlabns(std::vector<std::string> *) noexcept override {
+    return true;
+  }
   bool connect() noexcept override { return true; }
   bool send_login() noexcept override { return true; }
   bool recv_kickoff() noexcept override { return true; }
@@ -142,7 +156,9 @@ TEST_CASE("Client::run() deals with Client::recv_tests_ids() failure") {
 class FailRunTests : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns() noexcept override { return true; }
+  bool query_mlabns(std::vector<std::string> *) noexcept override {
+    return true;
+  }
   bool connect() noexcept override { return true; }
   bool send_login() noexcept override { return true; }
   bool recv_kickoff() noexcept override { return true; }
@@ -160,7 +176,9 @@ TEST_CASE("Client::run() deals with Client::run_tests() failure") {
 class FailRecvResultsAndLogout : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns() noexcept override { return true; }
+  bool query_mlabns(std::vector<std::string> *) noexcept override {
+    return true;
+  }
   bool connect() noexcept override { return true; }
   bool send_login() noexcept override { return true; }
   bool recv_kickoff() noexcept override { return true; }
@@ -180,7 +198,9 @@ TEST_CASE(  //
 class FailWaitClose : public libndt::Client {
  public:
   using libndt::Client::Client;
-  bool query_mlabns() noexcept override { return true; }
+  bool query_mlabns(std::vector<std::string> *) noexcept override {
+    return true;
+  }
   bool connect() noexcept override { return true; }
   bool send_login() noexcept override { return true; }
   bool recv_kickoff() noexcept override { return true; }
@@ -221,13 +241,15 @@ TEST_CASE("Client::query_mlabns() does nothing when we already know hostname") {
   libndt::Settings settings;
   settings.hostname = "neubot.mlab.mlab1.trn01.measurement-lab.org";
   FailQueryMlabnsCurl client{settings};
-  REQUIRE(client.query_mlabns() == true);
+  std::vector<std::string> v;
+  REQUIRE(client.query_mlabns(&v) == true);
 }
 
 TEST_CASE(
     "Client::query_mlabns() deals with Client::query_mlabns_curl() failure") {
   FailQueryMlabnsCurl client;
-  REQUIRE(client.query_mlabns() == false);
+  std::vector<std::string> v;
+  REQUIRE(client.query_mlabns(&v) == false);
 }
 
 class EmptyMlabnsJson : public libndt::Client {
@@ -242,7 +264,8 @@ class EmptyMlabnsJson : public libndt::Client {
 
 TEST_CASE("Client::query_mlabns() deals with empty JSON") {
   EmptyMlabnsJson client;
-  REQUIRE(client.query_mlabns() == false);
+  std::vector<std::string> v;
+  REQUIRE(client.query_mlabns(&v) == false);
 }
 
 class InvalidMlabnsJson : public libndt::Client {
@@ -257,7 +280,8 @@ class InvalidMlabnsJson : public libndt::Client {
 
 TEST_CASE("Client::query_mlabns() deals with invalid JSON") {
   InvalidMlabnsJson client;
-  REQUIRE(client.query_mlabns() == false);
+  std::vector<std::string> v;
+  REQUIRE(client.query_mlabns(&v) == false);
 }
 
 class IncompleteMlabnsJson : public libndt::Client {
@@ -272,7 +296,8 @@ class IncompleteMlabnsJson : public libndt::Client {
 
 TEST_CASE("Client::query_mlabns() deals with incomplete JSON") {
   IncompleteMlabnsJson client;
-  REQUIRE(client.query_mlabns() == false);
+  std::vector<std::string> v;
+  REQUIRE(client.query_mlabns(&v) == false);
 }
 
 // Client::recv_kickoff() tests
