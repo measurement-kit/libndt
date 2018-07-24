@@ -755,6 +755,8 @@ bool Client::run_upload() noexcept {
           if (err != Err::broken_pipe) {
             EMIT_WARNING(
                 "run_upload: netx_send() failed: " << sys_get_last_error());
+          } else {
+            EMIT_DEBUG("run_upload: treating EPIPE as success");
           }
           done = true;
           break;
@@ -1571,6 +1573,20 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         EMIT_WARNING("socket() failed: " << sys_get_last_error());
         continue;
       }
+#ifdef HAVE_SO_NOSIGPIPE
+      // Implementation note: SO_NOSIGPIPE is the nonportable BSD solution to
+      // avoid SIGPIPE when writing on a connection closed by the peer.
+      {
+        auto on = 1;
+        if (::setsockopt(  //
+                *sock, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on)) != 0) {
+          EMIT_WARNING("setsockopt(..., SO_NOSIGPIPE) failed");
+          sys_closesocket(*sock);
+          *sock = -1;
+          continue;
+        }
+      }
+#endif  // HAVE_SO_NOSIGPIPE
       if (netx_setnonblocking(*sock, true) != Err::none) {
         EMIT_WARNING("netx_setnonblocking() failed: " << sys_get_last_error());
         sys_closesocket(*sock);
