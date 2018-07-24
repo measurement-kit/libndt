@@ -4,7 +4,6 @@
 
 #include "libndt.hpp"
 
-#include <signal.h>
 #include <stdlib.h>
 
 #include <iostream>
@@ -98,13 +97,6 @@ int main(int, char **argv) {
       settings.mlabns_policy = libndt::mlabns_policy_geo_options;
     }
   }
-
-#ifndef _WIN32
-  // Make sure you ignore SIGPIPE because you're quite likely to receive
-  // one at the end of the uploading phase of the NDT test.
-  (void)signal(SIGPIPE, SIG_IGN);
-  std::clog << "will ignore any SIGPIPE signal" << std::endl;
-#endif
 
 #ifdef _WIN32
   {
