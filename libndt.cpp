@@ -1349,7 +1349,9 @@ again:
     if (err == Err::none) {
       goto again;
     }
-  } else if (err != Err::none) {
+  }
+  // Otherwise let the caller know
+  if (err != Err::none) {
     // The following is an inline expansion of EMIT_WARNING() required in
     // this context because we are not inside a Client method.
     if (client->get_verbosity() >= verbosity_warning) {
@@ -1358,7 +1360,6 @@ again:
       client->on_warning(ss.str());
     }
   }
-  // Otherwise let the caller know
   return err;
 }
 
