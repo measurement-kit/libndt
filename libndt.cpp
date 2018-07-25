@@ -47,6 +47,10 @@
 #include "json.hpp"
 #include "strtonum.h"
 
+#if !defined _WIN32 && !defined HAVE_MSG_NOSIGNAL && !defined HAVE_SO_NOSIGPIPE
+#error "No way to avoid SIGPIPE in the current thread when doing socket I/O."
+#endif
+
 namespace libndt {
 
 // Private constants
@@ -2244,8 +2248,8 @@ Ssize Client::sys_recv(Socket fd, void *base, Size count) noexcept {
     return -1;
   }
   int flags = 0;
+#ifdef HAVE_MSG_NOSIGNAL
   // On Linux systems this flag prevents socket ops from raising SIGPIPE.
-#ifdef MSG_NOSIGNAL
   flags |= MSG_NOSIGNAL;
 #endif
   return (Ssize)::recv(fd, AS_OS_BUFFER(base), AS_OS_BUFFER_LEN(count), flags);
@@ -2257,8 +2261,8 @@ Ssize Client::sys_send(Socket fd, const void *base, Size count) noexcept {
     return -1;
   }
   int flags = 0;
+#ifdef HAVE_MSG_NOSIGNAL
   // On Linux systems this flag prevents socket ops from raising SIGPIPE.
-#ifdef MSG_NOSIGNAL
   flags |= MSG_NOSIGNAL;
 #endif
   return (Ssize)::send(fd, AS_OS_BUFFER(base), AS_OS_BUFFER_LEN(count), flags);
