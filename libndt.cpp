@@ -1141,8 +1141,9 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
  */
 
 // Helper used to route read and write calls to Client's I/O methods. We
-// disregard the const qualifier of the `base` argument. That is not a big
-// deal since we add it again before calling the real Socket op.
+// disregard the const qualifier of the `base` argument for the write operation,
+// but that is not a big deal since we add it again before calling the real
+// Socket op (see libndt_bio_write() below).
 static int libndt_bio_operation(
     BIO *bio, char *base, int count,
     std::function<Ssize(Client *, Socket, char *, Size)> operation,
