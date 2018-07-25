@@ -1159,7 +1159,7 @@ static int libndt_bio_operation(
     return -1;
   }
   // Using a `int` to store a `SOCKET` is safe for internal non documented
-  // reasons: even on Windows 64 kernel handles uses only 24 bits. See also
+  // reasons: even on Windows64 kernel handles use only 24 bits. See also
   // this Stack Overflow post: <https://stackoverflow.com/a/1953738>.
   int sock{};
   ::BIO_get_fd(bio, &sock);
