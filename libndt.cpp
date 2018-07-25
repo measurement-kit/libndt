@@ -857,10 +857,6 @@ bool Client::run_upload() noexcept {
     EMIT_DEBUG("run_upload: client computed speed: " << client_side_speed);
   }
 
-  // TODO(bassosimone): in testing over mobile there are cases where the
-  // following operation fails with errno equal to EWOULDBLOCK on macOS when
-  // the network connection is a policed 3G network. This occurs frequently
-  // regardless of whether TLS is enabled. So, it's a socket level bug.
   {
     std::string message;
     if (!msg_expect(msg_test_msg, &message)) {
