@@ -22,6 +22,7 @@
 #include <unistd.h>
 #endif
 
+#include <atomic>
 #include <algorithm>
 #include <chrono>
 #include <functional>
