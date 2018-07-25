@@ -1227,7 +1227,7 @@ static BIO_METHOD *libndt_bio_method() noexcept {
       if (mm == nullptr) {
         return nullptr;
       }
-      // BIO_s_socket() returns a const BIO_METHOD in OpenSSL v1.1. We cast
+      // BIO_s_socket() returns a const BIO_METHOD in OpenSSL v1.1.0. We cast
       // that back to non const for the purpose of getting its methods.
       BIO_METHOD *m = (BIO_METHOD *)BIO_s_socket();
       BIO_meth_set_create(mm, BIO_meth_get_create(m));
