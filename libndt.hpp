@@ -129,9 +129,9 @@ constexpr ProtocolFlags protocol_flag_json = ProtocolFlags{1 << 0};
 /// use TLS channels for the control and the measurement connections.
 constexpr ProtocolFlags protocol_flag_tls = ProtocolFlags{1 << 1};
 
-/// When this flag is set we use WebSockets. This specifically means that
-/// we use the WebSockets framing (as opposed to the original binary framing).
-constexpr ProtocolFlags protocol_flag_websockets = ProtocolFlags{1 << 2};
+/// When this flag is set we use WebSocket. This specifically means that
+/// we use the WebSocket framing to encapsulate NDT messages.
+constexpr ProtocolFlags protocol_flag_websocket = ProtocolFlags{1 << 2};
 
 enum class Err;  // Forward declaration (see bottom of this file)
 
@@ -344,10 +344,62 @@ class Client {
 
   virtual bool msg_read_legacy(MsgType *code, std::string *msg) noexcept;
 
+  // WebSocket
+  // `````````
+  //
+  // This section contain a WebSocket implementation.
+
+  // Send @p line over @p fd.
+  virtual Err ws_sendln(Socket fd, std::string line) noexcept;
+
+  // Receive shorter-than @p maxlen @p *line over @p fd.
+  virtual Err ws_recvln(Socket fd, std::string *line, size_t maxlen) noexcept;
+
+  // Perform websocket handshake. @param fd is the socket to use. @param
+  // ws_flags specifies what headers to send and to expect (for more information
+  // see the ws_f_xxx constants defined below). @param ws_protocol specifies
+  // what protocol to specify as Sec-WebSocket-Protocol in the upgrade request.
+  virtual Err ws_handshake(Socket fd, uint64_t ws_flags,
+                           std::string ws_protocol) noexcept;
+
+  // Send @p count bytes from @p base over @p sock as a frame whose first byte
+  // @p first_byte should contain the opcode and possibly the FIN flag.
+  virtual Err ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
+                            Size count) noexcept;
+
+  // Receive a frame from @p sock. Puts the opcode in @p *opcode. Puts whether
+  // there is a FIN flag in @p *fin. The buffer starts at @p base and it
+  // contains @p total bytes. Puts in @p *count the actual number of bytes
+  // in the message. @return The error that occurred or Err::none.
+  Err ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin, uint8_t *base,
+                        Size total, Size *count) noexcept;
+
+  // Receive a frame. Automatically and transparently responds to PING, ignores
+  // PONG, and handles CLOSE frames. Arguments like ws_recv_any_frame().
+  Err ws_recv_frame(Socket sock, uint8_t *opcode, bool *fin, uint8_t *base,
+                    Size total, Size *count) noexcept;
+
+  // Receive a message consisting of one or more frames. Transparently handles
+  // PING and PONG frames. Handles CLOSE frames. @param sock is the socket to
+  // use. @param opcode is where the opcode is returned. @param base is the
+  // beginning of the buffer. @param total is the size of the buffer. @param
+  // count contains the actual message size. @return An error on failure or
+  // Err::none in case of success.
+  Err ws_recvmsg(Socket sock, uint8_t *opcode, uint8_t *base, Size total,
+                 Size *count) noexcept;
+
   // Networking layer
   // ````````````````
   //
   // This section contains network functionality used by NDT.
+
+  // Connect to @p hostname and @p port possibly using WebSockets,
+  // SSL, and SOCKSv5. This depends on the Settings. See the documentation
+  // of ws_handshake() for more info on @p ws_flags and @p ws_protocol.
+  virtual Err netx_maybews_dial(const std::string &hostname,
+                                const std::string &port, uint64_t ws_flags,
+                                std::string ws_protocol,
+                                Socket *sock) noexcept;
 
   // Connect to @p hostname and @p port possibly using SSL and SOCKSv5.
   virtual Err netx_maybessl_dial(const std::string &hostname,
@@ -506,6 +558,7 @@ enum class Err {
   interrupted,
   invalid_argument,
   io_error,
+  message_size,
   network_down,
   network_reset,
   network_unreachable,
@@ -523,6 +576,7 @@ enum class Err {
   ssl_want_read,
   ssl_want_write,
   ssl_syscall,
+  ws_proto,
 };
 
 constexpr MsgType msg_comm_failure = MsgType{0};
@@ -537,6 +591,29 @@ constexpr MsgType msg_results = MsgType{8};
 constexpr MsgType msg_logout = MsgType{9};
 constexpr MsgType msg_waiting = MsgType{10};
 constexpr MsgType msg_extended_login = MsgType{11};
+
+constexpr uint8_t ws_opcode_continue = 0x00;
+constexpr uint8_t ws_opcode_text = 0x01;
+constexpr uint8_t ws_opcode_binary = 0x02;
+constexpr uint8_t ws_opcode_close = 0x08;
+constexpr uint8_t ws_opcode_ping = 0x09;
+constexpr uint8_t ws_opcode_pong = 0x0a;
+
+constexpr uint8_t ws_fin_flag = 0x80;
+constexpr uint8_t ws_reserved_mask = 0x70;
+constexpr uint8_t ws_opcode_mask = 0x0f;
+
+constexpr uint8_t ws_mask_flag = 0x80;
+constexpr uint8_t ws_len_mask = 0x7f;
+
+constexpr uint64_t ws_f_connection = 1 << 0;
+constexpr uint64_t ws_f_sec_ws_accept = 1 << 1;
+constexpr uint64_t ws_f_sec_ws_protocol = 1 << 2;
+constexpr uint64_t ws_f_upgrade = 1 << 3;
+
+constexpr const char *ws_proto_control = "ndt";
+constexpr const char *ws_proto_c2s = "c2s";
+constexpr const char *ws_proto_s2c = "s2c";
 
 }  // namespace libndt
 #endif
