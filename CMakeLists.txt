@@ -74,10 +74,20 @@ endif()
 
 include(CheckFunctionExists)
 include(CheckIncludeFiles)
+include(CheckSymbolExists)
 
 check_function_exists(strtonum HAVE_STRTONUM)
 if(${HAVE_STRTONUM})
   add_definitions(-DHAVE_STRTONUM)
+endif()
+
+check_symbol_exists(SO_NOSIGPIPE sys/socket.h HAVE_SO_NOSIGPIPE)
+if(${HAVE_SO_NOSIGPIPE})
+  add_definitions(-DHAVE_SO_NOSIGPIPE)
+endif()
+check_symbol_exists(MSG_NOSIGNAL sys/socket.h HAVE_MSG_NOSIGNAL)
+if(${HAVE_MSG_NOSIGNAL})
+  add_definitions(-DHAVE_MSG_NOSIGNAL)
 endif()
 
 check_include_files(openssl/ssl.h HAVE_OPENSSL_SSL_H)
