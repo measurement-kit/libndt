@@ -35,6 +35,7 @@
 #include <vector>
 
 #ifdef HAVE_OPENSSL
+#include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
@@ -790,6 +791,10 @@ bool Client::run_upload() noexcept {
     EMIT_DEBUG("run_upload: client computed speed: " << client_side_speed);
   }
 
+  // TODO(bassosimone): in testing over mobile there are cases where the
+  // following operation fails with errno equal to EWOULDBLOCK on macOS when
+  // the network connection is a policed 3G network. This occurs frequently
+  // regardless of whether TLS is enabled. So, it's a socket level bug.
   {
     std::string message;
     if (!msg_expect(msg_test_msg, &message)) {
@@ -1085,6 +1090,137 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
 
 #ifdef HAVE_OPENSSL
 
+// - - - BEGIN BIO IMPLEMENTATION - - - {
+//
+// This BIO implementation is based on the implementation of rabbitmq-c
+// by @alanxz: <https://github.com/alanxz/rabbitmq-c/pull/402>.
+//
+// The code is available under the MIT license.
+//
+// The purpose of this BIO implementation is to pass the MSG_NOSIGNAL
+// flag to socket I/O functions on Linux systems. While there, it seems
+// convenient to route these I/O calls to the mockable methods of the
+// client class, allowing for (1) more regress testing and (2) the
+// possibility to very easily observe bytes on the wire. (I know that
+// OpenSSL also allows that using callbacks but since we're making a
+// BIO that possibility comes out very easily anyway.)
+//
+// We assume that a OpenSSL 1.1.0-like API is available.
+
+#ifdef _WIN32
+#define OS_SET_LAST_ERROR(ec) ::SetLastError(ec)
+#define OS_EINVAL WSAEINVAL
+#else
+#define OS_SET_LAST_ERROR(ec) errno = ec
+#define OS_EINVAL EINVAL
+#endif
+
+// Helper used to route read and write calls to Client's I/O methods. We
+// disregard the const qualifier of the `base` argument. That is not a big
+// deal since we add it again before calling the real Socket op.
+static int libndt_bio_operation(
+    BIO *bio, char *base, int count,
+    std::function<Ssize(Client *, Socket, char *, Size)> operation,
+    std::function<void(BIO *)> set_retry) noexcept {
+  // Implementation note: before we have a valid Client pointer we cannot
+  // of course use mocked functions. Hence OS_SET_LAST_ERROR().
+  if (bio == nullptr || base == nullptr || count <= 0) {
+    OS_SET_LAST_ERROR(OS_EINVAL);
+    return -1;
+  }
+  auto clnt = static_cast<Client *>(::BIO_get_data(bio));
+  if (clnt == nullptr) {
+    OS_SET_LAST_ERROR(OS_EINVAL);
+    return -1;
+  }
+  // Using a `int` to store a `SOCKET` is safe for internal non documented
+  // reasons: even on Windows 64 kernel handles uses only 24 bits. See also
+  // this Stack Overflow post: <https://stackoverflow.com/a/1953738>.
+  int sock{};
+  ::BIO_get_fd(bio, &sock);
+  ::BIO_clear_retry_flags(bio);
+  // Cast to Socket safe as int is okay to represent a Socket as we explained
+  // above. Cast to Size safe because we've checked for negative above.
+  Ssize rv = operation(clnt, (Socket)sock, base, (Size)count);
+  if (rv < 0) {
+    assert(rv == -1);
+    auto err = clnt->netx_map_errno(clnt->sys_get_last_error());
+    if (err == Err::operation_would_block) {
+      set_retry(bio);
+    }
+    return -1;
+  }
+  // Cast to int safe because count was initially int. We anyway deploy an
+  // assertion just in case (TM) but that should not happen (TM).
+  assert(rv <= INT_MAX);
+  return (int)rv;
+}
+
+// Write data using the underlying socket.
+static int libndt_bio_write(BIO *bio, const char *base, int count) noexcept {
+  // clang-format off
+  return libndt_bio_operation(
+      bio, (char *)base, count,
+      [](Client *clnt, Socket sock, char *base, Size count) noexcept {
+        return clnt->sys_send(sock, (const char *)base, count);
+      },
+      [](BIO *bio) noexcept { ::BIO_set_retry_write(bio); });
+  // clang-format on
+}
+
+// Read data using the underlying socket.
+static int libndt_bio_read(BIO *bio, char *base, int count) noexcept {
+  // clang-format off
+  return libndt_bio_operation(
+      bio, base, count,
+      [](Client *clnt, Socket sock, char *base, Size count) noexcept {
+        return clnt->sys_recv(sock, base, count);
+      },
+      [](BIO *bio) noexcept { ::BIO_set_retry_read(bio); });
+  // clang-format on
+}
+
+class BioMethodDeleter {
+ public:
+  void operator()(BIO_METHOD *meth) noexcept {
+    if (meth != nullptr) {
+      ::BIO_meth_free(meth);
+    }
+  }
+};
+using UniqueBioMethod = std::unique_ptr<BIO_METHOD, BioMethodDeleter>;
+
+static BIO_METHOD *libndt_bio_method() noexcept {
+  static std::atomic_bool initialized{false};
+  static UniqueBioMethod method;
+  static std::mutex mutex;
+  if (!initialized) {
+    std::unique_lock<std::mutex> _{mutex};
+    if (!initialized) {
+      BIO_METHOD *mm = ::BIO_meth_new(BIO_TYPE_SOCKET, "libndt_bio_method");
+      if (mm == nullptr) {
+        return nullptr;
+      }
+      // BIO_s_socket() returns a const BIO_METHOD in OpenSSL v1.1. We cast
+      // that back to non const for the purpose of getting its methods.
+      BIO_METHOD *m = (BIO_METHOD *)BIO_s_socket();
+      BIO_meth_set_create(mm, BIO_meth_get_create(m));
+      BIO_meth_set_destroy(mm, BIO_meth_get_destroy(m));
+      BIO_meth_set_ctrl(mm, BIO_meth_get_ctrl(m));
+      BIO_meth_set_callback_ctrl(mm, BIO_meth_get_callback_ctrl(m));
+      BIO_meth_set_read(mm, libndt_bio_read);
+      BIO_meth_set_write(mm, libndt_bio_write);
+      BIO_meth_set_gets(mm, BIO_meth_get_gets(m));
+      BIO_meth_set_puts(mm, BIO_meth_get_puts(m));
+      method.reset(mm);
+      initialized = true;
+    }
+  }
+  return method.get();
+}
+
+// } - - - END BIO IMPLEMENTATION - - -
+
 // Common function to map OpenSSL errors to Err.
 static Err map_ssl_error(SSL *ssl, int ret) noexcept {
   auto reason = ::SSL_get_error(ssl, ret);
@@ -1209,18 +1345,21 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     // imply that `::SSL_free(ssl)` is also called.
     impl->fd_to_ssl[*sock] = ssl;
   }
-  // Note: OpenSSL uses the BIO_NOCLOSE flag when a file descriptor is set
-  // using SSL_set_fd(). That is, we still own the file descriptor. Also, it
-  // is interesting to note that SSL_set_fd() takes an `int` rather than a
-  // `SOCKET` as its second argument. This is safe for internal non documented
-  // reasons: even on Windows 64 kernel handles uses only 24 bits. See also
-  // this Stack Overflow post: <https://stackoverflow.com/a/1953738>.
-  if (!::SSL_set_fd(ssl, *sock)) {
-    EMIT_WARNING("SSL_set_fd() failed");
+  BIO *bio = ::BIO_new(libndt_bio_method());
+  if (bio == nullptr) {
+    EMIT_WARNING("BIO_new() failed");
     netx_closesocket(*sock);
     //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
     return Err::ssl_generic;
   }
+  EMIT_DEBUG("libndt BIO created");
+  // We use BIO_NOCLOSE because it's the socket that owns the BIO and the SSL
+  // via fd_to_ssl rather than the other way around.
+  ::BIO_set_fd(bio, *sock, BIO_NOCLOSE);
+  // For historical reasons, if the two BIOs are equal, the SSL object will
+  // increase the refcount of bio just once rather than twice.
+  ::SSL_set_bio(ssl, bio, bio);
+  ::BIO_set_data(bio, this);
   ::SSL_set_connect_state(ssl);
   EMIT_DEBUG("Socket added to SSL context");
   {
@@ -2027,13 +2166,11 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((int)n)
 #define OS_SSIZE_MAX INT_MAX
-#define OS_EINVAL WSAEINVAL
 #define AS_OS_OPTION_VALUE(x) ((char *)x)
 #else
 #define AS_OS_BUFFER(b) ((char *)b)
 #define AS_OS_BUFFER_LEN(n) ((size_t)n)
 #define OS_SSIZE_MAX SSIZE_MAX
-#define OS_EINVAL EINVAL
 #define AS_OS_OPTION_VALUE(x) ((void *)x)
 #endif
 
@@ -2079,7 +2216,12 @@ Ssize Client::sys_recv(Socket fd, void *base, Size count) noexcept {
     sys_set_last_error(OS_EINVAL);
     return -1;
   }
-  return (Ssize)::recv(fd, AS_OS_BUFFER(base), AS_OS_BUFFER_LEN(count), 0);
+  int flags = 0;
+  // On Linux systems this flag prevents socket ops from raising SIGPIPE.
+#ifdef MSG_NOSIGNAL
+  flags |= MSG_NOSIGNAL;
+#endif
+  return (Ssize)::recv(fd, AS_OS_BUFFER(base), AS_OS_BUFFER_LEN(count), flags);
 }
 
 Ssize Client::sys_send(Socket fd, const void *base, Size count) noexcept {
@@ -2087,7 +2229,12 @@ Ssize Client::sys_send(Socket fd, const void *base, Size count) noexcept {
     sys_set_last_error(OS_EINVAL);
     return -1;
   }
-  return (Ssize)::send(fd, AS_OS_BUFFER(base), AS_OS_BUFFER_LEN(count), 0);
+  int flags = 0;
+  // On Linux systems this flag prevents socket ops from raising SIGPIPE.
+#ifdef MSG_NOSIGNAL
+  flags |= MSG_NOSIGNAL;
+#endif
+  return (Ssize)::send(fd, AS_OS_BUFFER(base), AS_OS_BUFFER_LEN(count), flags);
 }
 
 int Client::sys_shutdown(Socket fd, int shutdown_how) noexcept {
