@@ -22,8 +22,8 @@
 #include <unistd.h>
 #endif
 
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <iomanip>
@@ -61,6 +61,71 @@ constexpr char msg_kickoff[] = "123456 654321";
 constexpr size_t msg_kickoff_size = sizeof(msg_kickoff) - 1;
 
 // Private utils
+
+#ifdef HAVE_OPENSSL
+// Format OpenSSL error as a C++ string.
+static std::string ssl_format_error() noexcept {
+  std::stringstream ss;
+  for (unsigned short i = 0; i < USHRT_MAX; ++i) {
+    unsigned long err = ERR_get_error();
+    if (err == 0) {
+      break;
+    }
+    ss << ((i > 0) ? ": " : "") << ERR_reason_error_string(err);
+  }
+  return ss.str();
+}
+#endif  // HAVE_OPENSSL
+
+// Map an error code to the corresponding string value.
+static std::string libndt_perror(Err err) noexcept {
+  std::string rv;
+  //
+#define LIBNDT_PERROR(value) \
+  case Err::value:           \
+    rv = #value;             \
+    break
+  //
+  switch (err) {
+    LIBNDT_PERROR(none);
+    LIBNDT_PERROR(broken_pipe);
+    LIBNDT_PERROR(connection_aborted);
+    LIBNDT_PERROR(connection_refused);
+    LIBNDT_PERROR(connection_reset);
+    LIBNDT_PERROR(function_not_supported);
+    LIBNDT_PERROR(host_unreachable);
+    LIBNDT_PERROR(interrupted);
+    LIBNDT_PERROR(invalid_argument);
+    LIBNDT_PERROR(io_error);
+    LIBNDT_PERROR(network_down);
+    LIBNDT_PERROR(network_reset);
+    LIBNDT_PERROR(network_unreachable);
+    LIBNDT_PERROR(operation_in_progress);
+    LIBNDT_PERROR(operation_would_block);
+    LIBNDT_PERROR(timed_out);
+    LIBNDT_PERROR(value_too_large);
+    LIBNDT_PERROR(eof);
+    LIBNDT_PERROR(ai_generic);
+    LIBNDT_PERROR(ai_again);
+    LIBNDT_PERROR(ai_fail);
+    LIBNDT_PERROR(ai_noname);
+    LIBNDT_PERROR(socks5h);
+    LIBNDT_PERROR(ssl_generic);
+    LIBNDT_PERROR(ssl_want_read);
+    LIBNDT_PERROR(ssl_want_write);
+    LIBNDT_PERROR(ssl_syscall);
+  }
+#undef LIBNDT_PERROR  // Tidy
+  //
+#ifdef HAVE_OPENSSL
+  if (err == Err::ssl_generic) {
+    rv += ": ";
+    rv += ssl_format_error();
+  }
+#endif  // HAVE_OPENSSL
+  //
+  return rv;
+}
 
 #define EMIT_WARNING(statements)                         \
   do {                                                   \
@@ -393,7 +458,7 @@ bool Client::recv_kickoff() noexcept {
   if (err != Err::none) {
     // TODO(bassosimone): pretty print `err` not the last system error, because,
     // when we'll use also SSL, the latter will probably be inaccurate.
-    EMIT_WARNING("recv_kickoff: netx_recvn() failed: " << sys_get_last_error());
+    EMIT_WARNING("recv_kickoff: netx_recvn() failed");
     return false;
   }
   if (memcmp(buf, msg_kickoff, sizeof(buf)) != 0) {
@@ -501,8 +566,7 @@ bool Client::wait_close() noexcept {
   constexpr Timeout wait_for_close = 1;
   auto err = netx_wait_readable(impl->sock, wait_for_close);
   if (err != Err::none) {
-    EMIT_WARNING(
-        "wait_close(): netx_wait_readable() failed: " << sys_get_last_error());
+    EMIT_WARNING("wait_close(): netx_wait_readable() failed");
     (void)netx_shutdown_both(impl->sock);
     return (err == Err::timed_out);
   }
@@ -516,8 +580,7 @@ bool Client::wait_close() noexcept {
       return false;
     }
     if (n != 0) {
-      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF: "
-                   << sys_get_last_error());
+      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF");
       return false;
     }
   }
@@ -550,7 +613,7 @@ bool Client::run_download() noexcept {
   if (!msg_expect_empty(msg_test_start)) {
     return false;
   }
-  EMIT_DEBUG("run download: got the test_start message");
+  EMIT_DEBUG("run_download: got the test_start message");
 
   double client_side_speed = 0.0;
   {
@@ -570,8 +633,7 @@ bool Client::run_download() noexcept {
       constexpr int timeout_msec = 250;
       auto err = netx_poll(&pfds, timeout_msec);
       if (err != Err::none && err != Err::timed_out) {
-        EMIT_WARNING(
-            "run_download: netx_poll() failed: " << sys_get_last_error());
+        EMIT_WARNING("run_download: netx_poll() failed");
         return false;
       }
       for (auto fd : pfds) {
@@ -588,8 +650,8 @@ bool Client::run_download() noexcept {
         } else if (err == Err::ssl_want_write) {
           fd.events = POLLOUT;
         } else if (err != Err::none) {
-          EMIT_WARNING(
-              "run_download: netx_recv() failed: " << sys_get_last_error());
+          EMIT_WARNING("run_download: netx_recv_nonblocking() failed: "
+                       << libndt_perror(err));
           done = true;
           break;
         }
@@ -608,7 +670,7 @@ bool Client::run_download() noexcept {
         prev = now;
       }
       if (elapsed.count() > impl->settings.max_runtime) {
-        EMIT_WARNING("run_download(): running for too much time");
+        EMIT_WARNING("run_download: running for too much time");
         done = true;
       }
     }
@@ -696,7 +758,7 @@ bool Client::run_upload() noexcept {
     random_printable_fill(buf, sizeof(buf));
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    EMIT_DEBUG("run_upload(): time to fill random buffer: " << elapsed.count());
+    EMIT_DEBUG("run_upload: time to fill random buffer: " << elapsed.count());
   }
 
   std::string port;
@@ -706,7 +768,7 @@ bool Client::run_upload() noexcept {
   }
   // TODO(bassosimone): implement C2S_EXT
   if (nflows != 1) {
-    EMIT_WARNING("run_upload(): unexpected number of flows");
+    EMIT_WARNING("run_upload: unexpected number of flows");
     return false;
   }
 
@@ -740,8 +802,7 @@ bool Client::run_upload() noexcept {
       constexpr int timeout_msec = 250;
       auto err = netx_poll(&pfds, timeout_msec);
       if (err != Err::none && err != Err::timed_out) {
-        EMIT_WARNING(
-            "run_upload: netx_poll() failed: " << sys_get_last_error());
+        EMIT_WARNING("run_upload: netx_poll() failed");
         return false;
       }
       for (auto fd : pfds) {
@@ -760,8 +821,8 @@ bool Client::run_upload() noexcept {
           fd.events = POLLOUT;
         } else if (err != Err::none) {
           if (err != Err::broken_pipe) {
-            EMIT_WARNING(
-                "run_upload: netx_send() failed: " << sys_get_last_error());
+            EMIT_WARNING("run_upload: netx_send_nonblocking() failed: "
+                         << libndt_perror(err));
           } else {
             EMIT_DEBUG("run_upload: treating EPIPE as success");
           }
@@ -783,7 +844,7 @@ bool Client::run_upload() noexcept {
         prev = now;
       }
       if (elapsed.count() > impl->settings.max_runtime) {
-        EMIT_WARNING("run_upload(): running for too much time");
+        EMIT_WARNING("run_upload: running for too much time");
         done = true;
       }
     }
@@ -797,10 +858,6 @@ bool Client::run_upload() noexcept {
     EMIT_DEBUG("run_upload: client computed speed: " << client_side_speed);
   }
 
-  // TODO(bassosimone): in testing over mobile there are cases where the
-  // following operation fails with errno equal to EWOULDBLOCK on macOS when
-  // the network connection is a policed 3G network. This occurs frequently
-  // regardless of whether TLS is enabled. So, it's a socket level bug.
   {
     std::string message;
     if (!msg_expect(msg_test_msg, &message)) {
@@ -826,18 +883,18 @@ bool Client::msg_write_login(const std::string &version) noexcept {
   impl->settings.nettest_flags |= nettest_flag_status | nettest_flag_meta;
   if ((impl->settings.nettest_flags & nettest_flag_middlebox) !=
       NettestFlags{0}) {
-    EMIT_WARNING("msg_write_login(): nettest_flag_middlebox: not implemented");
+    EMIT_WARNING("msg_write_login: nettest_flag_middlebox: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_middlebox;
   }
   if ((impl->settings.nettest_flags & nettest_flag_simple_firewall) !=
       NettestFlags{0}) {
     EMIT_WARNING(
-        "msg_write_login(): nettest_flag_simple_firewall: not implemented");
+        "msg_write_login: nettest_flag_simple_firewall: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_simple_firewall;
   }
   if ((impl->settings.nettest_flags & nettest_flag_upload_ext) !=
       NettestFlags{0}) {
-    EMIT_WARNING("msg_write_login(): nettest_flag_upload_ext: not implemented");
+    EMIT_WARNING("msg_write_login: nettest_flag_upload_ext: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_upload_ext;
   }
   std::string serio;
@@ -901,7 +958,7 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
     char header[3];
     header[0] = code;
     if (msg.size() > UINT16_MAX) {
-      EMIT_WARNING("msg_write: message too long");
+      EMIT_WARNING("msg_write_legacy: message too long");
       return false;
     }
     uint16_t len = (uint16_t)msg.size();
@@ -913,8 +970,7 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
     {
       auto err = netx_sendn(impl->sock, header, sizeof(header));
       if (err != Err::none) {
-        EMIT_WARNING(
-            "msg_write_legacy: sendn() failed: " << sys_get_last_error());
+        EMIT_WARNING("msg_write_legacy: sendn() failed");
         return false;
       }
     }
@@ -927,8 +983,7 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
   {
     auto err = netx_sendn(impl->sock, msg.data(), msg.size());
     if (err != Err::none) {
-      EMIT_WARNING(
-          "msg_write_legacy: sendn() failed: " << sys_get_last_error());
+      EMIT_WARNING("msg_write_legacy: sendn() failed");
       return false;
     }
   }
@@ -1054,8 +1109,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
     {
       auto err = netx_recvn(impl->sock, header, sizeof(header));
       if (err != Err::none) {
-        EMIT_WARNING(
-            "msg_read_legacy: recvn() failed: " << sys_get_last_error());
+        EMIT_WARNING("msg_read_legacy: recvn() failed");
         return false;
       }
     }
@@ -1083,7 +1137,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
   {
     auto err = netx_recvn(impl->sock, buf.get(), len);
     if (err != Err::none) {
-      EMIT_WARNING("msg_read_legacy: recvn() failed: " << sys_get_last_error());
+      EMIT_WARNING("msg_read_legacy: recvn() failed");
       return false;
     }
   }
@@ -1253,7 +1307,7 @@ static BIO_METHOD *libndt_bio_method() noexcept {
 // } - - - END BIO IMPLEMENTATION - - -
 
 // Common function to map OpenSSL errors to Err.
-static Err map_ssl_error(SSL *ssl, int ret) noexcept {
+static Err map_ssl_error(Client *client, SSL *ssl, int ret) noexcept {
   auto reason = ::SSL_get_error(ssl, ret);
   switch (reason) {
     case SSL_ERROR_NONE:
@@ -1265,6 +1319,12 @@ static Err map_ssl_error(SSL *ssl, int ret) noexcept {
       return Err::ssl_want_read;
     case SSL_ERROR_WANT_WRITE:
       return Err::ssl_want_write;
+    case SSL_ERROR_SYSCALL:
+      auto ecode = client->sys_get_last_error();
+      if (ecode) {
+        return client->netx_map_errno(ecode);
+      }
+      return Err::ssl_syscall;
   }
   // TODO(bassosimone): in this case it may be nice to print the error queue
   // so to give the user a better understanding of what has happened.
@@ -1272,12 +1332,12 @@ static Err map_ssl_error(SSL *ssl, int ret) noexcept {
 }
 
 // Retry simple, nonblocking OpenSSL operations such as handshake or shutdown.
-static Err  //
-ssl_retry_unary_op(Client *client, SSL *ssl, Socket fd, Timeout timeout,
-                   std::function<int(SSL *)> unary_op) noexcept {
+static Err ssl_retry_unary_op(std::string opname, Client *client, SSL *ssl,
+                              Socket fd, Timeout timeout,
+                              std::function<int(SSL *)> unary_op) noexcept {
   auto err = Err::none;
 again:
-  err = map_ssl_error(ssl, unary_op(ssl));
+  err = map_ssl_error(client, ssl, unary_op(ssl));
   // Retry if needed
   if (err == Err::ssl_want_read) {
     err = client->netx_wait_readable(fd, timeout);
@@ -1291,19 +1351,16 @@ again:
     }
   }
   // Otherwise let the caller know
-  return err;
-}
-
-static std::string ssl_format_error() noexcept {
-  std::stringstream ss;
-  for (unsigned short i = 0; i < USHRT_MAX; ++i) {
-    unsigned long err = ERR_get_error();
-    if (err == 0) {
-      break;
+  if (err != Err::none) {
+    // The following is an inline expansion of EMIT_WARNING() required in
+    // this context because we are not inside a Client method.
+    if (client->get_verbosity() >= verbosity_warning) {
+      std::stringstream ss;
+      ss << opname << " failed: " << libndt_perror(err);
+      client->on_warning(ss.str());
     }
-    ss << ((i > 0) ? ": " : "") << ERR_reason_error_string(err);
   }
-  return ss.str();
+  return err;
 }
 
 #endif  // HAVE_OPENSSL
@@ -1409,13 +1466,12 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     SSL_set_verify(ssl, SSL_VERIFY_PEER, nullptr);
     EMIT_DEBUG("SSL_VERIFY_PEER configured");
   }
-  err = ssl_retry_unary_op(this, ssl, *sock, impl->settings.timeout,
-                           [](SSL *ssl) -> int {
+  err = ssl_retry_unary_op("SSL_do_handshake", this, ssl, *sock,
+                           impl->settings.timeout, [](SSL *ssl) -> int {
                              ERR_clear_error();
                              return ::SSL_do_handshake(ssl);
                            });
   if (err != Err::none) {
-    EMIT_WARNING("SSL handshake failed: " << ssl_format_error());
     netx_closesocket(*sock);
     //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
     return Err::ssl_generic;
@@ -1713,7 +1769,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
                       Socket *sock) noexcept {
   assert(sock != nullptr);
   if (*sock != -1) {
-    EMIT_WARNING("socket already connected");
+    EMIT_WARNING("netx_dial: socket already connected");
     return Err::invalid_argument;
   }
   // Implementation note: we could perform getaddrinfo() in one pass but having
@@ -1732,7 +1788,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
     addrinfo *rp = nullptr;
     int rv = sys_getaddrinfo(addr.data(), port.data(), &hints, &rp);
     if (rv != 0) {
-      EMIT_WARNING("unexpected getaddrinfo() failure");
+      EMIT_WARNING("netx_dial: unexpected getaddrinfo() failure");
       return netx_map_eai(rv);
     }
     assert(rp);
@@ -1740,7 +1796,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       sys_set_last_error(0);
       *sock = sys_socket(aip->ai_family, aip->ai_socktype, 0);
       if (!is_socket_valid(*sock)) {
-        EMIT_WARNING("socket() failed: " << sys_get_last_error());
+        EMIT_WARNING("netx_dial: socket() failed");
         continue;
       }
 #ifdef HAVE_SO_NOSIGPIPE
@@ -1750,7 +1806,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         auto on = 1;
         if (::setsockopt(  //
                 *sock, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on)) != 0) {
-          EMIT_WARNING("setsockopt(..., SO_NOSIGPIPE) failed");
+          EMIT_WARNING("netx_dial: setsockopt(..., SO_NOSIGPIPE) failed");
           sys_closesocket(*sock);
           *sock = -1;
           continue;
@@ -1758,7 +1814,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       }
 #endif  // HAVE_SO_NOSIGPIPE
       if (netx_setnonblocking(*sock, true) != Err::none) {
-        EMIT_WARNING("netx_setnonblocking() failed: " << sys_get_last_error());
+        EMIT_WARNING("netx_dial: netx_setnonblocking() failed");
         sys_closesocket(*sock);
         *sock = -1;
         continue;
@@ -1769,14 +1825,14 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       // that size_t is `ULONG_PTR` while socklen_t is most likely `int`.
 #ifdef _WIN32
       if (aip->ai_addrlen > sizeof(sockaddr_in6)) {
-        EMIT_WARNING("unexpected size of aip->ai_addrlen");
+        EMIT_WARNING("netx_dial: unexpected size of aip->ai_addrlen");
         sys_closesocket(*sock);
         *sock = -1;
         continue;
       }
 #endif
       if (sys_connect(*sock, aip->ai_addr, (socklen_t)aip->ai_addrlen) == 0) {
-        EMIT_DEBUG("connect(): okay");
+        EMIT_DEBUG("netx_dial: connect(): okay immediately");
         break;
       }
       auto err = netx_map_errno(sys_get_last_error());
@@ -1789,15 +1845,15 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
                              &soerrlen) == 0) {
             assert(soerrlen == sizeof(soerr));
             if (soerr == 0) {
-              EMIT_DEBUG("connect(): okay");
+              EMIT_DEBUG("netx_dial: connect(): okay");
               break;
             }
             sys_set_last_error(soerr);
           }
         }
       }
-      // TODO(bassosimone): print not only system error but also SSL error.
-      EMIT_WARNING("connect() failed: " << sys_get_last_error());
+      EMIT_WARNING("netx_dial: connect() failed: "
+                   << libndt_perror(netx_map_errno(sys_get_last_error())));
       sys_closesocket(*sock);
       *sock = -1;
     }
@@ -1828,6 +1884,8 @@ again:
   if (err == Err::none) {
     goto again;
   }
+  EMIT_WARNING(
+      "netx_recv: netx_recv_nonblocking() failed: " << libndt_perror(err));
   return err;
 }
 
@@ -1837,8 +1895,8 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
   *actual = 0;
   if (count <= 0) {
     EMIT_WARNING(
-        "netx_recv: explicitly disallowing zero read; use netx_select() "
-        "to check the state of a socket");
+        "netx_recv_nonblocking: explicitly disallowing zero read; use "
+        "netx_select() to check the state of a socket");
     return Err::invalid_argument;
   }
   sys_set_last_error(0);
@@ -1855,7 +1913,7 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
     ERR_clear_error();
     int ret = ::SSL_read(ssl, base, count);
     if (ret <= 0) {
-      return map_ssl_error(ssl, ret);
+      return map_ssl_error(this, ssl, ret);
     }
     *actual = (Size)ret;
     return Err::none;
@@ -1909,6 +1967,8 @@ again:
   if (err == Err::none) {
     goto again;
   }
+  EMIT_WARNING(
+      "netx_send: netx_send_nonblocking() failed: " << libndt_perror(err));
   return err;
 }
 
@@ -1918,8 +1978,8 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
   *actual = 0;
   if (count <= 0) {
     EMIT_WARNING(
-        "netx_send: explicitly disallowing zero send; use netx_select() "
-        "to check the state of a socket");
+        "netx_send_nonblocking: explicitly disallowing zero send; use "
+        "netx_select() to check the state of a socket");
     return Err::invalid_argument;
   }
   sys_set_last_error(0);
@@ -1936,7 +1996,7 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
     int ret = ::SSL_write(ssl, base, count);
     if (ret <= 0) {
-      return map_ssl_error(ssl, ret);
+      return map_ssl_error(this, ssl, ret);
     }
     *actual = (Size)ret;
     return Err::none;
@@ -1990,13 +2050,15 @@ Err Client::netx_resolve(const std::string &hostname,
     hints.ai_flags &= ~AI_NUMERICHOST;
     rv = sys_getaddrinfo(hostname.data(), portno, &hints, &rp);
     if (rv != 0) {
-      EMIT_WARNING("getaddrinfo() failed: " << gai_strerror(rv));
-      return netx_map_eai(rv);
+      auto err = netx_map_eai(rv);
+      EMIT_WARNING(
+          "netx_resolve: getaddrinfo() failed: " << libndt_perror(err));
+      return err;
     }
     // FALLTHROUGH
   }
   assert(rp);
-  EMIT_DEBUG("getaddrinfo(): okay");
+  EMIT_DEBUG("netx_resolve: getaddrinfo(): okay");
   Err result = Err::none;
   for (auto aip = rp; (aip); aip = aip->ai_next) {
     char address[NI_MAXHOST], port[NI_MAXSERV];
@@ -2010,7 +2072,7 @@ Err Client::netx_resolve(const std::string &hostname,
     // needs to be handled as we do above for getaddrinfo().
 #ifdef _WIN32
     if (aip->ai_addrlen > sizeof(sockaddr_in6)) {
-      EMIT_WARNING("unexpected size of aip->ai_addrlen");
+      EMIT_WARNING("netx_resolve: unexpected size of aip->ai_addrlen");
       result = Err::value_too_large;
       break;
     }
@@ -2019,12 +2081,12 @@ Err Client::netx_resolve(const std::string &hostname,
                         (socklen_t)sizeof(address), port,
                         (socklen_t)sizeof(port),
                         NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
-      EMIT_WARNING("unexpected getnameinfo() failure");
+      EMIT_WARNING("netx_resolve: unexpected getnameinfo() failure");
       result = Err::ai_generic;
       break;
     }
     addrs->push_back(address);  // we only care about address
-    EMIT_DEBUG("- " << address);
+    EMIT_DEBUG("netx_resolve: - " << address);
   }
   sys_freeaddrinfo(rp);
   return result;
@@ -2137,12 +2199,12 @@ Err Client::netx_shutdown_both(Socket fd) noexcept {
     }
     auto ssl = impl->fd_to_ssl.at(fd);
     auto err = ssl_retry_unary_op(  //
-        this, ssl, fd, impl->settings.timeout, [](SSL *ssl) -> int {
+        "SSL_shutdown", this, ssl, fd, impl->settings.timeout,
+        [](SSL *ssl) -> int {
           ERR_clear_error();
           return ::SSL_shutdown(ssl);
         });
     if (err != Err::none) {
-      EMIT_WARNING("SSL_shutdown() failed");
       return err;
     }
   }
