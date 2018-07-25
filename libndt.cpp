@@ -113,6 +113,7 @@ static std::string libndt_perror(Err err) noexcept {
     LIBNDT_PERROR(ssl_generic);
     LIBNDT_PERROR(ssl_want_read);
     LIBNDT_PERROR(ssl_want_write);
+    LIBNDT_PERROR(ssl_syscall);
   }
 #undef LIBNDT_PERROR  // Tidy
   //
@@ -1306,7 +1307,7 @@ static BIO_METHOD *libndt_bio_method() noexcept {
 // } - - - END BIO IMPLEMENTATION - - -
 
 // Common function to map OpenSSL errors to Err.
-static Err map_ssl_error(SSL *ssl, int ret) noexcept {
+static Err map_ssl_error(Client *client, SSL *ssl, int ret) noexcept {
   auto reason = ::SSL_get_error(ssl, ret);
   switch (reason) {
     case SSL_ERROR_NONE:
@@ -1318,6 +1319,12 @@ static Err map_ssl_error(SSL *ssl, int ret) noexcept {
       return Err::ssl_want_read;
     case SSL_ERROR_WANT_WRITE:
       return Err::ssl_want_write;
+    case SSL_ERROR_SYSCALL:
+      auto ecode = client->sys_get_last_error();
+      if (ecode) {
+        return client->netx_map_errno(ecode);
+      }
+      return Err::ssl_syscall;
   }
   // TODO(bassosimone): in this case it may be nice to print the error queue
   // so to give the user a better understanding of what has happened.
@@ -1330,7 +1337,7 @@ static Err ssl_retry_unary_op(std::string opname, Client *client, SSL *ssl,
                               std::function<int(SSL *)> unary_op) noexcept {
   auto err = Err::none;
 again:
-  err = map_ssl_error(ssl, unary_op(ssl));
+  err = map_ssl_error(client, ssl, unary_op(ssl));
   // Retry if needed
   if (err == Err::ssl_want_read) {
     err = client->netx_wait_readable(fd, timeout);
@@ -1342,12 +1349,12 @@ again:
     if (err == Err::none) {
       goto again;
     }
-  } else {
+  } else if (err != Err::none) {
     // The following is an inline expansion of EMIT_WARNING() required in
     // this context because we are not inside a Client method.
     if (client->get_verbosity() >= verbosity_warning) {
       std::stringstream ss;
-      ss << opname << "failed: " << libndt_perror(err);
+      ss << opname << " failed: " << libndt_perror(err);
       client->on_warning(ss.str());
     }
   }
@@ -1905,7 +1912,7 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
     ERR_clear_error();
     int ret = ::SSL_read(ssl, base, count);
     if (ret <= 0) {
-      return map_ssl_error(ssl, ret);
+      return map_ssl_error(this, ssl, ret);
     }
     *actual = (Size)ret;
     return Err::none;
@@ -1988,7 +1995,7 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
     int ret = ::SSL_write(ssl, base, count);
     if (ret <= 0) {
-      return map_ssl_error(ssl, ret);
+      return map_ssl_error(this, ssl, ret);
     }
     *actual = (Size)ret;
     return Err::none;

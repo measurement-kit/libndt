@@ -518,6 +518,7 @@ enum class Err {
   ssl_generic,
   ssl_want_read,
   ssl_want_write,
+  ssl_syscall,
 };
 
 constexpr MsgType msg_comm_failure = MsgType{0};
