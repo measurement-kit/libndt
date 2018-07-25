@@ -1089,6 +1089,16 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
 
 // Networking layer
 
+// Required by OpenSSL code below. Must be outside because we want the code
+// to compile also where we don't have OpenSSL support enabled.
+#ifdef _WIN32
+#define OS_SET_LAST_ERROR(ec) ::SetLastError(ec)
+#define OS_EINVAL WSAEINVAL
+#else
+#define OS_SET_LAST_ERROR(ec) errno = ec
+#define OS_EINVAL EINVAL
+#endif
+
 #ifdef HAVE_OPENSSL
 
 // - - - BEGIN BIO IMPLEMENTATION - - - {
@@ -1107,14 +1117,6 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
 // BIO that possibility comes out very easily anyway.)
 //
 // We assume that a OpenSSL 1.1.0-like API is available.
-
-#ifdef _WIN32
-#define OS_SET_LAST_ERROR(ec) ::SetLastError(ec)
-#define OS_EINVAL WSAEINVAL
-#else
-#define OS_SET_LAST_ERROR(ec) errno = ec
-#define OS_EINVAL EINVAL
-#endif
 
 // Helper used to route read and write calls to Client's I/O methods. We
 // disregard the const qualifier of the `base` argument. That is not a big
