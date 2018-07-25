@@ -393,7 +393,7 @@ bool Client::recv_kickoff() noexcept {
   if (err != Err::none) {
     // TODO(bassosimone): pretty print `err` not the last system error, because,
     // when we'll use also SSL, the latter will probably be inaccurate.
-    EMIT_WARNING("recv_kickoff: netx_recvn() failed: " << sys_get_last_error());
+    EMIT_WARNING("recv_kickoff: netx_recvn() failed");
     return false;
   }
   if (memcmp(buf, msg_kickoff, sizeof(buf)) != 0) {
@@ -501,8 +501,7 @@ bool Client::wait_close() noexcept {
   constexpr Timeout wait_for_close = 1;
   auto err = netx_wait_readable(impl->sock, wait_for_close);
   if (err != Err::none) {
-    EMIT_WARNING(
-        "wait_close(): netx_wait_readable() failed: " << sys_get_last_error());
+    EMIT_WARNING("wait_close(): netx_wait_readable() failed");
     (void)netx_shutdown_both(impl->sock);
     return (err == Err::timed_out);
   }
@@ -516,8 +515,7 @@ bool Client::wait_close() noexcept {
       return false;
     }
     if (n != 0) {
-      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF: "
-                   << sys_get_last_error());
+      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF");
       return false;
     }
   }
@@ -570,8 +568,7 @@ bool Client::run_download() noexcept {
       constexpr int timeout_msec = 250;
       auto err = netx_poll(&pfds, timeout_msec);
       if (err != Err::none && err != Err::timed_out) {
-        EMIT_WARNING(
-            "run_download: netx_poll() failed: " << sys_get_last_error());
+        EMIT_WARNING("run_download: netx_poll() failed");
         return false;
       }
       for (auto fd : pfds) {
@@ -588,8 +585,7 @@ bool Client::run_download() noexcept {
         } else if (err == Err::ssl_want_write) {
           fd.events = POLLOUT;
         } else if (err != Err::none) {
-          EMIT_WARNING(
-              "run_download: netx_recv() failed: " << sys_get_last_error());
+          EMIT_WARNING("run_download: netx_recv() failed");
           done = true;
           break;
         }
@@ -740,8 +736,7 @@ bool Client::run_upload() noexcept {
       constexpr int timeout_msec = 250;
       auto err = netx_poll(&pfds, timeout_msec);
       if (err != Err::none && err != Err::timed_out) {
-        EMIT_WARNING(
-            "run_upload: netx_poll() failed: " << sys_get_last_error());
+        EMIT_WARNING("run_upload: netx_poll() failed");
         return false;
       }
       for (auto fd : pfds) {
@@ -760,8 +755,7 @@ bool Client::run_upload() noexcept {
           fd.events = POLLOUT;
         } else if (err != Err::none) {
           if (err != Err::broken_pipe) {
-            EMIT_WARNING(
-                "run_upload: netx_send() failed: " << sys_get_last_error());
+            EMIT_WARNING("run_upload: netx_send() failed");
           } else {
             EMIT_DEBUG("run_upload: treating EPIPE as success");
           }
@@ -913,8 +907,7 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
     {
       auto err = netx_sendn(impl->sock, header, sizeof(header));
       if (err != Err::none) {
-        EMIT_WARNING(
-            "msg_write_legacy: sendn() failed: " << sys_get_last_error());
+        EMIT_WARNING("msg_write_legacy: sendn() failed");
         return false;
       }
     }
@@ -927,8 +920,7 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
   {
     auto err = netx_sendn(impl->sock, msg.data(), msg.size());
     if (err != Err::none) {
-      EMIT_WARNING(
-          "msg_write_legacy: sendn() failed: " << sys_get_last_error());
+      EMIT_WARNING("msg_write_legacy: sendn() failed");
       return false;
     }
   }
@@ -1054,8 +1046,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
     {
       auto err = netx_recvn(impl->sock, header, sizeof(header));
       if (err != Err::none) {
-        EMIT_WARNING(
-            "msg_read_legacy: recvn() failed: " << sys_get_last_error());
+        EMIT_WARNING("msg_read_legacy: recvn() failed");
         return false;
       }
     }
@@ -1083,7 +1074,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
   {
     auto err = netx_recvn(impl->sock, buf.get(), len);
     if (err != Err::none) {
-      EMIT_WARNING("msg_read_legacy: recvn() failed: " << sys_get_last_error());
+      EMIT_WARNING("msg_read_legacy: recvn() failed");
       return false;
     }
   }
@@ -1740,7 +1731,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       sys_set_last_error(0);
       *sock = sys_socket(aip->ai_family, aip->ai_socktype, 0);
       if (!is_socket_valid(*sock)) {
-        EMIT_WARNING("socket() failed: " << sys_get_last_error());
+        EMIT_WARNING("socket() failed");
         continue;
       }
 #ifdef HAVE_SO_NOSIGPIPE
@@ -1758,7 +1749,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       }
 #endif  // HAVE_SO_NOSIGPIPE
       if (netx_setnonblocking(*sock, true) != Err::none) {
-        EMIT_WARNING("netx_setnonblocking() failed: " << sys_get_last_error());
+        EMIT_WARNING("netx_setnonblocking() failed");
         sys_closesocket(*sock);
         *sock = -1;
         continue;
@@ -1797,7 +1788,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         }
       }
       // TODO(bassosimone): print not only system error but also SSL error.
-      EMIT_WARNING("connect() failed: " << sys_get_last_error());
+      EMIT_WARNING("connect() failed");
       sys_closesocket(*sock);
       *sock = -1;
     }
