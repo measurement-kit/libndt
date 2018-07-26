@@ -388,7 +388,7 @@ bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
     EMIT_WARNING("we need to use the neubot sliver and to force json since");
     EMIT_WARNING("this is the only configuration supported by neubot's sliver");
     impl->settings.protocol_flags &= ~protocol_flag_tls;
-    impl->settings.protocol_flags &= ~protocol_flag_websockets;
+    impl->settings.protocol_flags &= ~protocol_flag_websocket;
     impl->settings.protocol_flags |= protocol_flag_json;
     mlabns_url += "/neubot";  // only botticelli implements multi stream dload
   } else {
@@ -636,6 +636,7 @@ bool Client::run_download() noexcept {
     std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = impl->settings.max_runtime;
+    auto ws = (impl->settings.protocol_flags & protocol_flag_websocket) != 0;
     for (Socket fd : dload_socks.sockets) {
       active += 1;  // atomic
       auto main = [
@@ -645,18 +646,22 @@ bool Client::run_download() noexcept {
         max_runtime,   // copy for safety
         &recent_data,  // reference to atomic
         this,          // pointer (careful!)
-        &total_data    // reference to atomic
+        &total_data,   // reference to atomic
+        ws             // copy for safety
       ]() noexcept {
-        char buf[64000];
+        char buf[262144];
         for (;;) {
-          constexpr Timeout download_timeout = 3;
+          auto err = Err::none;
           Size n = 0;
-          auto err = netx_recv_ex(  //
-                  fd, buf, sizeof(buf), download_timeout, &n, false);
+          if (ws) {
+            uint8_t ignored = 0;
+            err = ws_recvmsg(fd, &ignored, (uint8_t *)buf, sizeof (buf), &n);
+          } else {
+            err = netx_recv(fd, buf, sizeof(buf), &n);
+          }
           if (err != Err::none) {
             if (err != Err::eof) {
-              EMIT_WARNING("run_download: netx_recv_ex(): "
-                           << libndt_perror(err));
+              EMIT_WARNING("run_download: receiving: " << libndt_perror(err));
             }
             break;
           }
@@ -808,6 +813,7 @@ bool Client::run_upload() noexcept {
     std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = impl->settings.max_runtime;
+    auto ws = (impl->settings.protocol_flags & protocol_flag_websocket) != 0;
     for (Socket fd : upload_socks.sockets) {
       active += 1;  // atomic
       auto main = [
@@ -817,9 +823,10 @@ bool Client::run_upload() noexcept {
         max_runtime,   // copy for safety
         &recent_data,  // reference to atomic
         this,          // pointer (careful!)
-        &total_data    // reference to atomic
+        &total_data,   // reference to atomic
+        ws             // copy for safety
       ]() noexcept {
-        char buf[8192];
+        char buf[131072];
         {
           auto begin = std::chrono::steady_clock::now();
           random_printable_fill(buf, sizeof(buf));
@@ -829,14 +836,20 @@ bool Client::run_upload() noexcept {
                      << elapsed.count());
         }
         for (;;) {
-          constexpr Timeout upload_timeout = 3;
           Size n = 0;
-          auto err = netx_send_ex(  //
-                    fd, buf, sizeof(buf), upload_timeout, &n, false);
+          auto err = Err::none;
+          if (ws) {
+            err = ws_send_frame(fd, ws_opcode_binary | ws_fin_flag,
+                      (uint8_t *)buf, sizeof (buf));
+            if (err == Err::none) {
+              n = sizeof (buf);
+            }
+          } else {
+            err = netx_send(fd, buf, sizeof(buf), &n);
+          }
           if (err != Err::none) {
             if (err != Err::broken_pipe) {
-              EMIT_WARNING("run_upload: netx_send_ex(): "
-                           << libndt_perror(err));
+              EMIT_WARNING("run_upload: netx_send(): " << libndt_perror(err));
             }
             break;
           }
@@ -1454,8 +1467,9 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
             "ws_recv_any_frame: netx_recvn() failed for 16 bit length");
         return err;
       }
-      EMIT_WARNING("ws_recv_any_frame: ws 16 bit length: "
-                   << represent(std::string{(char *)buf, sizeof(buf)}));
+      EMIT_DEBUG("ws_recv_any_frame: ws 16 bit length: "
+                 << represent(std::string{(char *)buf, sizeof(buf)}));
+      length = 0;  // Need to reset the length as AL() does +=
       AL(((Size)buf[0]) << 8);
       AL((Size)buf[1]);
     } else if (length == 127) {
@@ -1466,8 +1480,9 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
             "ws_recv_any_frame: netx_recvn() failed for 64 bit length");
         return err;
       }
-      EMIT_WARNING("ws_recv_any_frame: ws 64 bit length: "
-                   << represent(std::string{(char *)buf, sizeof(buf)}));
+      EMIT_DEBUG("ws_recv_any_frame: ws 64 bit length: "
+                 << represent(std::string{(char *)buf, sizeof(buf)}));
+      length = 0;  // Need to reset the length as AL() does +=
       AL(((Size)buf[0]) << 56);
       AL(((Size)buf[1]) << 48);
       AL(((Size)buf[2]) << 40);
@@ -2353,11 +2368,6 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
-  return netx_recv_ex(fd, base, count, impl->settings.timeout, actual, true);
-}
-
-Err Client::netx_recv_ex(Socket fd, void *base, Size count, Timeout timeout,
-                         Size *actual, bool log_eventual_error) noexcept {
   auto err = Err::none;
 again:
   err = netx_recv_nonblocking(fd, base, count, actual);
@@ -2365,17 +2375,15 @@ again:
     return Err::none;
   }
   if (err == Err::operation_would_block || err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, timeout);
+    err = netx_wait_readable(fd, impl->settings.timeout);
   } else if (err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, timeout);
+    err = netx_wait_writeable(fd, impl->settings.timeout);
   }
   if (err == Err::none) {
     goto again;
   }
-  if (log_eventual_error) {
-    EMIT_WARNING(
-        "netx_recv: netx_recv_nonblocking() failed: " << libndt_perror(err));
-  }
+  EMIT_WARNING(
+      "netx_recv: netx_recv_nonblocking() failed: " << libndt_perror(err));
   return err;
 }
 
@@ -2443,12 +2451,6 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
-  return netx_send_ex(fd, base, count, impl->settings.timeout, actual, true);
-}
-
-Err Client::netx_send_ex(Socket fd, const void *base, Size count,
-                         Timeout timeout, Size *actual,
-                         bool log_eventual_error) noexcept {
   auto err = Err::none;
 again:
   err = netx_send_nonblocking(fd, base, count, actual);
@@ -2456,17 +2458,15 @@ again:
     return Err::none;
   }
   if (err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, timeout);
+    err = netx_wait_readable(fd, impl->settings.timeout);
   } else if (err == Err::operation_would_block || err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, timeout);
+    err = netx_wait_writeable(fd, impl->settings.timeout);
   }
   if (err == Err::none) {
     goto again;
   }
-  if (log_eventual_error) {
-    EMIT_WARNING(
-        "netx_send: netx_send_nonblocking() failed: " << libndt_perror(err));
-  }
+  EMIT_WARNING(
+      "netx_send: netx_send_nonblocking() failed: " << libndt_perror(err));
   return err;
 }
 

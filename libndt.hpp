@@ -167,7 +167,7 @@ class Settings {
   MlabnsPolicy mlabns_policy = mlabns_policy_geo_options;
 
   /// Timeout used for I/O operations.
-  Timeout timeout = Timeout{30} /* seconds */;
+  Timeout timeout = Timeout{7} /* seconds */;
 
   /// Host name of the NDT server to use. If this is left blank (the default),
   /// we will use mlab-ns to discover a nearby server.
@@ -437,10 +437,6 @@ class Client {
   virtual Err netx_recv(Socket fd, void *base, Size count,
                         Size *actual) noexcept;
 
-  // Like netx_recv() but with custom timeout.
-  virtual Err netx_recv_ex(Socket fd, void *base, Size count, Timeout timeout,
-                           Size *actual, bool log_eventual_error) noexcept;
-
   // Receive from the network without blocking.
   virtual Err netx_recv_nonblocking(Socket fd, void *base, Size count,
                                     Size *actual) noexcept;
@@ -451,11 +447,6 @@ class Client {
   // Send data to the network.
   virtual Err netx_send(Socket fd, const void *base, Size count,
                         Size *actual) noexcept;
-
-  // Like netx_send() but with custom timeout.
-  virtual Err netx_send_ex(Socket fd, const void *base, Size count,
-                           Timeout timeout, Size *actual,
-                           bool log_eventual_error) noexcept;
 
   // Send to the network without blocking.
   virtual Err netx_send_nonblocking(Socket fd, const void *base, Size count,
