@@ -608,11 +608,10 @@ bool Client::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
-    // We do not check for the Sec-WebSocket-Protocol header in the reply
-    // because ndt-cloud does not set this header.
     Err err = netx_maybews_dial(  //
         impl->settings.hostname, port,
-        ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept, ws_proto_s2c,
+        ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
+          | ws_f_sec_ws_protocol, ws_proto_s2c,
         &sock);
     if (err != Err::none) {
       break;
@@ -649,7 +648,7 @@ bool Client::run_download() noexcept {
         &total_data,   // reference to atomic
         ws             // copy for safety
       ]() noexcept {
-        char buf[262144];
+        char buf[131072];
         for (;;) {
           auto err = Err::none;
           Size n = 0;
@@ -790,11 +789,10 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = -1;
-    // We do not check for the Sec-WebSocket-Protocol header in the reply
-    // because ndt-cloud does not set this header.
     Err err = netx_maybews_dial(  //
         impl->settings.hostname, port,
-        ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept, ws_proto_c2s,
+        ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
+          | ws_f_sec_ws_protocol, ws_proto_c2s,
         &sock);
     if (err != Err::none) {
       return false;
@@ -849,7 +847,7 @@ bool Client::run_upload() noexcept {
           }
           if (err != Err::none) {
             if (err != Err::broken_pipe) {
-              EMIT_WARNING("run_upload: netx_send(): " << libndt_perror(err));
+              EMIT_WARNING("run_upload: sending: " << libndt_perror(err));
             }
             break;
           }
@@ -1272,6 +1270,7 @@ Err Client::ws_handshake(Socket fd, uint64_t ws_flags,
   }
   EMIT_DEBUG("ws_handshake: sent HTTP/1.1 upgrade request");
   {
+    // TODO(bassosimone): use the same value used by ndt-project/ndt
     static constexpr size_t max_line_length = 8000;
     std::string line;
     auto err = ws_recvln(fd, &line, max_line_length);
@@ -1284,6 +1283,7 @@ Err Client::ws_handshake(Socket fd, uint64_t ws_flags,
       return Err::ws_proto;
     }
     uint64_t flags = 0;
+    // TODO(bassosimone): use the same value used by ndt-project/ndt
     constexpr size_t max_headers = 1000;
     for (size_t i = 0; i < max_headers; ++i) {
       // TODO(bassosimone): make header processing case insensitive.
@@ -1391,13 +1391,19 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
       EMIT_WARNING("ws_send_frame: passed a null pointer with nonzero length");
       return Err::invalid_argument;
     }
+    // Debug messages printing the body are commented out because they're too
+    // much verbose. Still they may be useful for future debugging.
+    /*
     EMIT_DEBUG("ws_send_frame: body unmasked: "
                << represent(std::string{(char *)base, count}));
+    */
     for (Size i = 0; i < count; ++i) {
       base[i] ^= (uint8_t)mask[i % mask_size];
     }
+    /*
     EMIT_DEBUG("ws_send_frame: body masked: "
                << represent(std::string{(char *)base, count}));
+    */
     auto err = netx_sendn(sock, base, count);
     if (err != Err::none) {
       EMIT_WARNING("ws_send_frame: netx_sendn() failed when sending body");
@@ -1426,7 +1432,7 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
   // This assert is because the code below assumes that Size is basically
   // a uint64_t value. On 32 bit systems my understanding is that the compiler
   // supports 64 bit integers via emulation, hence I believe there is no
-  // need to concern ourself with using a 64 bit integer here. My understanding
+  // need to be worried about using a 64 bit integer here. My understanding
   // is supported, e.g., by <https://stackoverflow.com/a/2692369>.
   static_assert(sizeof(Size) == sizeof(uint64_t), "Size is not 64 bit wide");
   {
@@ -1448,6 +1454,7 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
     *opcode = (uint8_t)(buf[0] & ws_opcode_mask);
     EMIT_DEBUG("ws_recv_any_frame: opcode: " << (unsigned int)*opcode);
     auto hasmask = (buf[1] & ws_mask_flag) != 0;
+    // We do not expect to receive a masked frame. This is client code.
     if (hasmask) {
       EMIT_WARNING("ws_recv_any_frame: received masked frame");
       return Err::invalid_argument;
@@ -1459,6 +1466,7 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
     EMIT_DEBUG("ws_recv_any_frame: length byte: " << (unsigned int)(value)); \
     length += (value);                                                       \
   } while (0)
+    assert(length <= 127);  // should not happen, just in case
     if (length == 126) {
       uint8_t buf[2];
       auto err = netx_recvn(sock, buf, sizeof(buf));
@@ -1467,7 +1475,7 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
             "ws_recv_any_frame: netx_recvn() failed for 16 bit length");
         return err;
       }
-      EMIT_DEBUG("ws_recv_any_frame: ws 16 bit length: "
+      EMIT_DEBUG("ws_recv_any_frame: 16 bit length: "
                  << represent(std::string{(char *)buf, sizeof(buf)}));
       length = 0;  // Need to reset the length as AL() does +=
       AL(((Size)buf[0]) << 8);
@@ -1480,7 +1488,7 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
             "ws_recv_any_frame: netx_recvn() failed for 64 bit length");
         return err;
       }
-      EMIT_DEBUG("ws_recv_any_frame: ws 64 bit length: "
+      EMIT_DEBUG("ws_recv_any_frame: 64 bit length: "
                  << represent(std::string{(char *)buf, sizeof(buf)}));
       length = 0;  // Need to reset the length as AL() does +=
       AL(((Size)buf[0]) << 56);
@@ -1502,13 +1510,18 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
   EMIT_DEBUG("ws_recv_any_frame: received header");
   // Message body
   if (length > 0) {
+    assert(length <= total);
     auto err = netx_recvn(sock, base, length);
     if (err != Err::none) {
       EMIT_WARNING("ws_recv_any_frame: netx_recvn() failed for body");
       return err;
     }
+    // This makes the code too noisy when using -verbose. It may still be
+    // useful to remove the comment when debugging.
+    /*
     EMIT_DEBUG("ws_recv_any_frame: received body: "
                << represent(std::string{(char *)base, length}));
+    */
     *count = length;
   } else {
     EMIT_DEBUG("ws_recv_any_frame: no body in this message");
@@ -1538,7 +1551,7 @@ again:
     return err;
   }
   if (*opcode == ws_opcode_close) {
-    EMIT_WARNING("ws_recv_frame: received CLOSE frame; sending CLOSE back");
+    EMIT_DEBUG("ws_recv_frame: received CLOSE frame; sending CLOSE back");
     (void)ws_send_frame(sock, ws_opcode_close, nullptr, 0);
     // TODO(bassosimone): distinguish between a shutdown at the socket layer
     // and a proper shutdown implemented at the WebSocket layer.
@@ -1549,6 +1562,8 @@ again:
     goto again;
   }
   if (*opcode == ws_opcode_ping) {
+    // TODO(bassosimone): in theory a malicious server could DoS us by sending
+    // a constant stream of PING frames for a long time.
     EMIT_DEBUG("ws_recv_frame: received PING frame; PONGing back");
     assert(*count <= total);
     err = ws_send_frame(sock, ws_opcode_pong, base, *count);
@@ -1562,8 +1577,9 @@ again:
   return Err::none;
 }
 
-Err Client::ws_recvmsg(Socket sock, uint8_t *opcode, uint8_t *base, Size total,
-                       Size *count) noexcept {
+Err Client::ws_recvmsg(  //
+    Socket sock, uint8_t *opcode, uint8_t *base, Size total,
+    Size *count) noexcept {
   if (opcode == nullptr || count == nullptr) {
     EMIT_WARNING("ws_recv: passed invalid return arguments");
     return Err::invalid_argument;
@@ -1593,8 +1609,9 @@ Err Client::ws_recvmsg(Socket sock, uint8_t *opcode, uint8_t *base, Size total,
       EMIT_WARNING("ws_recv: avoiding pointer overflow");
       return Err::value_too_large;
     }
+    uint8_t op = 0;
     Size n = 0;
-    err = ws_recv_frame(sock, opcode, &fin, base + *count, total - *count, &n);
+    err = ws_recv_frame(sock, &op, &fin, base + *count, total - *count, &n);
     if (err != Err::none) {
       EMIT_WARNING("ws_recv: ws_recv_frame() failed for continuation frame");
       return err;
@@ -1604,8 +1621,8 @@ Err Client::ws_recvmsg(Socket sock, uint8_t *opcode, uint8_t *base, Size total,
       return Err::value_too_large;
     }
     *count += n;
-    if (*opcode != ws_opcode_continue) {
-      EMIT_WARNING("ws_recv: received unexpected opcode: " << *opcode);
+    if (op != ws_opcode_continue) {
+      EMIT_WARNING("ws_recv: received unexpected opcode: " << op);
       return Err::ws_proto;
     }
     if (fin) {
