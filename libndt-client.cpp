@@ -19,14 +19,20 @@ static void usage() {
   std::clog << "  --ca-bundle-path <path> : path to OpenSSL CA bundle\n";
   std::clog << "  --download              : run download test\n";
   std::clog << "  --download-ext          : run multi-stream download test\n";
+  std::clog << "  --insecure              : if --tls is specified, disable any kind of\n";
+  std::clog << "                            TLS peer validation. This is insecure, hence\n";
+  std::clog << "                            the flag name, but useful for testing.\n";
   std::clog << "  --json                  : use the JSON protocol\n";
   std::clog << "  --port <port>           : use the specified port\n";
+  std::clog << "  --random                : if hostname is omitted, then use\n";
+  std::clog << "                            a random NDT server.\n";
   std::clog << "  --tls                   : use transport layer security\n";
   std::clog << "  --socks5h <port>        : use socks5h proxy at 127.0.0.1:<port>\n";
   std::clog << "  --upload                : run upload test\n";
   std::clog << "  --verbose               : be verbose\n";
   std::clog << "\n";
-  std::clog << "If <hostname> is omitted, we pick a nearby server.\n";
+  std::clog << "If <hostname> is omitted, we pick a nearby server, unless `--random'\n";
+  std::clog << "is specified, in which case we pick a random server.\n";
   std::clog << std::endl;
   // clang-format on
 }
@@ -49,11 +55,17 @@ int main(int, char **argv) {
       } else if (flag == "download-ext") {
         settings.nettest_flags |= libndt::nettest_flag_download_ext;
         std::clog << "will run download-ext" << std::endl;
+      } else if (flag == "insecure") {
+        settings.tls_verify_peer = false;
+        std::clog << "WILL NOT verify the TLS peer (<- INSECURE!)" << std::endl;
       } else if (flag == "json") {
-        settings.protocol_flags = libndt::protocol_flag_json;
+        settings.protocol_flags |= libndt::protocol_flag_json;
         std::clog << "will use json" << std::endl;
+      } else if (flag == "random") {
+        settings.mlabns_policy = libndt::mlabns_policy_random;
+        std::clog << "will use a random server" << std::endl;
       } else if (flag == "tls") {
-        settings.protocol_flags = libndt::protocol_flag_tls;
+        settings.protocol_flags |= libndt::protocol_flag_tls;
         std::clog << "will use TLS" << std::endl;
       } else if (flag == "upload") {
         settings.nettest_flags |= libndt::nettest_flag_upload;
@@ -94,7 +106,6 @@ int main(int, char **argv) {
       std::clog << "will use host: " << cmdline.pos_args()[1] << std::endl;
     } else {
       std::clog << "will find a suitable server" << std::endl;
-      settings.mlabns_policy = libndt::mlabns_policy_geo_options;
     }
   }
 
