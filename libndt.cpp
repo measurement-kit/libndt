@@ -1668,7 +1668,7 @@ again:
     // a constant stream of PING frames for a long time.
     EMIT_DEBUG("ws_recv_frame: received PING frame; PONGing back");
     assert(*count <= total);
-    err = ws_send_frame(sock, ws_opcode_pong, base, *count);
+    err = ws_send_frame(sock, ws_opcode_pong | ws_fin_flag, base, *count);
     if (err != Err::none) {
       EMIT_WARNING("ws_recv_frame: ws_send_frame() failed for PONG frame");
       return err;
