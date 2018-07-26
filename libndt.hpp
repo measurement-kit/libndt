@@ -401,7 +401,22 @@ class Client {
   // Networking layer
   // ````````````````
   //
-  // This section contains network functionality used by NDT.
+  // This section contains network functionality used by NDT. The functionality
+  // to connect to a remote host is layered to comply with the websocket spec
+  // as follows:
+  //
+  // - netx_maybews_dial() calls netx_maybessl_dial() and, if that succeeds, it
+  //   then attempts to negotiate a websocket channel (if enabled);
+  //
+  // - netx_maybessl_dial() calls netx_maybesocks5h_dial() and, if that
+  //   suceeds, it then attempts to establish a TLS connection (if enabled);
+  //
+  // - netx_maybesocks5h_dial() possibly creates the connection through a
+  //   SOCKSv5h proxy (if the proxy is enabled).
+  //
+  // By default with TLS we use a CA and we perform SNI validation. That can be
+  // disabled for debug reasons. Doing that breaks compliancy with the websocket
+  // spec. See <https://tools.ietf.org/html/rfc6455#section-4.1>.
 
   // Connect to @p hostname and @p port possibly using WebSocket,
   // SSL, and SOCKSv5. This depends on the Settings. See the documentation

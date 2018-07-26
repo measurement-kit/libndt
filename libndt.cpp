@@ -590,7 +590,11 @@ bool Client::wait_close() noexcept {
   // of the socket after netx_wait_readable() returns. I don't think here
   // we've any "dirty shutdown" concerns, because the NDT protocol includes a
   // MSG_LOGOUT sent from the server, hence we know we reached the final state.
-  constexpr Timeout wait_for_close = 1;
+  //
+  // Note: after reading RFC6455, I realized why the server SHOULD close the
+  // connection rather than the client: so that the TIME_WAIT state is entered
+  // by the server, such that there is little server side impact.
+  constexpr Timeout wait_for_close = 3;
   (void)netx_wait_readable(impl->sock, wait_for_close);
   (void)netx_closesocket(impl->sock);
   return true;
@@ -608,6 +612,10 @@ bool Client::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
+    // Implementation note: here connection attempts are serialized. This is
+    // consistent with <https://tools.ietf.org/html/rfc6455#section-4.1>, and
+    // namely with requirement 2: "If multiple connections to the same IP
+    // address are attempted simultaneously, the client MUST serialize them".
     Err err = netx_maybews_dial(  //
         impl->settings.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
@@ -794,6 +802,8 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = -1;
+    // Remark: in case we'll even implement multi-stream here, remember that
+    // websocket requires connections to be serialized. See above.
     Err err = netx_maybews_dial(  //
         impl->settings.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
@@ -1217,6 +1227,11 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
 
 // WebSocket
 // `````````
+// This section contains the websocket implementation. Although this has been
+// written from scratch while reading the RFC, it has beem very useful to be
+// able to see the websocket implementation in ndt-project/ndt, to have another
+// clear, simple existing implementation to compare with.
+//
 // - - - BEGIN WEBSOCKET IMPLEMENTATION - - - {
 
 Err Client::ws_sendln(Socket fd, std::string line) noexcept {
@@ -1260,10 +1275,22 @@ Err Client::ws_handshake(Socket fd, uint64_t ws_flags,
   {
     // Implementation note: we use the default WebSocket key provided in the RFC
     // so that we don't need to depend on OpenSSL for websocket.
-    // TODO(bassosimone): understand whether this is okay with the RFC.
+    //
+    // TODO(bassosimone): replace this with a randomly selected value that
+    // varies for each connection. Or we're not compliant.
     constexpr auto key_header = "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==";
     std::stringstream host_header;
     host_header << "Host: " << impl->settings.hostname;
+    // Adding nonstandard port as specified in RFC6455 Sect. 4.1.
+    if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+      if (impl->settings.port != "443") {
+        host_header << ":" << impl->settings.port;
+      }
+    } else {
+      if (impl->settings.port != "80") {
+        host_header << ":" << impl->settings.port;
+      }
+    }
     Err err = Err::none;
     if ((err = ws_sendln(fd, "GET /ndt_protocol HTTP/1.1")) != Err::none ||
         (err = ws_sendln(fd, host_header.str())) != Err::none ||
@@ -1278,6 +1305,18 @@ Err Client::ws_handshake(Socket fd, uint64_t ws_flags,
     }
   }
   EMIT_DEBUG("ws_handshake: sent HTTP/1.1 upgrade request");
+  //
+  // Limitations of the response processing code
+  // ```````````````````````````````````````````
+  // Apart from the limitations explicitly identified with TODO messages, the
+  // algorithm to process the response has the following limitations:
+  //
+  // 1. we do not follow redirects (but we're not required to)
+  //
+  // 2. we do not fail the connection if the Sec-WebSocket-Extensions header is
+  //    part of the handshake response (it would mean that an extension we do
+  //    not support is being enforced by the server)
+  //
   {
     // TODO(bassosimone): use the same value used by ndt-project/ndt
     static constexpr size_t max_line_length = 8000;
@@ -1327,6 +1366,9 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
   // TODO(bassosimone): perhaps move the RNG into Client?
   constexpr Size mask_size = 4;
   uint8_t mask[mask_size] = {};
+  // "When preparing a masked frame, the client MUST pick a fresh masking
+  //  key from the set of allowed 32-bit values." [RFC6455 Sect. 5.3]. Hence
+  // we're not compliant (TODO(bassosimone)).
   random_printable_fill((char *)mask, sizeof(mask));
   // Message header
   {
@@ -1349,6 +1391,9 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
       // as part of the second byte that we send on the wire. Also, the spec
       // says that we must emit the length in network byte order, which means
       // in practice that we should use big endian.
+      //
+      // See <https://tools.ietf.org/html/rfc6455#section-5.1>, and
+      //     <https://tools.ietf.org/html/rfc6455#section-5.2>.
 #define LB(value)                                                        \
   do {                                                                   \
     EMIT_DEBUG("ws_send_frame: length byte: " << (unsigned int)(value)); \
@@ -1457,18 +1502,49 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
     EMIT_DEBUG("ws_recv_any_frame: FIN: " << std::boolalpha << *fin);
     uint8_t reserved = (uint8_t)(buf[0] & ws_reserved_mask);
     if (reserved != 0) {
+      // They only make sense for extensions, which we don't use. So we return
+      // error. See <https://tools.ietf.org/html/rfc6455#section-5.2>.
       EMIT_WARNING("ws_recv_any_frame: invalid reserved bits: " << reserved);
       return Err::ws_proto;
     }
     *opcode = (uint8_t)(buf[0] & ws_opcode_mask);
     EMIT_DEBUG("ws_recv_any_frame: opcode: " << (unsigned int)*opcode);
+    switch (opcode) {
+      // clang-format off
+      case ws_opcode_continue:
+      case ws_opcode_text:
+      case ws_opcode_binary:
+      case ws_opcode_close:
+      case ws_opcode_ping:
+      case ws_opcode_pong: break;
+      // clang-format off
+      default:
+        // See <https://tools.ietf.org/html/rfc6455#section-5.2>.
+        EMIT_WARNING("ws_recv_any_frame: invalid opcode");
+        return Err::ws_proto;
+    }
     auto hasmask = (buf[1] & ws_mask_flag) != 0;
-    // We do not expect to receive a masked frame. This is client code.
+    // We do not expect to receive a masked frame. This is client code and
+    // the RFC says that a server MUST not mask its frames.
+    //
+    // See <https://tools.ietf.org/html/rfc6455#section-5.1>.
     if (hasmask) {
       EMIT_WARNING("ws_recv_any_frame: received masked frame");
       return Err::invalid_argument;
     }
     length = (buf[1] & ws_len_mask);
+    switch (opcode) {
+      case ws_opcode_close:
+      case ws_opcode_ping:
+      case ws_opcode_ping:
+        if (length > 125 || *fin == false) {
+          EMIT_WARNING("ws_recv_any_frame: control messages MUST have a "
+                       "payload length of 125 bytes or less and MUST NOT "
+                       "be fragmented (see RFC6455 Sect 5.5.)");
+          return Err::ws_proto;
+        }
+        break;
+    }
     // As mentioned above, length is transmitted using big endian encoding.
 #define AL(value)                                                            \
   do {                                                                       \
@@ -1501,6 +1577,12 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
                  << represent(std::string{(char *)buf, sizeof(buf)}));
       length = 0;  // Need to reset the length as AL() does +=
       AL(((Size)buf[0]) << 56);
+      if ((buf[0] & 0x80) != 0) {
+        // See <https://tools.ietf.org/html/rfc6455#section-5.2>: "[...] the
+        // most significant bit MUST be 0."
+        EMIT_WARNING("ws_recv_any_frame: 64 bit length: invalid first bit");
+        return Err::ws_proto;
+      }
       AL(((Size)buf[1]) << 48);
       AL(((Size)buf[2]) << 40);
       AL(((Size)buf[3]) << 32);
@@ -1541,6 +1623,9 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
 
 Err Client::ws_recv_frame(Socket sock, uint8_t *opcode, bool *fin,
                           uint8_t *base, Size total, Size *count) noexcept {
+  // "Control frames (see Section 5.5) MAY be injected in the middle of
+  // a fragmented message.  Control frames themselves MUST NOT be fragmented."
+  //    -- RFC6455 Section 5.4.
   if (opcode == nullptr || fin == nullptr || count == nullptr) {
     EMIT_WARNING("ws_recv_frame: passed invalid return arguments");
     return Err::invalid_argument;
@@ -1559,14 +1644,22 @@ again:
     EMIT_WARNING("ws_recv_frame: ws_recv_any_frame() failed");
     return err;
   }
+  // "The application MUST NOT send any more data frames after sending a
+  // Close frame." (RFC6455 Sect. 5.5.1). We're good as long as, for example,
+  // we don't ever send a CLOSE but we just reply to CLOSE and then return
+  // with an error, which will cause the connection to be closed. Note that
+  // we MUST reply with CLOSE here (again Sect. 5.5.1).
   if (*opcode == ws_opcode_close) {
     EMIT_DEBUG("ws_recv_frame: received CLOSE frame; sending CLOSE back");
-    (void)ws_send_frame(sock, ws_opcode_close, nullptr, 0);
+    // Setting the FIN flag because control messages MUST NOT be fragmented
+    // as specified in Section 5.5 of RFC6455.
+    (void)ws_send_frame(sock, ws_opcode_close | ws_fin_flag, nullptr, 0);
     // TODO(bassosimone): distinguish between a shutdown at the socket layer
     // and a proper shutdown implemented at the WebSocket layer.
     return Err::eof;
   }
   if (*opcode == ws_opcode_pong) {
+    // RFC6455 Sect. 5.5.3 says that we must ignore a PONG.
     EMIT_DEBUG("ws_recv_frame: received PONG frame; continuing to read");
     goto again;
   }
@@ -1589,6 +1682,14 @@ again:
 Err Client::ws_recvmsg(  //
     Socket sock, uint8_t *opcode, uint8_t *base, Size total,
     Size *count) noexcept {
+  // General remark from RFC6455 Sect. 5.4: "[I]n absence of extensions, senders
+  // and receivers must not depend on [...] specific frame boundaries."
+  //
+  // Also: "In the absence of any extension, a receiver doesn't have to buffer
+  // the whole frame in order to process it." (Sect 5.4). However, currently
+  // this implementation does that because we know NDT messages are "smallish"
+  // not only for the control protocol but also for c2s and s2c, where in
+  // general we attempt to use messages smaller than 256K.
   if (opcode == nullptr || count == nullptr) {
     EMIT_WARNING("ws_recv: passed invalid return arguments");
     return Err::invalid_argument;
