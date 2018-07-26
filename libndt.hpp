@@ -40,6 +40,7 @@
 #include <stdint.h>  // IWYU pragma: export
 
 #include <map>
+#include <mutex>
 #include <memory>
 #include <string>
 #include <vector>
@@ -419,6 +420,10 @@ class Client {
 
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
+
+  // Other helpers
+
+  std::mutex &get_mutex() noexcept;
 
   // Dependencies (system)
   // `````````````````````

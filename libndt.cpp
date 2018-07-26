@@ -33,6 +33,7 @@
 #include <mutex>
 #include <random>
 #include <sstream>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -127,32 +128,28 @@ static std::string libndt_perror(Err err) noexcept {
   return rv;
 }
 
-#define EMIT_WARNING(statements)                         \
-  do {                                                   \
-    if (impl->settings.verbosity >= verbosity_warning) { \
-      std::stringstream ss;                              \
-      ss << statements;                                  \
-      on_warning(ss.str());                              \
-    }                                                    \
+// Generic macro for emitting logs. We lock the mutex when logging because
+// some log messages are emitted by background threads. Accessing the verbosity
+// is constant and does not change, hence it is a safe thing to do. Usually
+// you probably don't want to log like crazy, hence it's probably okay to have
+// a fully mutex lock rather than an atomic access to make it faster.
+#define EMIT_LOG_EX(client, level, statements)             \
+  do {                                                     \
+    if (client->get_verbosity() >= verbosity_##level) {    \
+      std::unique_lock<std::mutex> _{client->get_mutex()}; \
+      std::stringstream ss;                                \
+      ss << statements;                                    \
+      client->on_##level(ss.str());                        \
+    }                                                      \
   } while (0)
 
-#define EMIT_INFO(statements)                         \
-  do {                                                \
-    if (impl->settings.verbosity >= verbosity_info) { \
-      std::stringstream ss;                           \
-      ss << statements;                               \
-      on_info(ss.str());                              \
-    }                                                 \
-  } while (0)
+#define EMIT_WARNING_EX(clnt, stmnts) EMIT_LOG_EX(clnt, warning, stmnts)
+#define EMIT_INFO_EX(clnt, stmnts) EMIT_LOG_EX(clnt, info, stmnts)
+#define EMIT_DEBUG_EX(clnt, stmnts) EMIT_LOG_EX(clnt, debug, stmnts)
 
-#define EMIT_DEBUG(statements)                         \
-  do {                                                 \
-    if (impl->settings.verbosity >= verbosity_debug) { \
-      std::stringstream ss;                            \
-      ss << statements;                                \
-      on_debug(ss.str());                              \
-    }                                                  \
-  } while (0)
+#define EMIT_WARNING(statements) EMIT_WARNING_EX(this, statements)
+#define EMIT_INFO(statements) EMIT_INFO_EX(this, statements)
+#define EMIT_DEBUG(statements) EMIT_DEBUG_EX(this, statements)
 
 #ifdef _WIN32
 #define OS_SHUT_RDWR SD_BOTH
@@ -168,6 +165,7 @@ class Client::Impl {
 #ifdef HAVE_OPENSSL
   std::map<Socket, SSL *> fd_to_ssl;
 #endif
+  std::mutex mutex;
 };
 
 static void random_printable_fill(char *buffer, size_t length) noexcept {
@@ -383,10 +381,20 @@ bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
     return true;
   }
   std::string mlabns_url = impl->settings.mlabns_base_url;
-  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
-    mlabns_url += "/ndt_ssl";
+  if ((impl->settings.nettest_flags & nettest_flag_download_ext) != 0) {
+    EMIT_WARNING("tweaking mlabns settings to allow for multi stream download");
+    EMIT_WARNING("we need to use the neubot sliver and to force json since");
+    EMIT_WARNING("this is the only configuration supported by neubot's sliver");
+    impl->settings.protocol_flags &= ~protocol_flag_tls;
+    impl->settings.protocol_flags &= ~protocol_flag_websockets;
+    impl->settings.protocol_flags |= protocol_flag_json;
+    mlabns_url += "/neubot";  // only botticelli implements multi stream dload
   } else {
-    mlabns_url += "/ndt";
+    if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+      mlabns_url += "/ndt_ssl";
+    } else {
+      mlabns_url += "/ndt";
+    }
   }
   if (impl->settings.mlabns_policy == mlabns_policy_random) {
     mlabns_url += "?policy=random";
@@ -617,61 +625,65 @@ bool Client::run_download() noexcept {
 
   double client_side_speed = 0.0;
   {
-    uint64_t recent_data = 0;
-    uint64_t total_data = 0;
+    std::atomic<uint64_t> active{0};
     auto begin = std::chrono::steady_clock::now();
-    auto prev = begin;
-    char buf[64000];
-    std::vector<pollfd> pfds;
-    for (auto fd : dload_socks.sockets) {
-      pollfd pfd{};
-      pfd.events = POLLIN;  // start in want-read state
-      pfd.fd = fd;
-      pfds.push_back(pfd);
+    std::atomic<uint64_t> recent_data{0};
+    std::atomic<uint64_t> total_data{0};
+    auto max_runtime = impl->settings.max_runtime;
+    for (Socket fd : dload_socks.sockets) {
+      auto main = [
+        &active,       // reference to atomic
+        begin,         // copy for safety
+        fd,            // copy for safety
+        max_runtime,   // copy for safety
+        &recent_data,  // reference to atomic
+        this,          // pointer (careful!)
+        &total_data    // reference to atomic
+      ]() noexcept {
+        active += 1;  // atomic
+        char buf[64000];
+        for (;;) {
+          // TODO(bassosimone): we can actually emit logs here but we need
+          // to be careful because that must not be unlocked. Another way of
+          // dealing with this should basically be to prevent logging from
+          // another thread but that is backwards.
+          Size n = 0;
+          auto err = netx_recv(fd, buf, sizeof(buf), &n);
+          if (err != Err::none) {
+            break;
+          }
+          recent_data += (uint64_t)n;  // atomic
+          total_data += (uint64_t)n;   // atomic
+          auto now = std::chrono::steady_clock::now();
+          std::chrono::duration<double> elapsed = now - begin;
+          if (elapsed.count() > max_runtime) {
+            break;
+          }
+        }
+        active -= 1;
+      };
+      std::thread thread{std::move(main)};
+      thread.detach();
     }
-    for (auto done = false; !done;) {
+    auto prev = begin;
+    for (;;) {
       constexpr int timeout_msec = 250;
-      auto err = netx_poll(&pfds, timeout_msec);
-      if (err != Err::none && err != Err::timed_out) {
-        EMIT_WARNING("run_download: netx_poll() failed");
-        return false;
-      }
-      for (auto fd : pfds) {
-        if (fd.revents == 0) {
-          // Implementation note: the only case in which we do not attempt to
-          // perform a recv is when _no event_ occurred. Otherwise try to recv
-          // either to get data back or possibly an error or EOF.
-          continue;
-        }
-        Size n = 0;
-        auto err = netx_recv_nonblocking(fd.fd, buf, sizeof(buf), &n);
-        if (err == Err::operation_would_block || err == Err::ssl_want_read) {
-          fd.events = POLLIN;
-        } else if (err == Err::ssl_want_write) {
-          fd.events = POLLOUT;
-        } else if (err != Err::none) {
-          EMIT_WARNING("run_download: netx_recv_nonblocking() failed: "
-                       << libndt_perror(err));
-          done = true;
-          break;
-        }
-        recent_data += (uint64_t)n;
-        total_data += (uint64_t)n;
+      std::this_thread::sleep_for(std::chrono::milliseconds(timeout_msec));
+      if (active <= 0) {
+        break;
       }
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       if (measurement_interval.count() > 0.25) {
-        on_performance(nettest_flag_download, nflows,
-                       static_cast<double>(recent_data),
-                       measurement_interval.count(), elapsed.count(),
+        on_performance(nettest_flag_download,             //
+                       active,                            // atomic
+                       static_cast<double>(recent_data),  // atomic
+                       measurement_interval.count(),      //
+                       elapsed.count(),                   //
                        impl->settings.max_runtime);
-        recent_data = 0;
+        recent_data = 0;  // atomic
         prev = now;
-      }
-      if (elapsed.count() > impl->settings.max_runtime) {
-        EMIT_WARNING("run_download: running for too much time");
-        done = true;
       }
     }
     for (auto &fd : dload_socks.sockets) {
@@ -1356,13 +1368,7 @@ again:
   }
   // Otherwise let the caller know
   if (err != Err::none) {
-    // The following is an inline expansion of EMIT_WARNING() required in
-    // this context because we are not inside a Client method.
-    if (client->get_verbosity() >= verbosity_warning) {
-      std::stringstream ss;
-      ss << opname << " failed: " << libndt_perror(err);
-      client->on_warning(ss.str());
-    }
+    EMIT_WARNING_EX(client, opname << " failed: " << libndt_perror(err));
   }
   return err;
 }
@@ -2258,6 +2264,10 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
   return false;
 #endif
 }
+
+// Other helpers
+
+std::mutex &Client::get_mutex() noexcept { return impl->mutex; }
 
 // Dependencies (libc)
 
