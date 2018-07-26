@@ -42,6 +42,7 @@
 #include <stdint.h>  // IWYU pragma: export
 
 #include <map>
+#include <mutex>
 #include <memory>
 #include <string>
 #include <vector>
@@ -436,6 +437,10 @@ class Client {
   virtual Err netx_recv(Socket fd, void *base, Size count,
                         Size *actual) noexcept;
 
+  // Like netx_recv() but with custom timeout.
+  virtual Err netx_recv_ex(Socket fd, void *base, Size count, Timeout timeout,
+                           Size *actual, bool log_eventual_error) noexcept;
+
   // Receive from the network without blocking.
   virtual Err netx_recv_nonblocking(Socket fd, void *base, Size count,
                                     Size *actual) noexcept;
@@ -446,6 +451,11 @@ class Client {
   // Send data to the network.
   virtual Err netx_send(Socket fd, const void *base, Size count,
                         Size *actual) noexcept;
+
+  // Like netx_send() but with custom timeout.
+  virtual Err netx_send_ex(Socket fd, const void *base, Size count,
+                           Timeout timeout, Size *actual,
+                           bool log_eventual_error) noexcept;
 
   // Send to the network without blocking.
   virtual Err netx_send_nonblocking(Socket fd, const void *base, Size count,
@@ -482,6 +492,10 @@ class Client {
 
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
+
+  // Other helpers
+
+  std::mutex &get_mutex() noexcept;
 
   // Dependencies (system)
   // `````````````````````

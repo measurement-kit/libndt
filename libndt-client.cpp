@@ -16,6 +16,9 @@ static void usage() {
   std::clog << "\n";
   std::clog << "Usage: libndt-client [options] [<hostname>]\n";
   std::clog << "\n";
+  std::clog << "Options can start with either a single dash (i.e. -option) or\n";
+  std::clog << "a double dash (i.e. --option). Available options:\n";
+  std::clog << "\n";
   std::clog << "  --ca-bundle-path <path> : path to OpenSSL CA bundle\n";
   std::clog << "  --download              : run download test\n";
   std::clog << "  --download-ext          : run multi-stream download test\n";
@@ -40,8 +43,8 @@ static void usage() {
 
 int main(int, char **argv) {
   libndt::Settings settings;
-  settings.verbosity = libndt::verbosity_quiet;
-  // You need to enable tests explicitly:
+  settings.verbosity = libndt::verbosity_info;
+  // You need to enable tests explicitly
   settings.nettest_flags = libndt::NettestFlags{0};
 
   {
