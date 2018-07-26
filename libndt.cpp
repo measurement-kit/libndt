@@ -240,13 +240,7 @@ static bool emit_result(Client *client, std::string scope,
       keyval.push_back(token);
     }
     if (keyval.size() != 2) {
-      // The following is an inline expansion of EMIT_WARNING() required in
-      // this context because we are not inside a Client method.
-      if (client->get_verbosity() >= verbosity_warning) {
-        std::stringstream ss;
-        ss << "incorrectly formatted summary message: " << message;
-        client->on_warning(ss.str());
-      }
+      EMIT_WARNING_EX(client, "incorrectly formatted summary message: " << message);
       return false;
     }
     client->on_result(scope, trim(std::move(keyval[0])),
