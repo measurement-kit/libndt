@@ -893,7 +893,7 @@ bool Client::run_upload() noexcept {
   return true;
 }
 
-// Low-level API
+// NDT protocol API
 
 bool Client::msg_write_login(const std::string &version) noexcept {
   static_assert(sizeof(impl->settings.nettest_flags) == 1,

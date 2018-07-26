@@ -327,7 +327,14 @@ class Client {
   virtual bool run_meta() noexcept;
   virtual bool run_upload() noexcept;
 
-  // Low-level API
+  // NDT protocol API
+  // ````````````````
+  //
+  // This API allows to send and receive NDT messages. At the bottom of the
+  // abstraction layer lie functions to send and receive NDT's binary protocol
+  // which here is called "legacy". It's called like this because it's still
+  // the original protocol, AFAIK, even though several additions were layered
+  // on top of it over the years (i.e. websocket, JSON, and TLS).
 
   bool msg_write_login(const std::string &version) noexcept;
 
