@@ -653,8 +653,13 @@ bool Client::run_download() noexcept {
           auto err = Err::none;
           Size n = 0;
           if (ws) {
-            uint8_t ignored = 0;
-            err = ws_recvmsg(fd, &ignored, (uint8_t *)buf, sizeof (buf), &n);
+            uint8_t op = 0;
+            err = ws_recvmsg(fd, &op, (uint8_t *)buf, sizeof (buf), &n);
+            if (err == Err::none && op != ws_opcode_binary) {
+              EMIT_WARNING("run_download: unexpected opcode: "
+                           << (unsigned int)op);
+              break;
+            }
           } else {
             err = netx_recv(fd, buf, sizeof(buf), &n);
           }
@@ -1157,7 +1162,11 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
         EMIT_WARNING("msg_read_legacy: message too short");
         return false;
       }
-      assert(opcode == ws_opcode_binary || opcode == ws_opcode_text);
+      if (opcode != ws_opcode_binary) {
+        EMIT_WARNING("msg_ready_legacy: unexpected opcode: "
+                     << (unsigned int)opcode);
+        return false;
+      }
       assert(ws_msg_len <= sizeof(buffer));
     } else {
       static_assert(sizeof(buffer) >= header_size,
