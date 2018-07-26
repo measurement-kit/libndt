@@ -130,9 +130,9 @@ static std::string libndt_perror(Err err) noexcept {
 
 // Generic macro for emitting logs. We lock the mutex when logging because
 // some log messages are emitted by background threads. Accessing the verbosity
-// is constant and does not change, hence it is a safe thing to do. Usually
-// you probably don't want to log like crazy, hence it's probably okay to have
-// a fully mutex lock rather than an atomic access to make it faster.
+// is constant and verbosity does not change throughout the Client lifecycle,
+// hence it is a safe thing to do. Usually you probably don't want to log like
+// crazy, hence it's probably okay to use a mutex in this macro.
 #define EMIT_LOG_EX(client, level, statements)             \
   do {                                                     \
     if (client->get_verbosity() >= verbosity_##level) {    \
