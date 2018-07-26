@@ -790,10 +790,10 @@ bool Client::run_upload() noexcept {
     Socket sock = -1;
     // We do not check for the Sec-WebSocket-Protocol header in the reply
     // because ndt-cloud does not set this header.
-    Err err =
-        netx_maybews_dial(impl->settings.hostname, port,
-                          ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept,
-                          ws_proto_c2s, &sock);
+    Err err = netx_maybews_dial(  //
+        impl->settings.hostname, port,
+        ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept, ws_proto_c2s,
+        &sock);
     if (err != Err::none) {
       return false;
     }
