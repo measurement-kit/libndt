@@ -11,11 +11,13 @@
 /// advanced usage may require you to create a subclass of `libndt::Client` and
 /// override specific virtual methods to customize the behaviour.
 ///
+/// This implementation provides the C2S and S2C NDT subtests. We implement
+/// NDT over TLS and NDT over websocket. For more information on the NDT
+/// protocol, \see https://github.com/ndt-project/ndt/wiki/NDTProtocol.
+///
 /// \remark As a general rule, what is not documented using Doxygen comments
 /// inside of this file is considered either internal or experimental. We
 /// recommend you to only use documented interfaces.
-///
-/// \see https://github.com/ndt-project/ndt/wiki/NDTProtocol.
 ///
 /// Usage example:
 ///
@@ -393,7 +395,7 @@ class Client {
   //
   // This section contains network functionality used by NDT.
 
-  // Connect to @p hostname and @p port possibly using WebSockets,
+  // Connect to @p hostname and @p port possibly using WebSocket,
   // SSL, and SOCKSv5. This depends on the Settings. See the documentation
   // of ws_handshake() for more info on @p ws_flags and @p ws_protocol.
   virtual Err netx_maybews_dial(const std::string &hostname,
@@ -401,12 +403,14 @@ class Client {
                                 std::string ws_protocol,
                                 Socket *sock) noexcept;
 
-  // Connect to @p hostname and @p port possibly using SSL and SOCKSv5.
+  // Connect to @p hostname and @p port possibly using SSL and SOCKSv5. This
+  // depends on the Settings you configured.
   virtual Err netx_maybessl_dial(const std::string &hostname,
                                  const std::string &port,
                                  Socket *sock) noexcept;
 
-  // Connect to @p hostname and @port possibly using SOCKSv5.
+  // Connect to @p hostname and @port possibly using SOCKSv5. This depends
+  // on the Settings you configured.
   virtual Err netx_maybesocks5h_dial(const std::string &hostname,
                                      const std::string &port,
                                      Socket *sock) noexcept;
@@ -547,8 +551,15 @@ class Client {
   std::unique_ptr<Impl> impl;
 };
 
+// Error codes
+// ```````````
+
 enum class Err {
   none,
+  //
+  // Error codes that map directly to errno values. Here we use the naming used
+  // by the C++ library <https://en.cppreference.com/w/cpp/error/errc>.
+  //
   broken_pipe,
   connection_aborted,
   connection_refused,
@@ -566,18 +577,31 @@ enum class Err {
   operation_would_block,
   timed_out,
   value_too_large,
-  eof,
+  //
+  // Getaddrinfo() error codes. See <http://man.openbsd.org/gai_strerror>.
+  //
   ai_generic,
   ai_again,
   ai_fail,
   ai_noname,
-  socks5h,
+  //
+  // SSL error codes. See <http://man.openbsd.org/SSL_get_error>.
+  //
   ssl_generic,
   ssl_want_read,
   ssl_want_write,
   ssl_syscall,
+  //
+  // Libndt misc error codes.
+  //
+  eof,
+  socks5h,
   ws_proto,
 };
+
+// NDT message types
+// `````````````````
+// See <https://github.com/ndt-project/ndt/wiki/NDTProtocol#message-types>.
 
 constexpr MsgType msg_comm_failure = MsgType{0};
 constexpr MsgType msg_srv_queue = MsgType{1};
@@ -592,25 +616,36 @@ constexpr MsgType msg_logout = MsgType{9};
 constexpr MsgType msg_waiting = MsgType{10};
 constexpr MsgType msg_extended_login = MsgType{11};
 
-constexpr uint8_t ws_opcode_continue = 0x00;
-constexpr uint8_t ws_opcode_text = 0x01;
-constexpr uint8_t ws_opcode_binary = 0x02;
-constexpr uint8_t ws_opcode_close = 0x08;
-constexpr uint8_t ws_opcode_ping = 0x09;
-constexpr uint8_t ws_opcode_pong = 0x0a;
+// WebSocket constants
+// ```````````````````
 
+// Opcodes. See <https://tools.ietf.org/html/rfc6455#section-11.8>.
+constexpr uint8_t ws_opcode_continue = 0;
+constexpr uint8_t ws_opcode_text = 1;
+constexpr uint8_t ws_opcode_binary = 2;
+constexpr uint8_t ws_opcode_close = 8;
+constexpr uint8_t ws_opcode_ping = 9;
+constexpr uint8_t ws_opcode_pong = 10;
+
+// Constants useful to process the first octet of a websocket frame. For more
+// info see <https://tools.ietf.org/html/rfc6455#section-5.2>.
 constexpr uint8_t ws_fin_flag = 0x80;
 constexpr uint8_t ws_reserved_mask = 0x70;
 constexpr uint8_t ws_opcode_mask = 0x0f;
 
+// Constants useful to process the second octet of a websocket frame. For more
+// info see <https://tools.ietf.org/html/rfc6455#section-5.2>.
 constexpr uint8_t ws_mask_flag = 0x80;
 constexpr uint8_t ws_len_mask = 0x7f;
 
+// Flags used to specify what HTTP headers are required and present into the
+// websocket handshake where we upgrade from HTTP/1.1 to websocket.
 constexpr uint64_t ws_f_connection = 1 << 0;
 constexpr uint64_t ws_f_sec_ws_accept = 1 << 1;
 constexpr uint64_t ws_f_sec_ws_protocol = 1 << 2;
 constexpr uint64_t ws_f_upgrade = 1 << 3;
 
+// Values of Sec-WebSocket-Protocol used by ndt-project/ndt.
 constexpr const char *ws_proto_control = "ndt";
 constexpr const char *ws_proto_c2s = "c2s";
 constexpr const char *ws_proto_s2c = "s2c";

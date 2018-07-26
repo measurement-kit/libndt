@@ -338,11 +338,9 @@ bool Client::run() noexcept {
       return false;
     }
     EMIT_INFO("received logout message");
-    // Ignore the return value of wait_close(): we already cleanly received
-    // a LOGOUT and it does not matter much the mechanics with which the whole
-    // set of protocols is shut down. We basically already have reached the
-    // final state and failing the test here is probably too strict.
-    (void)wait_close();
+    if (!wait_close()) {
+      return false;
+    }
     EMIT_INFO("connection closed");
     return true;
   }
@@ -581,57 +579,20 @@ bool Client::recv_results_and_logout() noexcept {
 }
 
 bool Client::wait_close() noexcept {
-  // TODO(bassosimone): reread NDT specification and the codebase to
-  // understand what could be the issue with this function impl.
-  // Start with shutting down the websocket channel (if any).
-  if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
-    auto err = ws_send_frame(impl->sock, ws_opcode_close, nullptr, 0);
-    if (err != Err::none) {
-      EMIT_WARNING("wait_close(): failed to send CLOSE frame");
-      return false;
-    }
-    // Read the CLOSE frame. Do not bother too much with checking whether the
-    // frame actually contains any body since we're not interested.
-    uint8_t opcode = 0;
-    bool fin = false;
-    char buf[1024];
-    Size n = 0;
-    err = ws_recv_any_frame(impl->sock, &opcode, &fin, (uint8_t *)buf,
-                            sizeof(buf), &n);
-    if (err != Err::none) {
-      EMIT_WARNING("wait_close(): failed to recv CLOSE frame");
-      return false;
-    }
-    if (opcode != ws_opcode_close) {
-      EMIT_WARNING("wait_close(): unexpected opcode: " << (unsigned int)opcode);
-      return false;
-    }
-  }
-  // Then wait for the socket to become readable: we're waiting for the
-  // server to close the connection explicitly.
+  // So, the NDT protocol specification just says: "At the end the Server MUST
+  // close the whole test session by sending an empty MSG_LOGOUT message and
+  // closing connection with the Client." The following code gives the server
+  // one second to close the connection, using netx_wait_readable(). Once that
+  // function returns, we unconditionally close the socket. This is simpler
+  // than a previous implementation in that we do not care much about the state
+  // of the socket after we netx_wait_readable() returns. I don't think here
+  // we've any "dirty shutdown" concerns, because the NDT protocol includes a
+  // logout message send from the server hence we know we're at final state.
   {
     constexpr Timeout wait_for_close = 1;
-    auto err = netx_wait_readable(impl->sock, wait_for_close);
-    if (err != Err::none) {
-      EMIT_WARNING("wait_close(): netx_wait_readable() failed");
-      return (err == Err::timed_out);
-    }
+    (void)netx_wait_readable(impl->sock, wait_for_close);
   }
-  // Once the socket is readable, make sure we really got EOF.
-  {
-    // Implementation note: here we use sys_recv() because we want to act
-    // at the networking layer rather than possibly at the SSL layer.
-    char data{};
-    Ssize n = sys_recv(impl->sock, &data, sizeof(data));
-    if (n > 0) {
-      EMIT_WARNING("wait_close(): unexpected data recv'd when waiting for EOF");
-      return false;
-    }
-    if (n != 0) {
-      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF");
-      return false;
-    }
-  }
+  (void)netx_closesocket(impl->sock);
   return true;
 }
 
@@ -1563,7 +1524,7 @@ again:
     EMIT_WARNING("ws_recv_frame: received CLOSE frame; sending CLOSE back");
     (void)ws_send_frame(sock, ws_opcode_close, nullptr, 0);
     // TODO(bassosimone): distinguish between a shutdown at the socket layer
-    // and a proper shutdown implemented at the WebSockets layer.
+    // and a proper shutdown implemented at the WebSocket layer.
     return Err::eof;
   }
   if (*opcode == ws_opcode_pong) {

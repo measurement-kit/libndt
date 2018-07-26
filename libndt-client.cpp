@@ -77,7 +77,7 @@ int main(int, char **argv) {
         std::clog << "will be verbose" << std::endl;
       } else if (flag == "websocket") {
         settings.protocol_flags |= libndt::protocol_flag_websocket;
-        std::clog << "will use WebSockets" << std::endl;
+        std::clog << "will use WebSocket" << std::endl;
       } else {
         std::clog << "fatal: unrecognized flag: " << flag << std::endl;
         usage();
