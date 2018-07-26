@@ -16,7 +16,7 @@ static void usage() {
   std::clog << "\n";
   std::clog << "Usage: libndt-client [options] [<hostname>]\n";
   std::clog << "\n";
-  std::clog << "Option can start with either a single dash (i.e. -option) or\n";
+  std::clog << "Options can start with either a single dash (i.e. -option) or\n";
   std::clog << "a double dash (i.e. --option).\n";
   std::clog << "\n";
   std::clog << "  --ca-bundle-path <path> : path to OpenSSL CA bundle\n";
