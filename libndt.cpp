@@ -588,10 +588,8 @@ bool Client::wait_close() noexcept {
   // of the socket after we netx_wait_readable() returns. I don't think here
   // we've any "dirty shutdown" concerns, because the NDT protocol includes a
   // logout message send from the server hence we know we're at final state.
-  {
-    constexpr Timeout wait_for_close = 1;
-    (void)netx_wait_readable(impl->sock, wait_for_close);
-  }
+  constexpr Timeout wait_for_close = 1;
+  (void)netx_wait_readable(impl->sock, wait_for_close);
   (void)netx_closesocket(impl->sock);
   return true;
 }
