@@ -623,8 +623,6 @@ bool Client::run_download() noexcept {
   }
   EMIT_DEBUG("run_download: got the test_start message");
 
-  // TODO(bassosimone): there needs to be a specific timeout rather than
-  // a generic otherwise this thing will eventually explode?
   double client_side_speed = 0.0;
   {
     std::atomic<uint64_t> active{0};
@@ -645,9 +643,15 @@ bool Client::run_download() noexcept {
         active += 1;  // atomic
         char buf[64000];
         for (;;) {
+          constexpr Timeout download_timeout = 3;
           Size n = 0;
-          auto err = netx_recv(fd, buf, sizeof(buf), &n);
+          auto err = netx_recv_ex(  //
+                  fd, buf, sizeof(buf), download_timeout, &n, false);
           if (err != Err::none) {
+            if (err != Err::eof) {
+              EMIT_WARNING("run_upload: netx_send_ex(): "
+                           << libndt_perror(err));
+            }
             break;
           }
           recent_data += (uint64_t)n;  // atomic
@@ -665,7 +669,7 @@ bool Client::run_download() noexcept {
     }
     auto prev = begin;
     for (;;) {
-      constexpr int timeout_msec = 250;
+      constexpr int timeout_msec = 500;
       std::this_thread::sleep_for(std::chrono::milliseconds(timeout_msec));
       if (active <= 0) {
         break;
@@ -683,9 +687,6 @@ bool Client::run_download() noexcept {
         recent_data = 0;  // atomic
         prev = now;
       }
-    }
-    for (auto &fd : dload_socks.sockets) {
-      (void)netx_shutdown_both(fd);
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -815,9 +816,15 @@ bool Client::run_upload() noexcept {
                      << elapsed.count());
         }
         for (;;) {
+          constexpr Timeout upload_timeout = 3;
           Size n = 0;
-          auto err = netx_send(fd, buf, sizeof(buf), &n);
+          auto err = netx_send_ex(  //
+                    fd, buf, sizeof(buf), upload_timeout, &n, false);
           if (err != Err::none) {
+            if (err != Err::broken_pipe) {
+              EMIT_WARNING("run_upload: netx_send_ex(): "
+                           << libndt_perror(err));
+            }
             break;
           }
           recent_data += (uint64_t)n;  // atomic
@@ -835,7 +842,7 @@ bool Client::run_upload() noexcept {
     }
     auto prev = begin;
     for (;;) {
-      constexpr int timeout_msec = 250;
+      constexpr int timeout_msec = 500;
       std::this_thread::sleep_for(std::chrono::milliseconds(timeout_msec));
       if (active <= 0) {
         break;
@@ -853,9 +860,6 @@ bool Client::run_upload() noexcept {
         recent_data = 0;  // atomic
         prev = now;
       }
-    }
-    for (auto &fd : upload_socks.sockets) {
-      (void)netx_shutdown_both(fd);
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -1876,6 +1880,11 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
+  return netx_recv_ex(fd, base, count, impl->settings.timeout, actual, true);
+}
+
+Err Client::netx_recv_ex(Socket fd, void *base, Size count, Timeout timeout,
+                         Size *actual, bool log_eventual_error) noexcept {
   auto err = Err::none;
 again:
   err = netx_recv_nonblocking(fd, base, count, actual);
@@ -1883,15 +1892,17 @@ again:
     return Err::none;
   }
   if (err == Err::operation_would_block || err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, impl->settings.timeout);
+    err = netx_wait_readable(fd, timeout);
   } else if (err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, impl->settings.timeout);
+    err = netx_wait_writeable(fd, timeout);
   }
   if (err == Err::none) {
     goto again;
   }
-  EMIT_WARNING(
-      "netx_recv: netx_recv_nonblocking() failed: " << libndt_perror(err));
+  if (log_eventual_error) {
+    EMIT_WARNING(
+        "netx_recv: netx_recv_nonblocking() failed: " << libndt_perror(err));
+  }
   return err;
 }
 
@@ -1959,6 +1970,12 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
+  return netx_send_ex(fd, base, count, impl->settings.timeout, actual, true);
+}
+
+Err Client::netx_send_ex(Socket fd, const void *base, Size count,
+                         Timeout timeout, Size *actual,
+                         bool log_eventual_error) noexcept {
   auto err = Err::none;
 again:
   err = netx_send_nonblocking(fd, base, count, actual);
@@ -1966,15 +1983,17 @@ again:
     return Err::none;
   }
   if (err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, impl->settings.timeout);
+    err = netx_wait_readable(fd, timeout);
   } else if (err == Err::operation_would_block || err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, impl->settings.timeout);
+    err = netx_wait_writeable(fd, timeout);
   }
   if (err == Err::none) {
     goto again;
   }
-  EMIT_WARNING(
-      "netx_send: netx_send_nonblocking() failed: " << libndt_perror(err));
+  if (log_eventual_error) {
+    EMIT_WARNING(
+        "netx_send: netx_send_nonblocking() failed: " << libndt_perror(err));
+  }
   return err;
 }
 

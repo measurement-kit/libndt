@@ -115,13 +115,13 @@ bool Curl::method_get(const std::string &url, long timeout,
     EMIT_WARNING(client_, "curlx: cannot set timeout");
     return false;
   }
-  EMIT_INFO(client_, "curlx: performing request");
+  EMIT_DEBUG(client_, "curlx: performing request");
   auto rv = perform();
   if (rv != CURLE_OK) {
     EMIT_WARNING(client_, "curlx: cURL failed: " << curl_easy_strerror(rv));
     return false;
   }
-  EMIT_INFO(client_, "curlx: request complete");
+  EMIT_DEBUG(client_, "curlx: request complete");
   *body = ss.str();
   return true;
 }
