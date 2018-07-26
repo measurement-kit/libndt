@@ -211,26 +211,25 @@ if(${BUILD_TESTING} AND ${LIBNDT_ENABLE_TESTS})
   if(${CURL_FOUND}) # Some tests require cURL for mlab-ns
     add_test(
       NAME simple_test
-      COMMAND libndt-client --verbose --download --upload --random
+      COMMAND libndt-client --verbose --download --upload
     )
     add_test(
       NAME json_test
-      COMMAND libndt-client --verbose --json --download --upload --random
+      COMMAND libndt-client --verbose --json --download --upload
     )
     add_test(
       NAME websocket_test
-      COMMAND libndt-client --verbose --websocket --download --upload --random
+      COMMAND libndt-client --verbose --websocket --download --upload
     )
     if(${UNIX})  # On UNIX We auto-discover the CA bundle path
       add_test(
         NAME tls_test
         COMMAND libndt-client --verbose --download --upload --tls --json
-                              --random
       )
       add_test(
         NAME modern_test  # This is how NDT should run
         COMMAND libndt-client --verbose --download --upload --tls --json
-                              --websocket --random
+                              --websocket
       )
     endif()
   endif()
