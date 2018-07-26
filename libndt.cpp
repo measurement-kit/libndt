@@ -1265,7 +1265,7 @@ Err Client::ws_recvln(Socket fd, std::string *line, size_t maxlen) noexcept {
   return Err::value_too_large;
 }
 
-Err Client::ws_handshake(Socket fd, uint64_t ws_flags,
+Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
                          std::string ws_proto) noexcept {
   std::string proto_header;
   {
@@ -1283,12 +1283,12 @@ Err Client::ws_handshake(Socket fd, uint64_t ws_flags,
     host_header << "Host: " << impl->settings.hostname;
     // Adding nonstandard port as specified in RFC6455 Sect. 4.1.
     if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
-      if (impl->settings.port != "443") {
-        host_header << ":" << impl->settings.port;
+      if (port != "443") {
+        host_header << ":" << port;
       }
     } else {
-      if (impl->settings.port != "80") {
-        host_header << ":" << impl->settings.port;
+      if (port != "80") {
+        host_header << ":" << port;
       }
     }
     Err err = Err::none;
@@ -1973,7 +1973,7 @@ Err Client::netx_maybews_dial(const std::string &hostname,
     return Err::none;
   }
   EMIT_DEBUG("netx_maybews_dial: about to start websocket handhsake");
-  err = ws_handshake(*sock, ws_flags, ws_protocol);
+  err = ws_handshake(*sock, port, ws_flags, ws_protocol);
   if (err != Err::none) {
     (void)netx_closesocket(*sock);
     *sock = (Socket)-1;

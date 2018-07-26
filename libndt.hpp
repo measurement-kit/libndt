@@ -369,7 +369,8 @@ class Client {
   // ws_flags specifies what headers to send and to expect (for more information
   // see the ws_f_xxx constants defined below). @param ws_protocol specifies
   // what protocol to specify as Sec-WebSocket-Protocol in the upgrade request.
-  virtual Err ws_handshake(Socket fd, uint64_t ws_flags,
+  // @param port is used to construct the Host header.
+  virtual Err ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
                            std::string ws_protocol) noexcept;
 
   // Send @p count bytes from @p base over @p sock as a frame whose first byte
