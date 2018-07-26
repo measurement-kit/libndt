@@ -72,6 +72,9 @@ endif()
 
 # Checks
 
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 include(CheckFunctionExists)
 include(CheckIncludeFiles)
 include(CheckSymbolExists)
@@ -180,7 +183,7 @@ if("${WIN32}" OR "${MINGW}")
     target_link_libraries(ndt -static-libgcc -static-libstdc++)
   endif()
 endif()
-target_link_libraries(ndt "${_EXTRA_LIBS}")
+target_link_libraries(ndt "${_EXTRA_LIBS}" Threads::Threads)
 
 # Testing
 # -------

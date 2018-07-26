@@ -625,12 +625,13 @@ bool Client::run_download() noexcept {
 
   double client_side_speed = 0.0;
   {
-    std::atomic<uint64_t> active{0};
+    std::atomic<uint8_t> active{0};
     auto begin = std::chrono::steady_clock::now();
     std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = impl->settings.max_runtime;
     for (Socket fd : dload_socks.sockets) {
+      active += 1;  // atomic
       auto main = [
         &active,       // reference to atomic
         begin,         // copy for safety
@@ -640,7 +641,6 @@ bool Client::run_download() noexcept {
         this,          // pointer (careful!)
         &total_data    // reference to atomic
       ]() noexcept {
-        active += 1;  // atomic
         char buf[64000];
         for (;;) {
           constexpr Timeout download_timeout = 3;
@@ -649,7 +649,7 @@ bool Client::run_download() noexcept {
                   fd, buf, sizeof(buf), download_timeout, &n, false);
           if (err != Err::none) {
             if (err != Err::eof) {
-              EMIT_WARNING("run_upload: netx_send_ex(): "
+              EMIT_WARNING("run_download: netx_recv_ex(): "
                            << libndt_perror(err));
             }
             break;
@@ -662,7 +662,7 @@ bool Client::run_download() noexcept {
             break;
           }
         }
-        active -= 1;
+        active -= 1;  // atomic
       };
       std::thread thread{std::move(main)};
       thread.detach();
@@ -790,12 +790,13 @@ bool Client::run_upload() noexcept {
 
   double client_side_speed = 0.0;
   {
-    std::atomic<uint64_t> active{0};
+    std::atomic<uint8_t> active{0};
     auto begin = std::chrono::steady_clock::now();
     std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = impl->settings.max_runtime;
     for (Socket fd : upload_socks.sockets) {
+      active += 1;  // atomic
       auto main = [
         &active,       // reference to atomic
         begin,         // copy for safety
@@ -805,7 +806,6 @@ bool Client::run_upload() noexcept {
         this,          // pointer (careful!)
         &total_data    // reference to atomic
       ]() noexcept {
-        active += 1;  // atomic
         char buf[8192];
         {
           auto begin = std::chrono::steady_clock::now();
@@ -835,7 +835,7 @@ bool Client::run_upload() noexcept {
             break;
           }
         }
-        active -= 1;
+        active -= 1;  // atomic
       };
       std::thread thread{std::move(main)};
       thread.detach();
