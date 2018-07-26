@@ -623,6 +623,8 @@ bool Client::run_download() noexcept {
   }
   EMIT_DEBUG("run_download: got the test_start message");
 
+  // TODO(bassosimone): there needs to be a specific timeout rather than
+  // a generic otherwise this thing will eventually explode?
   double client_side_speed = 0.0;
   {
     std::atomic<uint64_t> active{0};
@@ -643,10 +645,6 @@ bool Client::run_download() noexcept {
         active += 1;  // atomic
         char buf[64000];
         for (;;) {
-          // TODO(bassosimone): we can actually emit logs here but we need
-          // to be careful because that must not be unlocked. Another way of
-          // dealing with this should basically be to prevent logging from
-          // another thread but that is backwards.
           Size n = 0;
           auto err = netx_recv(fd, buf, sizeof(buf), &n);
           if (err != Err::none) {
@@ -764,14 +762,6 @@ bool Client::run_meta() noexcept {
 
 bool Client::run_upload() noexcept {
   SocketVector upload_socks{this};
-  char buf[8192];
-  {
-    auto begin = std::chrono::steady_clock::now();
-    random_printable_fill(buf, sizeof(buf));
-    auto now = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed = now - begin;
-    EMIT_DEBUG("run_upload: time to fill random buffer: " << elapsed.count());
-  }
 
   std::string port;
   uint8_t nflows = 1;
@@ -799,65 +789,69 @@ bool Client::run_upload() noexcept {
 
   double client_side_speed = 0.0;
   {
-    uint64_t recent_data = 0;
-    uint64_t total_data = 0;
+    std::atomic<uint64_t> active{0};
     auto begin = std::chrono::steady_clock::now();
-    auto prev = begin;
-    std::vector<pollfd> pfds;
-    for (auto fd : upload_socks.sockets) {
-      pollfd pfd{};
-      pfd.events = POLLOUT;  // start in want-write state
-      pfd.fd = fd;
-      pfds.push_back(pfd);
-    }
-    for (auto done = false; !done;) {
-      constexpr int timeout_msec = 250;
-      auto err = netx_poll(&pfds, timeout_msec);
-      if (err != Err::none && err != Err::timed_out) {
-        EMIT_WARNING("run_upload: netx_poll() failed");
-        return false;
-      }
-      for (auto fd : pfds) {
-        if (fd.revents == 0) {
-          // Implementation note: the only case in which we do not attempt to
-          // perform a send is when _no event_ occurred. Otherwise try to send
-          // either to get data back or possibly an error or EOF.
-          continue;
+    std::atomic<uint64_t> recent_data{0};
+    std::atomic<uint64_t> total_data{0};
+    auto max_runtime = impl->settings.max_runtime;
+    for (Socket fd : upload_socks.sockets) {
+      auto main = [
+        &active,       // reference to atomic
+        begin,         // copy for safety
+        fd,            // copy for safety
+        max_runtime,   // copy for safety
+        &recent_data,  // reference to atomic
+        this,          // pointer (careful!)
+        &total_data    // reference to atomic
+      ]() noexcept {
+        active += 1;  // atomic
+        char buf[8192];
+        {
+          auto begin = std::chrono::steady_clock::now();
+          random_printable_fill(buf, sizeof(buf));
+          auto now = std::chrono::steady_clock::now();
+          std::chrono::duration<double> elapsed = now - begin;
+          EMIT_DEBUG("run_upload: time to fill random buffer: "
+                     << elapsed.count());
         }
-        Size n = 0;
-        auto err = netx_send_nonblocking(fd.fd, buf, sizeof(buf), &n);
-        if (err == Err::ssl_want_read) {
-          fd.events = POLLIN;
-        } else if (err == Err::operation_would_block ||
-                   err == Err::ssl_want_write) {
-          fd.events = POLLOUT;
-        } else if (err != Err::none) {
-          if (err != Err::broken_pipe) {
-            EMIT_WARNING("run_upload: netx_send_nonblocking() failed: "
-                         << libndt_perror(err));
-          } else {
-            EMIT_DEBUG("run_upload: treating EPIPE as success");
+        for (;;) {
+          Size n = 0;
+          auto err = netx_send(fd, buf, sizeof(buf), &n);
+          if (err != Err::none) {
+            break;
           }
-          done = true;
-          break;
+          recent_data += (uint64_t)n;  // atomic
+          total_data += (uint64_t)n;   // atomic
+          auto now = std::chrono::steady_clock::now();
+          std::chrono::duration<double> elapsed = now - begin;
+          if (elapsed.count() > max_runtime) {
+            break;
+          }
         }
-        recent_data += (uint64_t)n;
-        total_data += (uint64_t)n;
+        active -= 1;
+      };
+      std::thread thread{std::move(main)};
+      thread.detach();
+    }
+    auto prev = begin;
+    for (;;) {
+      constexpr int timeout_msec = 250;
+      std::this_thread::sleep_for(std::chrono::milliseconds(timeout_msec));
+      if (active <= 0) {
+        break;
       }
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       if (measurement_interval.count() > 0.25) {
-        on_performance(nettest_flag_upload, nflows,
-                       static_cast<double>(recent_data),
-                       measurement_interval.count(), elapsed.count(),
+        on_performance(nettest_flag_upload,               //
+                       active,                            // atomic
+                       static_cast<double>(recent_data),  // atomic
+                       measurement_interval.count(),      //
+                       elapsed.count(),                   //
                        impl->settings.max_runtime);
-        recent_data = 0;
+        recent_data = 0;  // atomic
         prev = now;
-      }
-      if (elapsed.count() > impl->settings.max_runtime) {
-        EMIT_WARNING("run_upload: running for too much time");
-        done = true;
       }
     }
     for (auto &fd : upload_socks.sockets) {
