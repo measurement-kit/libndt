@@ -1509,7 +1509,7 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
     }
     *opcode = (uint8_t)(buf[0] & ws_opcode_mask);
     EMIT_DEBUG("ws_recv_any_frame: opcode: " << (unsigned int)*opcode);
-    switch (opcode) {
+    switch (*opcode) {
       // clang-format off
       case ws_opcode_continue:
       case ws_opcode_text:
@@ -1533,10 +1533,10 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
       return Err::invalid_argument;
     }
     length = (buf[1] & ws_len_mask);
-    switch (opcode) {
+    switch (*opcode) {
       case ws_opcode_close:
       case ws_opcode_ping:
-      case ws_opcode_ping:
+      case ws_opcode_pong:
         if (length > 125 || *fin == false) {
           EMIT_WARNING("ws_recv_any_frame: control messages MUST have a "
                        "payload length of 125 bytes or less and MUST NOT "

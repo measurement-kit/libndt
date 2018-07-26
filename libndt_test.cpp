@@ -1110,8 +1110,7 @@ TEST_CASE(
 
 TEST_CASE("Client::msg_write_login() deals with invalid protocol") {
   libndt::Settings settings;
-  // That is, more precisely, a valid but unimplemented proto
-  settings.protocol_flags = libndt::protocol_flag_websocket;
+  settings.protocol_flags = (1 << 11); // nonexisting protocol
   libndt::Client client{settings};
   REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == false);
 }
@@ -1203,8 +1202,7 @@ TEST_CASE("Client::msg_write() deals with unserializable JSON") {
 
 TEST_CASE("Client::msg_write() deals with invalid protocol") {
   libndt::Settings settings;
-  // That is, more precisely, a valid but unimplemented proto
-  settings.protocol_flags = libndt::protocol_flag_websocket;
+  settings.protocol_flags = (1 << 11); // nonexisting protocol
   libndt::Client client{settings};
   REQUIRE(client.msg_write(libndt::msg_test_start, "foo") == false);
 }
@@ -1421,16 +1419,6 @@ class OkayMsgReadLegacy : public libndt::Client {
     return true;
   }
 };
-
-TEST_CASE("Client::msg_read() deals with unknown protocol") {
-  libndt::Settings settings;
-  // That is, more precisely, a valid but unimplemented proto
-  settings.protocol_flags = libndt::protocol_flag_websocket;
-  OkayMsgReadLegacy client{settings};
-  libndt::MsgType code = libndt::MsgType{0};
-  std::string s;
-  REQUIRE(client.msg_read(&code, &s) == false);
-}
 
 // Client::msg_read_legacy() tests
 // -------------------------------
