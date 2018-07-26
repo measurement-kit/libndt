@@ -1103,23 +1103,28 @@ bool Client::msg_read(MsgType *code, std::string *msg) noexcept {
 
 bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
+  constexpr Size header_size = 3;
+  constexpr Size max_body_size = UINT16_MAX;
+  constexpr Size max_msg_size = header_size + max_body_size;
+  char buffer[max_msg_size];
   uint16_t len = 0;
   {
-    char header[3];
     {
-      auto err = netx_recvn(impl->sock, header, sizeof(header));
+      static_assert(sizeof(buffer) >= header_size,
+                    "Not enough room in buffer to read the NDT header");
+      auto err = netx_recvn(impl->sock, buffer, header_size);
       if (err != Err::none) {
-        EMIT_WARNING("msg_read_legacy: recvn() failed");
+        EMIT_WARNING("msg_read_legacy: cannot read NDT message header");
         return false;
       }
     }
-    EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)header[0]);
-    EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)header[1]);
-    EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)header[2]);
+    EMIT_DEBUG("msg_read_legacy: header[0] (type): " << (int)buffer[0]);
+    EMIT_DEBUG("msg_read_legacy: header[1] (len-high): " << (int)buffer[1]);
+    EMIT_DEBUG("msg_read_legacy: header[2] (len-low): " << (int)buffer[2]);
     static_assert(sizeof(MsgType) == sizeof(unsigned char),
                   "Unexpected MsgType size");
-    *code = MsgType{(unsigned char)header[0]};
-    memcpy(&len, &header[1], sizeof(len));
+    *code = MsgType{(unsigned char)buffer[0]};
+    memcpy(&len, &buffer[1], sizeof(len));
     len = ntohs(len);
     EMIT_DEBUG("msg_read_legacy: message length: " << len);
   }
@@ -1128,20 +1133,19 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
     *msg = "";
     return true;
   }
-  // Allocating a unique pointer and then copying into a string seems better
-  // than resizing() `msg` (because that appends zero characters to the end
-  // of it). Returning something more buffer-like than a string might be better
-  // for efficiency but NDT messages are generally small, and the performance
-  // critical path is certainly not the one with control messages.
-  std::unique_ptr<char[]> buf{new char[len]};
   {
-    auto err = netx_recvn(impl->sock, buf.get(), len);
+    assert(sizeof(buffer) >= header_size &&
+           sizeof(buffer) - header_size >= len);
+    auto err = netx_recvn(impl->sock, &buffer[header_size], len);
     if (err != Err::none) {
-      EMIT_WARNING("msg_read_legacy: recvn() failed");
+      EMIT_WARNING("msg_read_legacy: cannot read NDT message body");
       return false;
     }
   }
-  *msg = std::string{buf.get(), len};
+  // This is a stringy copy but we do not care much because the part that needs
+  // to be efficient is the one running measurements not the one where we deal
+  // with incoming and outgoing NDT control messages.
+  *msg = std::string{&buffer[header_size], len};
   EMIT_DEBUG("msg_read_legacy: raw message: " << represent(*msg));
   return true;
 }
