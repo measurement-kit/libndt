@@ -1379,7 +1379,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     return Err::none;
   }
 #ifdef HAVE_OPENSSL
-  if (impl->settings.ca_bundle_path.empty()) {
+  if (impl->settings.ca_bundle_path.empty() && impl->settings.tls_verify_peer) {
 #ifndef _WIN32
     // See <https://serverfault.com/a/722646>
     std::vector<std::string> candidates{
@@ -1415,14 +1415,16 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
       return Err::ssl_generic;
     }
     EMIT_DEBUG("SSL_CTX created");
-    if (!::SSL_CTX_load_verify_locations(  //
-            ctx, impl->settings.ca_bundle_path.c_str(), nullptr)) {
-      EMIT_WARNING("Cannot load the CA bundle path from the file system");
-      ::SSL_CTX_free(ctx);
-      netx_closesocket(*sock);
-      return Err::ssl_generic;
+    if (impl->settings.tls_verify_peer) {
+      if (!::SSL_CTX_load_verify_locations(  //
+              ctx, impl->settings.ca_bundle_path.c_str(), nullptr)) {
+        EMIT_WARNING("Cannot load the CA bundle path from the file system");
+        ::SSL_CTX_free(ctx);
+        netx_closesocket(*sock);
+        return Err::ssl_generic;
+      }
+      EMIT_DEBUG("Loaded the CA bundle path");
     }
-    EMIT_DEBUG("Loaded the CA bundle path");
     ssl = ::SSL_new(ctx);
     if (ssl == nullptr) {
       EMIT_WARNING("SSL_new() failed");
@@ -1454,7 +1456,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   ::BIO_set_data(bio, this);
   ::SSL_set_connect_state(ssl);
   EMIT_DEBUG("Socket added to SSL context");
-  {
+  if (impl->settings.tls_verify_peer) {
     // This approach for validating the hostname should work with versions
     // of OpenSSL greater than v1.0.2 and with LibreSSL. Code taken from the
     // wiki: <https://wiki.openssl.org/index.php/Hostname_validation>.

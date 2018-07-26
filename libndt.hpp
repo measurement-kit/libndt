@@ -163,9 +163,8 @@ class Settings {
   /// geo_options policy that is the most robust to random server failures.
   MlabnsPolicy mlabns_policy = mlabns_policy_geo_options;
 
-  /// Timeout used for I/O operations. \bug in v0.23.0 this timeout is only
-  /// used for cURL operations, but this will be fixed in v0.25.0.
-  Timeout timeout = Timeout{3} /* seconds */;
+  /// Timeout used for I/O operations.
+  Timeout timeout = Timeout{30} /* seconds */;
 
   /// Host name of the NDT server to use. If this is left blank (the default),
   /// we will use mlab-ns to discover a nearby server.
@@ -208,6 +207,11 @@ class Settings {
   /// set this variable and you're on Unix, we'll attempt to use some reasonable
   /// default value. Otherwise, the test will fail.
   std::string ca_bundle_path;
+
+  /// Whether to use the CA bundle and OpenSSL's builtin hostname validation to
+  /// make sure we are talking to the correct host. Enabled by default, but it
+  /// may be useful sometimes to disable it for testing purposes.
+  bool tls_verify_peer = true;
 };
 
 using MsgType = unsigned char;
