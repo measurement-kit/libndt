@@ -587,7 +587,7 @@ bool Client::wait_close() noexcept {
   // one second to close the connection, using netx_wait_readable(). Once that
   // function returns, we unconditionally close the socket. This is simpler
   // than a previous implementation in that we do not care much about the state
-  // of the socket after we netx_wait_readable() returns. I don't think here
+  // of the socket after netx_wait_readable() returns. I don't think here
   // we've any "dirty shutdown" concerns, because the NDT protocol includes a
   // logout message send from the server hence we know we're at final state.
   constexpr Timeout wait_for_close = 1;
