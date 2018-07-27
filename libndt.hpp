@@ -222,8 +222,9 @@ using MsgType = unsigned char;
 /// NDT client. In the typical usage, you just need to construct a Client,
 /// optionally providing settings, and to call the run() method. More advanced
 /// usage may require you to override methods in a subclass to customize the
-/// default behavior. E.g., you may want to customize `recv` and `send`
-/// to record when data is received and sent to the other endpoint.
+/// default behavior. For instance, you may probably want to override the
+/// on_result() method that is called when processing NDT results to either
+/// show such results to a user or store them on the disk.
 class Client {
  public:
   // Implementation note: this is the classic implementation of the pimpl
@@ -291,7 +292,11 @@ class Client {
 
   /// Called when the server is busy. The default behavior is to write a
   /// warning message. @param msg is the reason why the server is busy, encoded
-  /// according to the NDT protocol.
+  /// according to the NDT protocol. @remark when Settings::hostname is empty,
+  /// we will autodiscover one or more servers, depending on the configured
+  /// policy; in the event in which we autodiscover more than one server, we
+  /// will attempt to use each of them, hence, this method may be called more
+  /// than once if some of these servers happen to be busy.
   virtual void on_server_busy(std::string msg);
 
   /*
