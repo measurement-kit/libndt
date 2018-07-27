@@ -57,7 +57,7 @@ using Version = unsigned int;
 constexpr Version version_major = Version{0};
 
 /// Minor API version number of measurement-kit/libndt.
-constexpr Version version_minor = Version{25};
+constexpr Version version_minor = Version{26};
 
 /// Patch API version number of measurement-kit/libndt.
 constexpr Version version_patch = Version{0};
