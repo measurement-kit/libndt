@@ -1525,7 +1525,7 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
     }
     auto hasmask = (buf[1] & ws_mask_flag) != 0;
     // We do not expect to receive a masked frame. This is client code and
-    // the RFC says that a server MUST not mask its frames.
+    // the RFC says that a server MUST NOT mask its frames.
     //
     // See <https://tools.ietf.org/html/rfc6455#section-5.1>.
     if (hasmask) {
