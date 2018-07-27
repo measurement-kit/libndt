@@ -33,6 +33,7 @@ static void usage() {
   std::clog << "  --socks5h <port>        : use socks5h proxy at 127.0.0.1:<port>\n";
   std::clog << "  --upload                : run upload test\n";
   std::clog << "  --verbose               : be verbose\n";
+  std::clog << "  --version               : print the version number and exit.\n";
   std::clog << "  --websocket             : use the WebSocket protocol\n";
   std::clog << "\n";
   std::clog << "If <hostname> is omitted, we pick a nearby server, unless `--random'\n";
@@ -78,6 +79,10 @@ int main(int, char **argv) {
       } else if (flag == "verbose") {
         settings.verbosity = libndt::verbosity_debug;
         std::clog << "will be verbose" << std::endl;
+      } else if (flag == "version") {
+        std::cout << libndt::version_major << "." << libndt::version_minor
+                  << "." << libndt::version_patch << std::endl;
+        exit(EXIT_SUCCESS);
       } else if (flag == "websocket") {
         settings.protocol_flags |= libndt::protocol_flag_websocket;
         std::clog << "will use WebSocket" << std::endl;
