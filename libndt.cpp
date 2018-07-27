@@ -98,6 +98,7 @@ static std::string libndt_perror(Err err) noexcept {
     LIBNDT_PERROR(interrupted);
     LIBNDT_PERROR(invalid_argument);
     LIBNDT_PERROR(io_error);
+    LIBNDT_PERROR(message_size);
     LIBNDT_PERROR(network_down);
     LIBNDT_PERROR(network_reset);
     LIBNDT_PERROR(network_unreachable);
@@ -115,6 +116,7 @@ static std::string libndt_perror(Err err) noexcept {
     LIBNDT_PERROR(ssl_want_read);
     LIBNDT_PERROR(ssl_want_write);
     LIBNDT_PERROR(ssl_syscall);
+    LIBNDT_PERROR(ws_proto);
   }
 #undef LIBNDT_PERROR  // Tidy
   //
@@ -238,6 +240,7 @@ static bool emit_result(Client *client, std::string scope,
       keyval.push_back(token);
     }
     if (keyval.size() != 2) {
+      EMIT_WARNING_EX(client, "incorrectly formatted summary message: " << message);
       return false;
     }
     client->on_result(scope, trim(std::move(keyval[0])),
@@ -302,7 +305,6 @@ bool Client::run() noexcept {
       EMIT_WARNING("failed to receive kickoff; trying another host");
       continue;
     }
-    EMIT_INFO("received kickoff message");
     if (!wait_in_queue()) {
       EMIT_WARNING("failed to wait in queue; trying another host");
       continue;
@@ -386,7 +388,7 @@ bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
     EMIT_WARNING("we need to use the neubot sliver and to force json since");
     EMIT_WARNING("this is the only configuration supported by neubot's sliver");
     impl->settings.protocol_flags &= ~protocol_flag_tls;
-    impl->settings.protocol_flags &= ~protocol_flag_websockets;
+    impl->settings.protocol_flags &= ~protocol_flag_websocket;
     impl->settings.protocol_flags |= protocol_flag_json;
     mlabns_url += "/neubot";  // only botticelli implements multi stream dload
   } else {
@@ -452,8 +454,11 @@ bool Client::connect() noexcept {
     (void)netx_closesocket(impl->sock);
     impl->sock = (Socket)-1;
   }
-  return netx_maybessl_dial(  //
-             impl->settings.hostname, port, &impl->sock) == Err::none;
+  return netx_maybews_dial(  //
+             impl->settings.hostname, port,
+             ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
+                 ws_f_sec_ws_protocol,
+             ws_proto_control, &impl->sock) == Err::none;
 }
 
 bool Client::send_login() noexcept {
@@ -461,11 +466,13 @@ bool Client::send_login() noexcept {
 }
 
 bool Client::recv_kickoff() noexcept {
+  if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+    EMIT_INFO("no kickoff when using websocket");
+    return true;
+  }
   char buf[msg_kickoff_size];
   auto err = netx_recvn(impl->sock, buf, sizeof(buf));
   if (err != Err::none) {
-    // TODO(bassosimone): pretty print `err` not the last system error, because,
-    // when we'll use also SSL, the latter will probably be inaccurate.
     EMIT_WARNING("recv_kickoff: netx_recvn() failed");
     return false;
   }
@@ -473,6 +480,7 @@ bool Client::recv_kickoff() noexcept {
     EMIT_WARNING("recv_kickoff: invalid kickoff message");
     return false;
   }
+  EMIT_INFO("received kickoff message");
   return true;
 }
 
@@ -563,7 +571,9 @@ bool Client::recv_results_and_logout() noexcept {
       return true;
     }
     if (!emit_result(this, "summary", std::move(message))) {
-      return false;
+      // NOTHING: apparently ndt-cloud returns a free text message in this
+      // case and the warning has already been printed by emit_result(). We
+      // used to fail here but probably it's more robust just to warn.
     }
   }
   EMIT_WARNING("recv_results_and_logout: too many msg_results messages");
@@ -571,27 +581,22 @@ bool Client::recv_results_and_logout() noexcept {
 }
 
 bool Client::wait_close() noexcept {
-  constexpr Timeout wait_for_close = 1;
-  auto err = netx_wait_readable(impl->sock, wait_for_close);
-  if (err != Err::none) {
-    EMIT_WARNING("wait_close(): netx_wait_readable() failed");
-    (void)netx_shutdown_both(impl->sock);
-    return (err == Err::timed_out);
-  }
-  {
-    // Implementation note: here we use sys_recv() because we want to act
-    // at the networking layer rather than possibly at the SSL layer.
-    char data{};
-    Ssize n = sys_recv(impl->sock, &data, sizeof(data));
-    if (n > 0) {
-      EMIT_WARNING("wait_close(): unexpected data recv'd when waiting for EOF");
-      return false;
-    }
-    if (n != 0) {
-      EMIT_WARNING("wait_close(): unexpected error when waiting for EOF");
-      return false;
-    }
-  }
+  // So, the NDT protocol specification just says: "At the end the Server MUST
+  // close the whole test session by sending an empty MSG_LOGOUT message and
+  // closing connection with the Client." The following code gives the server
+  // one second to close the connection, using netx_wait_readable(). Once that
+  // function returns, we unconditionally close the socket. This is simpler
+  // than a previous implementation in that we do not care much about the state
+  // of the socket after netx_wait_readable() returns. I don't think here
+  // we've any "dirty shutdown" concerns, because the NDT protocol includes a
+  // MSG_LOGOUT sent from the server, hence we know we reached the final state.
+  //
+  // Note: after reading RFC6455, I realized why the server SHOULD close the
+  // connection rather than the client: so that the TIME_WAIT state is entered
+  // by the server, such that there is little server side impact.
+  constexpr Timeout wait_for_close = 3;
+  (void)netx_wait_readable(impl->sock, wait_for_close);
+  (void)netx_closesocket(impl->sock);
   return true;
 }
 
@@ -607,7 +612,15 @@ bool Client::run_download() noexcept {
 
   for (uint8_t i = 0; i < nflows; ++i) {
     Socket sock = -1;
-    Err err = netx_maybessl_dial(impl->settings.hostname, port, &sock);
+    // Implementation note: here connection attempts are serialized. This is
+    // consistent with <https://tools.ietf.org/html/rfc6455#section-4.1>, and
+    // namely with requirement 2: "If multiple connections to the same IP
+    // address are attempted simultaneously, the client MUST serialize them".
+    Err err = netx_maybews_dial(  //
+        impl->settings.hostname, port,
+        ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
+          | ws_f_sec_ws_protocol, ws_proto_s2c,
+        &sock);
     if (err != Err::none) {
       break;
     }
@@ -630,6 +643,7 @@ bool Client::run_download() noexcept {
     std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = impl->settings.max_runtime;
+    auto ws = (impl->settings.protocol_flags & protocol_flag_websocket) != 0;
     for (Socket fd : dload_socks.sockets) {
       active += 1;  // atomic
       auto main = [
@@ -639,18 +653,27 @@ bool Client::run_download() noexcept {
         max_runtime,   // copy for safety
         &recent_data,  // reference to atomic
         this,          // pointer (careful!)
-        &total_data    // reference to atomic
+        &total_data,   // reference to atomic
+        ws             // copy for safety
       ]() noexcept {
-        char buf[64000];
+        char buf[131072];
         for (;;) {
-          constexpr Timeout download_timeout = 3;
+          auto err = Err::none;
           Size n = 0;
-          auto err = netx_recv_ex(  //
-                  fd, buf, sizeof(buf), download_timeout, &n, false);
+          if (ws) {
+            uint8_t op = 0;
+            err = ws_recvmsg(fd, &op, (uint8_t *)buf, sizeof (buf), &n);
+            if (err == Err::none && op != ws_opcode_binary) {
+              EMIT_WARNING("run_download: unexpected opcode: "
+                           << (unsigned int)op);
+              break;
+            }
+          } else {
+            err = netx_recv(fd, buf, sizeof(buf), &n);
+          }
           if (err != Err::none) {
             if (err != Err::eof) {
-              EMIT_WARNING("run_download: netx_recv_ex(): "
-                           << libndt_perror(err));
+              EMIT_WARNING("run_download: receiving: " << libndt_perror(err));
             }
             break;
           }
@@ -727,7 +750,9 @@ bool Client::run_download() noexcept {
       return true;
     }
     if (!emit_result(this, "web100", std::move(message))) {
-      return false;
+      // NOTHING: warning already printed by emit_result() and failing the whole
+      // test - rather than warning - because of an incorrect data format is
+      // probably being too strict in this context. So just keep going.
     }
   }
 
@@ -777,7 +802,13 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = -1;
-    Err err = netx_maybessl_dial(impl->settings.hostname, port, &sock);
+    // Remark: in case we'll even implement multi-stream here, remember that
+    // websocket requires connections to be serialized. See above.
+    Err err = netx_maybews_dial(  //
+        impl->settings.hostname, port,
+        ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
+          | ws_f_sec_ws_protocol, ws_proto_c2s,
+        &sock);
     if (err != Err::none) {
       return false;
     }
@@ -795,6 +826,7 @@ bool Client::run_upload() noexcept {
     std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = impl->settings.max_runtime;
+    auto ws = (impl->settings.protocol_flags & protocol_flag_websocket) != 0;
     for (Socket fd : upload_socks.sockets) {
       active += 1;  // atomic
       auto main = [
@@ -804,9 +836,10 @@ bool Client::run_upload() noexcept {
         max_runtime,   // copy for safety
         &recent_data,  // reference to atomic
         this,          // pointer (careful!)
-        &total_data    // reference to atomic
+        &total_data,   // reference to atomic
+        ws             // copy for safety
       ]() noexcept {
-        char buf[8192];
+        char buf[131072];
         {
           auto begin = std::chrono::steady_clock::now();
           random_printable_fill(buf, sizeof(buf));
@@ -816,14 +849,20 @@ bool Client::run_upload() noexcept {
                      << elapsed.count());
         }
         for (;;) {
-          constexpr Timeout upload_timeout = 3;
           Size n = 0;
-          auto err = netx_send_ex(  //
-                    fd, buf, sizeof(buf), upload_timeout, &n, false);
+          auto err = Err::none;
+          if (ws) {
+            err = ws_send_frame(fd, ws_opcode_binary | ws_fin_flag,
+                      (uint8_t *)buf, sizeof (buf));
+            if (err == Err::none) {
+              n = sizeof (buf);
+            }
+          } else {
+            err = netx_send(fd, buf, sizeof(buf), &n);
+          }
           if (err != Err::none) {
             if (err != Err::broken_pipe) {
-              EMIT_WARNING("run_upload: netx_send_ex(): "
-                           << libndt_perror(err));
+              EMIT_WARNING("run_upload: sending: " << libndt_perror(err));
             }
             break;
           }
@@ -884,7 +923,7 @@ bool Client::run_upload() noexcept {
   return true;
 }
 
-// Low-level API
+// NDT protocol API
 
 bool Client::msg_write_login(const std::string &version) noexcept {
   static_assert(sizeof(impl->settings.nettest_flags) == 1,
@@ -926,19 +965,12 @@ bool Client::msg_write_login(const std::string &version) noexcept {
     }
   }
   assert(code != MsgType{0});
-  if ((impl->settings.protocol_flags & protocol_flag_websockets) != 0) {
-    EMIT_WARNING("msg_write_login: websockets not supported");
-    return false;
-  }
   if (!msg_write_legacy(code, std::move(serio))) {
     return false;
   }
   return true;
 }
 
-// TODO(bassosimone): when we will implement WebSockets here, it may
-// be useful to have an interface for reading/writing data and to use
-// a different implementation depending on the actual protocol.
 bool Client::msg_write(MsgType code, std::string &&msg) noexcept {
   EMIT_DEBUG("msg_write: message to send: " << represent(msg));
   if ((impl->settings.protocol_flags & protocol_flag_json) != 0) {
@@ -950,10 +982,6 @@ bool Client::msg_write(MsgType code, std::string &&msg) noexcept {
       EMIT_WARNING("msg_write: cannot serialize JSON");
       return false;
     }
-  }
-  if ((impl->settings.protocol_flags & protocol_flag_websockets) != 0) {
-    EMIT_WARNING("msg_write: websockets not supported");
-    return false;
   }
   if (!msg_write_legacy(code, std::move(msg))) {
     return false;
@@ -978,9 +1006,17 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
     EMIT_DEBUG("msg_write_legacy: header[1] (len-high): " << (int)header[1]);
     EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
     {
-      auto err = netx_sendn(impl->sock, header, sizeof(header));
+      auto err = Err::none;
+      if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+        err = ws_send_frame(
+            impl->sock,
+            ws_opcode_binary | ((msg.size() <= 0) ? ws_fin_flag : 0),
+            (uint8_t *)header, sizeof(header));
+      } else {
+        err = netx_sendn(impl->sock, header, sizeof(header));
+      }
       if (err != Err::none) {
-        EMIT_WARNING("msg_write_legacy: sendn() failed");
+        EMIT_WARNING("msg_write_legacy: cannot send NDT message header");
         return false;
       }
     }
@@ -991,9 +1027,15 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
     return true;
   }
   {
-    auto err = netx_sendn(impl->sock, msg.data(), msg.size());
+    auto err = Err::none;
+    if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+      err = ws_send_frame(impl->sock, ws_opcode_continue | ws_fin_flag,
+                          (uint8_t *)msg.data(), msg.size());
+    } else {
+      err = netx_sendn(impl->sock, msg.data(), msg.size());
+    }
     if (err != Err::none) {
-      EMIT_WARNING("msg_write_legacy: sendn() failed");
+      EMIT_WARNING("msg_write_legacy: cannot send NDT message body");
       return false;
     }
   }
@@ -1083,10 +1125,6 @@ bool Client::msg_expect(MsgType expected_code, std::string *s) noexcept {
 bool Client::msg_read(MsgType *code, std::string *msg) noexcept {
   assert(code != nullptr && msg != nullptr);
   std::string s;
-  if ((impl->settings.protocol_flags & protocol_flag_websockets) != 0) {
-    EMIT_WARNING("msg_read: websockets not supported");
-    return false;
-  }
   if (!msg_read_legacy(code, &s)) {
     return false;
   }
@@ -1118,8 +1156,29 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
   constexpr Size max_msg_size = header_size + max_body_size;
   char buffer[max_msg_size];
   uint16_t len = 0;
+  *msg = "";
   {
-    {
+    Size ws_msg_len = 0;
+    if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+      uint8_t opcode = 0;
+      auto err = ws_recvmsg(  //
+          impl->sock, &opcode, (uint8_t *)buffer, sizeof(buffer), &ws_msg_len);
+      if (err != Err::none) {
+        EMIT_WARNING(
+            "msg_read_legacy: cannot read NDT message using websocket");
+        return false;
+      }
+      if (ws_msg_len < header_size) {
+        EMIT_WARNING("msg_read_legacy: message too short");
+        return false;
+      }
+      if (opcode != ws_opcode_binary) {
+        EMIT_WARNING("msg_ready_legacy: unexpected opcode: "
+                     << (unsigned int)opcode);
+        return false;
+      }
+      assert(ws_msg_len <= sizeof(buffer));
+    } else {
       static_assert(sizeof(buffer) >= header_size,
                     "Not enough room in buffer to read the NDT header");
       auto err = netx_recvn(impl->sock, buffer, header_size);
@@ -1136,14 +1195,20 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
     *code = MsgType{(unsigned char)buffer[0]};
     memcpy(&len, &buffer[1], sizeof(len));
     len = ntohs(len);
+    if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+      assert(ws_msg_len >= header_size);  // Proper check above
+      if (len != ws_msg_len - header_size) {
+        EMIT_WARNING("msg_read_legacy: got inconsistent websocket message");
+        return false;
+      }
+    }
     EMIT_DEBUG("msg_read_legacy: message length: " << len);
   }
   if (len <= 0) {
     EMIT_DEBUG("msg_read_legacy: zero length message");
-    *msg = "";
     return true;
   }
-  {
+  if ((impl->settings.protocol_flags & protocol_flag_websocket) == 0) {
     assert(sizeof(buffer) >= header_size &&
            sizeof(buffer) - header_size >= len);
     auto err = netx_recvn(impl->sock, &buffer[header_size], len);
@@ -1159,6 +1224,528 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
   EMIT_DEBUG("msg_read_legacy: raw message: " << represent(*msg));
   return true;
 }
+
+// WebSocket
+// `````````
+// This section contains the websocket implementation. Although this has been
+// written from scratch while reading the RFC, it has beem very useful to be
+// able to see the websocket implementation in ndt-project/ndt, to have another
+// clear, simple existing implementation to compare with.
+//
+// - - - BEGIN WEBSOCKET IMPLEMENTATION - - - {
+
+Err Client::ws_sendln(Socket fd, std::string line) noexcept {
+  EMIT_DEBUG("> " << line);
+  line += "\r\n";
+  return netx_sendn(fd, line.c_str(), line.size());
+}
+
+Err Client::ws_recvln(Socket fd, std::string *line, size_t maxlen) noexcept {
+  if (line == nullptr || maxlen <= 0) {
+    return Err::invalid_argument;
+  }
+  line->reserve(maxlen);
+  line->clear();
+  while (line->size() < maxlen) {
+    char ch = {};
+    auto err = netx_recvn(fd, &ch, sizeof(ch));
+    if (err != Err::none) {
+      return err;
+    }
+    if (ch == '\r') {
+      continue;
+    }
+    if (ch == '\n') {
+      EMIT_DEBUG("< " << *line);
+      return Err::none;
+    }
+    *line += ch;
+  }
+  EMIT_WARNING("ws_recvln: line too long");
+  return Err::value_too_large;
+}
+
+Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
+                         std::string ws_proto) noexcept {
+  std::string proto_header;
+  {
+    proto_header += "Sec-WebSocket-Protocol: ";
+    proto_header += ws_proto;
+  }
+  {
+    // Implementation note: we use the default WebSocket key provided in the RFC
+    // so that we don't need to depend on OpenSSL for websocket.
+    //
+    // TODO(bassosimone): replace this with a randomly selected value that
+    // varies for each connection. Or we're not compliant.
+    constexpr auto key_header = "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==";
+    std::stringstream host_header;
+    host_header << "Host: " << impl->settings.hostname;
+    // Adding nonstandard port as specified in RFC6455 Sect. 4.1.
+    if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+      if (port != "443") {
+        host_header << ":" << port;
+      }
+    } else {
+      if (port != "80") {
+        host_header << ":" << port;
+      }
+    }
+    Err err = Err::none;
+    if ((err = ws_sendln(fd, "GET /ndt_protocol HTTP/1.1")) != Err::none ||
+        (err = ws_sendln(fd, host_header.str())) != Err::none ||
+        (err = ws_sendln(fd, "Upgrade: websocket")) != Err::none ||
+        (err = ws_sendln(fd, "Connection: Upgrade")) != Err::none ||
+        (err = ws_sendln(fd, key_header)) != Err::none ||
+        (err = ws_sendln(fd, proto_header)) != Err::none ||
+        (err = ws_sendln(fd, "Sec-WebSocket-Version: 13")) != Err::none ||
+        (err = ws_sendln(fd, "")) != Err::none) {
+      EMIT_WARNING("ws_handshake: cannot send HTTP upgrade request");
+      return err;
+    }
+  }
+  EMIT_DEBUG("ws_handshake: sent HTTP/1.1 upgrade request");
+  //
+  // Limitations of the response processing code
+  // ```````````````````````````````````````````
+  // Apart from the limitations explicitly identified with TODO messages, the
+  // algorithm to process the response has the following limitations:
+  //
+  // 1. we do not follow redirects (but we're not required to)
+  //
+  // 2. we do not fail the connection if the Sec-WebSocket-Extensions header is
+  //    part of the handshake response (it would mean that an extension we do
+  //    not support is being enforced by the server)
+  //
+  {
+    // TODO(bassosimone): use the same value used by ndt-project/ndt
+    static constexpr size_t max_line_length = 8000;
+    std::string line;
+    auto err = ws_recvln(fd, &line, max_line_length);
+    if (err != Err::none) {
+      return err;
+    }
+    // TODO(bassosimone): ignore text after 101
+    if (line != "HTTP/1.1 101 Switching Protocols") {
+      EMIT_WARNING("ws_handshake: unexpected response line");
+      return Err::ws_proto;
+    }
+    uint64_t flags = 0;
+    // TODO(bassosimone): use the same value used by ndt-project/ndt
+    constexpr size_t max_headers = 1000;
+    for (size_t i = 0; i < max_headers; ++i) {
+      // TODO(bassosimone): make header processing case insensitive.
+      auto err = ws_recvln(fd, &line, max_line_length);
+      if (err != Err::none) {
+        return err;
+      }
+      if (line == "Upgrade: websocket") {
+        flags |= ws_f_upgrade;
+      } else if (line == "Connection: Upgrade") {
+        flags |= ws_f_connection;
+      } else if (line == "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") {
+        flags |= ws_f_sec_ws_accept;
+      } else if (line == proto_header) {
+        flags |= ws_f_sec_ws_protocol;
+      } else if (line == "") {
+        if ((flags & ws_flags) != ws_flags) {
+          EMIT_WARNING("ws_handshake: received incorrect handshake");
+          return Err::ws_proto;
+        }
+        EMIT_DEBUG("ws_handshake: complete");
+        return Err::none;
+      }
+    }
+  }
+  EMIT_DEBUG("ws_handshake: got too many headers");
+  return Err::value_too_large;
+}
+
+Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
+                          Size count) noexcept {
+  // TODO(bassosimone): perhaps move the RNG into Client?
+  constexpr Size mask_size = 4;
+  uint8_t mask[mask_size] = {};
+  // "When preparing a masked frame, the client MUST pick a fresh masking
+  //  key from the set of allowed 32-bit values." [RFC6455 Sect. 5.3]. Hence
+  // we're not compliant (TODO(bassosimone)).
+  random_printable_fill((char *)mask, sizeof(mask));
+  // Message header
+  {
+    std::stringstream ss;
+    // First byte
+    {
+      // TODO(bassosimone): add sanity checks for first byte
+      ss << first_byte;
+      EMIT_DEBUG("ws_send_frame: FIN: " << std::boolalpha
+                                        << ((first_byte & ws_fin_flag) != 0));
+      EMIT_DEBUG(
+          "ws_send_frame: reserved: " << (first_byte & ws_reserved_mask));
+      EMIT_DEBUG("ws_send_frame: opcode: " << (first_byte & ws_opcode_mask));
+    }
+    // Length
+    {
+      EMIT_DEBUG("ws_send_frame: mask flag: " << std::boolalpha << true);
+      EMIT_DEBUG("ws_send_frame: length: " << count);
+      // Since this is a client implementation, we always include the MASK flag
+      // as part of the second byte that we send on the wire. Also, the spec
+      // says that we must emit the length in network byte order, which means
+      // in practice that we should use big endian.
+      //
+      // See <https://tools.ietf.org/html/rfc6455#section-5.1>, and
+      //     <https://tools.ietf.org/html/rfc6455#section-5.2>.
+#define LB(value)                                                        \
+  do {                                                                   \
+    EMIT_DEBUG("ws_send_frame: length byte: " << (unsigned int)(value)); \
+    ss << (value);                                                       \
+  } while (0)
+      if (count < 126) {
+        LB((uint8_t)((count & ws_len_mask) | ws_mask_flag));
+      } else if (count < (1 << 16)) {
+        LB((uint8_t)((126 & ws_len_mask) | ws_mask_flag));
+        LB((uint8_t)((count >> 8) & 0xff));
+        LB((uint8_t)(count & 0xff));
+      } else {
+        LB((uint8_t)((127 & ws_len_mask) | ws_mask_flag));
+        LB((uint8_t)((count >> 56) & 0xff));
+        LB((uint8_t)((count >> 48) & 0xff));
+        LB((uint8_t)((count >> 40) & 0xff));
+        LB((uint8_t)((count >> 32) & 0xff));
+        LB((uint8_t)((count >> 24) & 0xff));
+        LB((uint8_t)((count >> 16) & 0xff));
+        LB((uint8_t)((count >> 8) & 0xff));
+        LB((uint8_t)(count & 0xff));
+      }
+#undef LB  // Tidy
+    }
+    // Mask
+    {
+      for (Size i = 0; i < mask_size; ++i) {
+        EMIT_DEBUG("ws_send_frame: mask byte: " << (unsigned int)mask[i]
+                                                << " ('" << mask[i] << "')");
+        ss << (uint8_t)mask[i];
+      }
+    }
+    // Send header
+    auto header = ss.str();
+    EMIT_DEBUG("ws_send_frame: ws header: " << represent(header));
+    auto err = netx_sendn(sock, header.c_str(), header.size());
+    if (err != Err::none) {
+      EMIT_WARNING("ws_send_frame: netx_sendn() failed when sending header");
+      return err;
+    }
+  }
+  EMIT_DEBUG("ws_send_frame: header sent");
+  {
+    if (count <= 0) {
+      EMIT_DEBUG("ws_send_frame: no body provided");
+      return Err::none;
+    }
+    if (base == nullptr && count > 0) {
+      EMIT_WARNING("ws_send_frame: passed a null pointer with nonzero length");
+      return Err::invalid_argument;
+    }
+    // Debug messages printing the body are commented out because they're too
+    // much verbose. Still they may be useful for future debugging.
+    /*
+    EMIT_DEBUG("ws_send_frame: body unmasked: "
+               << represent(std::string{(char *)base, count}));
+    */
+    for (Size i = 0; i < count; ++i) {
+      base[i] ^= (uint8_t)mask[i % mask_size];
+    }
+    /*
+    EMIT_DEBUG("ws_send_frame: body masked: "
+               << represent(std::string{(char *)base, count}));
+    */
+    auto err = netx_sendn(sock, base, count);
+    if (err != Err::none) {
+      EMIT_WARNING("ws_send_frame: netx_sendn() failed when sending body");
+      return err;
+    }
+  }
+  EMIT_DEBUG("ws_send_frame: body sent");
+  return Err::none;
+}
+
+Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
+                              uint8_t *base, Size total, Size *count) noexcept {
+  if (opcode == nullptr || fin == nullptr || count == nullptr) {
+    EMIT_WARNING("ws_recv_any_frame: passed invalid return arguments");
+    return Err::invalid_argument;
+  }
+  *opcode = 0;
+  *fin = false;
+  *count = 0;
+  if (base == nullptr || total <= 0) {
+    EMIT_WARNING("ws_recv_any_frame: passed invalid buffer arguments");
+    return Err::invalid_argument;
+  }
+  // Message header
+  Size length = 0;
+  // This assert is because the code below assumes that Size is basically
+  // a uint64_t value. On 32 bit systems my understanding is that the compiler
+  // supports 64 bit integers via emulation, hence I believe there is no
+  // need to be worried about using a 64 bit integer here. My understanding
+  // is supported, e.g., by <https://stackoverflow.com/a/2692369>.
+  static_assert(sizeof(Size) == sizeof(uint64_t), "Size is not 64 bit wide");
+  {
+    uint8_t buf[2];
+    auto err = netx_recvn(sock, buf, sizeof(buf));
+    if (err != Err::none) {
+      EMIT_WARNING("ws_recv_any_frame: netx_recvn() failed for header");
+      return err;
+    }
+    EMIT_DEBUG("ws_recv_any_frame: ws header: "
+               << represent(std::string{(char *)buf, sizeof(buf)}));
+    *fin = (buf[0] & ws_fin_flag) != 0;
+    EMIT_DEBUG("ws_recv_any_frame: FIN: " << std::boolalpha << *fin);
+    uint8_t reserved = (uint8_t)(buf[0] & ws_reserved_mask);
+    if (reserved != 0) {
+      // They only make sense for extensions, which we don't use. So we return
+      // error. See <https://tools.ietf.org/html/rfc6455#section-5.2>.
+      EMIT_WARNING("ws_recv_any_frame: invalid reserved bits: " << reserved);
+      return Err::ws_proto;
+    }
+    *opcode = (uint8_t)(buf[0] & ws_opcode_mask);
+    EMIT_DEBUG("ws_recv_any_frame: opcode: " << (unsigned int)*opcode);
+    switch (*opcode) {
+      // clang-format off
+      case ws_opcode_continue:
+      case ws_opcode_text:
+      case ws_opcode_binary:
+      case ws_opcode_close:
+      case ws_opcode_ping:
+      case ws_opcode_pong: break;
+      // clang-format off
+      default:
+        // See <https://tools.ietf.org/html/rfc6455#section-5.2>.
+        EMIT_WARNING("ws_recv_any_frame: invalid opcode");
+        return Err::ws_proto;
+    }
+    auto hasmask = (buf[1] & ws_mask_flag) != 0;
+    // We do not expect to receive a masked frame. This is client code and
+    // the RFC says that a server MUST not mask its frames.
+    //
+    // See <https://tools.ietf.org/html/rfc6455#section-5.1>.
+    if (hasmask) {
+      EMIT_WARNING("ws_recv_any_frame: received masked frame");
+      return Err::invalid_argument;
+    }
+    length = (buf[1] & ws_len_mask);
+    switch (*opcode) {
+      case ws_opcode_close:
+      case ws_opcode_ping:
+      case ws_opcode_pong:
+        if (length > 125 || *fin == false) {
+          EMIT_WARNING("ws_recv_any_frame: control messages MUST have a "
+                       "payload length of 125 bytes or less and MUST NOT "
+                       "be fragmented (see RFC6455 Sect 5.5.)");
+          return Err::ws_proto;
+        }
+        break;
+    }
+    // As mentioned above, length is transmitted using big endian encoding.
+#define AL(value)                                                            \
+  do {                                                                       \
+    EMIT_DEBUG("ws_recv_any_frame: length byte: " << (unsigned int)(value)); \
+    length += (value);                                                       \
+  } while (0)
+    assert(length <= 127);  // should not happen, just in case
+    if (length == 126) {
+      uint8_t buf[2];
+      auto err = netx_recvn(sock, buf, sizeof(buf));
+      if (err != Err::none) {
+        EMIT_WARNING(
+            "ws_recv_any_frame: netx_recvn() failed for 16 bit length");
+        return err;
+      }
+      EMIT_DEBUG("ws_recv_any_frame: 16 bit length: "
+                 << represent(std::string{(char *)buf, sizeof(buf)}));
+      length = 0;  // Need to reset the length as AL() does +=
+      AL(((Size)buf[0]) << 8);
+      AL((Size)buf[1]);
+    } else if (length == 127) {
+      uint8_t buf[8];
+      auto err = netx_recvn(sock, buf, sizeof(buf));
+      if (err != Err::none) {
+        EMIT_WARNING(
+            "ws_recv_any_frame: netx_recvn() failed for 64 bit length");
+        return err;
+      }
+      EMIT_DEBUG("ws_recv_any_frame: 64 bit length: "
+                 << represent(std::string{(char *)buf, sizeof(buf)}));
+      length = 0;  // Need to reset the length as AL() does +=
+      AL(((Size)buf[0]) << 56);
+      if ((buf[0] & 0x80) != 0) {
+        // See <https://tools.ietf.org/html/rfc6455#section-5.2>: "[...] the
+        // most significant bit MUST be 0."
+        EMIT_WARNING("ws_recv_any_frame: 64 bit length: invalid first bit");
+        return Err::ws_proto;
+      }
+      AL(((Size)buf[1]) << 48);
+      AL(((Size)buf[2]) << 40);
+      AL(((Size)buf[3]) << 32);
+      AL(((Size)buf[4]) << 24);
+      AL(((Size)buf[5]) << 16);
+      AL(((Size)buf[6]) << 8);
+      AL(((Size)buf[7]));
+    }
+#undef AL  // Tidy
+    if (length > total) {
+      EMIT_WARNING("ws_recv_any_frame: buffer too small");
+      return Err::message_size;
+    }
+    EMIT_DEBUG("ws_recv_any_frame: length: " << length);
+  }
+  EMIT_DEBUG("ws_recv_any_frame: received header");
+  // Message body
+  if (length > 0) {
+    assert(length <= total);
+    auto err = netx_recvn(sock, base, length);
+    if (err != Err::none) {
+      EMIT_WARNING("ws_recv_any_frame: netx_recvn() failed for body");
+      return err;
+    }
+    // This makes the code too noisy when using -verbose. It may still be
+    // useful to remove the comment when debugging.
+    /*
+    EMIT_DEBUG("ws_recv_any_frame: received body: "
+               << represent(std::string{(char *)base, length}));
+    */
+    *count = length;
+  } else {
+    EMIT_DEBUG("ws_recv_any_frame: no body in this message");
+    assert(*count == 0);
+  }
+  return Err::none;
+}
+
+Err Client::ws_recv_frame(Socket sock, uint8_t *opcode, bool *fin,
+                          uint8_t *base, Size total, Size *count) noexcept {
+  // "Control frames (see Section 5.5) MAY be injected in the middle of
+  // a fragmented message.  Control frames themselves MUST NOT be fragmented."
+  //    -- RFC6455 Section 5.4.
+  if (opcode == nullptr || fin == nullptr || count == nullptr) {
+    EMIT_WARNING("ws_recv_frame: passed invalid return arguments");
+    return Err::invalid_argument;
+  }
+  if (base == nullptr || total <= 0) {
+    EMIT_WARNING("ws_recv_frame: passed invalid buffer arguments");
+    return Err::invalid_argument;
+  }
+  auto err = Err::none;
+again:
+  *opcode = 0;
+  *fin = false;
+  *count = 0;
+  err = ws_recv_any_frame(sock, opcode, fin, base, total, count);
+  if (err != Err::none) {
+    EMIT_WARNING("ws_recv_frame: ws_recv_any_frame() failed");
+    return err;
+  }
+  // "The application MUST NOT send any more data frames after sending a
+  // Close frame." (RFC6455 Sect. 5.5.1). We're good as long as, for example,
+  // we don't ever send a CLOSE but we just reply to CLOSE and then return
+  // with an error, which will cause the connection to be closed. Note that
+  // we MUST reply with CLOSE here (again Sect. 5.5.1).
+  if (*opcode == ws_opcode_close) {
+    EMIT_DEBUG("ws_recv_frame: received CLOSE frame; sending CLOSE back");
+    // Setting the FIN flag because control messages MUST NOT be fragmented
+    // as specified in Section 5.5 of RFC6455.
+    (void)ws_send_frame(sock, ws_opcode_close | ws_fin_flag, nullptr, 0);
+    // TODO(bassosimone): distinguish between a shutdown at the socket layer
+    // and a proper shutdown implemented at the WebSocket layer.
+    return Err::eof;
+  }
+  if (*opcode == ws_opcode_pong) {
+    // RFC6455 Sect. 5.5.3 says that we must ignore a PONG.
+    EMIT_DEBUG("ws_recv_frame: received PONG frame; continuing to read");
+    goto again;
+  }
+  if (*opcode == ws_opcode_ping) {
+    // TODO(bassosimone): in theory a malicious server could DoS us by sending
+    // a constant stream of PING frames for a long time.
+    EMIT_DEBUG("ws_recv_frame: received PING frame; PONGing back");
+    assert(*count <= total);
+    err = ws_send_frame(sock, ws_opcode_pong | ws_fin_flag, base, *count);
+    if (err != Err::none) {
+      EMIT_WARNING("ws_recv_frame: ws_send_frame() failed for PONG frame");
+      return err;
+    }
+    EMIT_DEBUG("ws_recv_frame: continuing to read after PONG");
+    goto again;
+  }
+  return Err::none;
+}
+
+Err Client::ws_recvmsg(  //
+    Socket sock, uint8_t *opcode, uint8_t *base, Size total,
+    Size *count) noexcept {
+  // General remark from RFC6455 Sect. 5.4: "[I]n absence of extensions, senders
+  // and receivers must not depend on [...] specific frame boundaries."
+  //
+  // Also: "In the absence of any extension, a receiver doesn't have to buffer
+  // the whole frame in order to process it." (Sect 5.4). However, currently
+  // this implementation does that because we know NDT messages are "smallish"
+  // not only for the control protocol but also for c2s and s2c, where in
+  // general we attempt to use messages smaller than 256K.
+  if (opcode == nullptr || count == nullptr) {
+    EMIT_WARNING("ws_recv: passed invalid return arguments");
+    return Err::invalid_argument;
+  }
+  if (base == nullptr || total <= 0) {
+    EMIT_WARNING("ws_recv: passed invalid buffer arguments");
+    return Err::invalid_argument;
+  }
+  bool fin = false;
+  *opcode = 0;
+  *count = 0;
+  auto err = ws_recv_frame(sock, opcode, &fin, base, total, count);
+  if (err != Err::none) {
+    EMIT_WARNING("ws_recv: ws_recv_frame() failed for first frame");
+    return err;
+  }
+  if (*opcode != ws_opcode_binary && *opcode != ws_opcode_text) {
+    EMIT_WARNING("ws_recv: received unexpected opcode: " << *opcode);
+    return Err::ws_proto;
+  }
+  if (fin) {
+    EMIT_DEBUG("ws_recv: the first frame is also the last frame");
+    return Err::none;
+  }
+  while (*count < total) {
+    if ((uintptr_t)base > UINTPTR_MAX - *count) {
+      EMIT_WARNING("ws_recv: avoiding pointer overflow");
+      return Err::value_too_large;
+    }
+    uint8_t op = 0;
+    Size n = 0;
+    err = ws_recv_frame(sock, &op, &fin, base + *count, total - *count, &n);
+    if (err != Err::none) {
+      EMIT_WARNING("ws_recv: ws_recv_frame() failed for continuation frame");
+      return err;
+    }
+    if (*count > SizeMax - n) {
+      EMIT_WARNING("ws_recv: avoiding integer overflow");
+      return Err::value_too_large;
+    }
+    *count += n;
+    if (op != ws_opcode_continue) {
+      EMIT_WARNING("ws_recv: received unexpected opcode: " << op);
+      return Err::ws_proto;
+    }
+    if (fin) {
+      EMIT_DEBUG("ws_recv: this is the last frame");
+      return Err::none;
+    }
+    EMIT_DEBUG("ws_recv: this is not the last frame");
+  }
+  EMIT_WARNING("ws_recv: buffer smaller than incoming message");
+  return Err::message_size;
+}
+
+// } - - - END WEBSOCKET IMPLEMENTATION - - -
 
 // Networking layer
 
@@ -1373,16 +1960,43 @@ again:
 
 #endif  // HAVE_OPENSSL
 
+Err Client::netx_maybews_dial(const std::string &hostname,
+                              const std::string &port, uint64_t ws_flags,
+                              std::string ws_protocol, Socket *sock) noexcept {
+  auto err = netx_maybessl_dial(hostname, port, sock);
+  if (err != Err::none) {
+    return err;
+  }
+  EMIT_DEBUG("netx_maybews_dial: netx_maybessl_dial() returned successfully");
+  if ((impl->settings.protocol_flags & protocol_flag_websocket) == 0) {
+    EMIT_DEBUG("netx_maybews_dial: websocket not enabled");
+    return Err::none;
+  }
+  EMIT_DEBUG("netx_maybews_dial: about to start websocket handhsake");
+  err = ws_handshake(*sock, port, ws_flags, ws_protocol);
+  if (err != Err::none) {
+    (void)netx_closesocket(*sock);
+    *sock = (Socket)-1;
+    return err;
+  }
+  EMIT_DEBUG("netx_maybews_dial: established websocket channel");
+  return Err::none;
+}
+
 Err Client::netx_maybessl_dial(const std::string &hostname,
                                const std::string &port, Socket *sock) noexcept {
   auto err = netx_maybesocks5h_dial(hostname, port, sock);
   if (err != Err::none) {
     return err;
   }
+  EMIT_DEBUG(
+      "netx_maybessl_dial: netx_maybesocks5h_dial() returned successfully");
   if ((impl->settings.protocol_flags & protocol_flag_tls) == 0) {
+    EMIT_DEBUG("netx_maybessl_dial: TLS not enabled");
     return Err::none;
   }
 #ifdef HAVE_OPENSSL
+  EMIT_DEBUG("netx_maybetls_dial: about to start TLS handshake");
   if (impl->settings.ca_bundle_path.empty() && impl->settings.tls_verify_peer) {
 #ifndef _WIN32
     // See <https://serverfault.com/a/722646>
@@ -1498,6 +2112,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
                                    const std::string &port,
                                    Socket *sock) noexcept {
   if (impl->settings.socks5h_port.empty()) {
+    EMIT_DEBUG("socks5h: not configured, connecting directly");
     return netx_dial(hostname, port, sock);
   }
   {
@@ -1880,11 +2495,6 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
                       Size *actual) noexcept {
-  return netx_recv_ex(fd, base, count, impl->settings.timeout, actual, true);
-}
-
-Err Client::netx_recv_ex(Socket fd, void *base, Size count, Timeout timeout,
-                         Size *actual, bool log_eventual_error) noexcept {
   auto err = Err::none;
 again:
   err = netx_recv_nonblocking(fd, base, count, actual);
@@ -1892,17 +2502,15 @@ again:
     return Err::none;
   }
   if (err == Err::operation_would_block || err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, timeout);
+    err = netx_wait_readable(fd, impl->settings.timeout);
   } else if (err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, timeout);
+    err = netx_wait_writeable(fd, impl->settings.timeout);
   }
   if (err == Err::none) {
     goto again;
   }
-  if (log_eventual_error) {
-    EMIT_WARNING(
-        "netx_recv: netx_recv_nonblocking() failed: " << libndt_perror(err));
-  }
+  EMIT_WARNING(
+      "netx_recv: netx_recv_nonblocking() failed: " << libndt_perror(err));
   return err;
 }
 
@@ -1970,12 +2578,6 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
                       Size *actual) noexcept {
-  return netx_send_ex(fd, base, count, impl->settings.timeout, actual, true);
-}
-
-Err Client::netx_send_ex(Socket fd, const void *base, Size count,
-                         Timeout timeout, Size *actual,
-                         bool log_eventual_error) noexcept {
   auto err = Err::none;
 again:
   err = netx_send_nonblocking(fd, base, count, actual);
@@ -1983,17 +2585,15 @@ again:
     return Err::none;
   }
   if (err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, timeout);
+    err = netx_wait_readable(fd, impl->settings.timeout);
   } else if (err == Err::operation_would_block || err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, timeout);
+    err = netx_wait_writeable(fd, impl->settings.timeout);
   }
   if (err == Err::none) {
     goto again;
   }
-  if (log_eventual_error) {
-    EMIT_WARNING(
-        "netx_send: netx_send_nonblocking() failed: " << libndt_perror(err));
-  }
+  EMIT_WARNING(
+      "netx_send: netx_send_nonblocking() failed: " << libndt_perror(err));
   return err;
 }
 

@@ -518,79 +518,6 @@ TEST_CASE("Client::recv_results_and_logout() deals with too many results") {
   REQUIRE(client.recv_results_and_logout() == false);
 }
 
-// Client::wait_close() tests
-// --------------------------
-
-class NetxSelectHardFailure : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
-    return libndt::Err::io_error;
-  }
-};
-
-TEST_CASE("Client::wait_close() deals with Client::netx_poll() hard failure") {
-  NetxSelectHardFailure client;
-  REQUIRE(client.wait_close() == false);
-}
-
-class NetxSelectTimeout : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
-    return libndt::Err::timed_out;
-  }
-};
-
-TEST_CASE("Client::wait_close() deals with Client::netx_poll() timeout") {
-  NetxSelectTimeout client;
-  REQUIRE(client.wait_close() == true /* Being tolerant */);
-}
-
-class NotEofAfterGoodNetxSelect : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  libndt::Err netx_poll(std::vector<pollfd> *pfds, int) noexcept override {
-    for (auto &fd : *pfds) {
-      fd.revents = fd.events;
-    }
-    return libndt::Err::none;
-  }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
-    return libndt::Err::io_error;
-  }
-};
-
-TEST_CASE(
-    "Client::wait_close() deals with Client::recv() failure different from "
-    "EOF") {
-  NotEofAfterGoodNetxSelect client;
-  REQUIRE(client.wait_close() == false);
-}
-
-class SuccessAfterGoodNetxSelect : public libndt::Client {
- public:
-  using libndt::Client::Client;
-  libndt::Err netx_poll(std::vector<pollfd> *pfds, int) noexcept override {
-    for (auto &fd : *pfds) {
-      fd.revents = fd.events;
-    }
-    return libndt::Err::none;
-  }
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size size,
-                        libndt::Size *tot) noexcept override {
-    *tot = size;
-    return libndt::Err::none;
-  }
-};
-
-TEST_CASE(
-    "Client::wait_close() deals with Client::recv() success (unexpected)") {
-  SuccessAfterGoodNetxSelect client;
-  REQUIRE(client.wait_close() == false);
-}
-
 // Client::run_download() tests
 // ----------------------------
 
@@ -1183,8 +1110,7 @@ TEST_CASE(
 
 TEST_CASE("Client::msg_write_login() deals with invalid protocol") {
   libndt::Settings settings;
-  // That is, more precisely, a valid but unimplemented proto
-  settings.protocol_flags = libndt::protocol_flag_websockets;
+  settings.protocol_flags = (1 << 11); // nonexisting protocol
   libndt::Client client{settings};
   REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == false);
 }
@@ -1276,8 +1202,7 @@ TEST_CASE("Client::msg_write() deals with unserializable JSON") {
 
 TEST_CASE("Client::msg_write() deals with invalid protocol") {
   libndt::Settings settings;
-  // That is, more precisely, a valid but unimplemented proto
-  settings.protocol_flags = libndt::protocol_flag_websockets;
+  settings.protocol_flags = (1 << 11); // nonexisting protocol
   libndt::Client client{settings};
   REQUIRE(client.msg_write(libndt::msg_test_start, "foo") == false);
 }
@@ -1494,16 +1419,6 @@ class OkayMsgReadLegacy : public libndt::Client {
     return true;
   }
 };
-
-TEST_CASE("Client::msg_read() deals with unknown protocol") {
-  libndt::Settings settings;
-  // That is, more precisely, a valid but unimplemented proto
-  settings.protocol_flags = libndt::protocol_flag_websockets;
-  OkayMsgReadLegacy client{settings};
-  libndt::MsgType code = libndt::MsgType{0};
-  std::string s;
-  REQUIRE(client.msg_read(&code, &s) == false);
-}
 
 // Client::msg_read_legacy() tests
 // -------------------------------

@@ -33,6 +33,7 @@ static void usage() {
   std::clog << "  --socks5h <port>        : use socks5h proxy at 127.0.0.1:<port>\n";
   std::clog << "  --upload                : run upload test\n";
   std::clog << "  --verbose               : be verbose\n";
+  std::clog << "  --websocket             : use the WebSocket protocol\n";
   std::clog << "\n";
   std::clog << "If <hostname> is omitted, we pick a nearby server, unless `--random'\n";
   std::clog << "is specified, in which case we pick a random server.\n";
@@ -43,7 +44,7 @@ static void usage() {
 int main(int, char **argv) {
   libndt::Settings settings;
   settings.verbosity = libndt::verbosity_info;
-  // you need to enable tests explicitly
+  // You need to enable tests explicitly
   settings.nettest_flags = libndt::NettestFlags{0};
 
   {
@@ -61,7 +62,7 @@ int main(int, char **argv) {
         std::clog << "will run download-ext" << std::endl;
       } else if (flag == "insecure") {
         settings.tls_verify_peer = false;
-        std::clog << "WILL NOT verify the TLS peer (<- INSECURE!)" << std::endl;
+        std::clog << "WILL NOT verify the TLS peer (INSECURE!)" << std::endl;
       } else if (flag == "json") {
         settings.protocol_flags |= libndt::protocol_flag_json;
         std::clog << "will use json" << std::endl;
@@ -77,6 +78,9 @@ int main(int, char **argv) {
       } else if (flag == "verbose") {
         settings.verbosity = libndt::verbosity_debug;
         std::clog << "will be verbose" << std::endl;
+      } else if (flag == "websocket") {
+        settings.protocol_flags |= libndt::protocol_flag_websocket;
+        std::clog << "will use WebSocket" << std::endl;
       } else {
         std::clog << "fatal: unrecognized flag: " << flag << std::endl;
         usage();
