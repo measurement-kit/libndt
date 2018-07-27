@@ -5,5 +5,5 @@ INPUT = libndt.hpp
 JAVADOC_AUTOBRIEF = YES
 PROJECT_BRIEF = "Measurement Kit NDT library"
 PROJECT_NAME = measurement-kit/libndt
-PROJECT_NUMBER = v0.26.0
+PROJECT_NUMBER = v0.25.1
 RECURSIVE = NO
