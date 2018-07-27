@@ -1985,7 +1985,13 @@ Err Client::netx_maybews_dial(const std::string &hostname,
 
 Err Client::netx_maybessl_dial(const std::string &hostname,
                                const std::string &port, Socket *sock) noexcept {
+  // Temporarily clear the TLS flag because I/O functions inside of socks5h
+  // code would otherwise fail given we've not established TLS yet. Then restore
+  // the original flags right after the socks5h code returns.
+  auto flags = impl->settings.protocol_flags;
+  impl->settings.protocol_flags &= ~protocol_flag_tls;
   auto err = netx_maybesocks5h_dial(hostname, port, sock);
+  impl->settings.protocol_flags = flags;
   if (err != Err::none) {
     return err;
   }
