@@ -30,8 +30,17 @@ git clone --recursive https://github.com/measurement-kit/libndt
 
 ## Build and test
 
+We use `cmake`. If you install `OpenSSL` library and headers, libndt will
+have support for TLS based tests. If you install `cURL` library and headers,
+libndt will perform server auto-discovery using the `mlab-ns` service.
+
+(To see the exact dependencies required on Debian, you can see the content
+of the [Dockerfile](.ci/docker/debian/Dockerfile) that we use to test
+libndt in Travis-CI.)
+
 ```
 cmake .
 cmake --build .
 ctest -a --output-on-failure .
+./libndt-client
 ```
