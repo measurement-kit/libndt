@@ -1551,7 +1551,9 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
     EMIT_DEBUG("ws_recv_any_frame: length byte: " << (unsigned int)(value)); \
     length += (value);                                                       \
   } while (0)
-    assert(length <= 127);  // should not happen, just in case
+    // The following should not happen because the lenght is over 7 bits but
+    // it's nice to enforce assertions to make assumptions explicit.
+    assert(length <= 127);
     if (length == 126) {
       uint8_t buf[2];
       auto err = netx_recvn(sock, buf, sizeof(buf));
