@@ -6,7 +6,7 @@
 https://github.com/ndt-project/ndt/wiki/NDTProtocol) (NDT) single-include
 C++11 client library.
 
-## Synopsis
+## Tutorial
 
 Make sure you download [nlohmann/json](https://github.com/nlohmann/json)
 single include header [json.hpp](
@@ -18,7 +18,8 @@ Then, download [libndt.hpp](
 https://github.com/measurement-kit/libndt/blob/master/libndt.hpp) and
 put it in the current working directory.
 
-This example runs a NDT download-only nettest with a nearby server.
+This example runs a NDT download-only nettest with a nearby server. Create
+a file named `main.cpp` with this content.
 
 ```C++
 #include "json.hpp"  // MUST be included before libndt
@@ -29,6 +30,8 @@ int main() {
   client.run();
 }
 ```
+
+Compile with `g++ -std=c++11 -Wall -Wextra -I. -o main main.cpp`.
 
 Libndt optionally depends on OpenSSL (for TLS support and in the future for
 WebSocket support) and cURL (to autodiscover servers). You can use the following
