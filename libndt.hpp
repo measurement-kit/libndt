@@ -82,14 +82,14 @@
 #include <utility>
 #include <vector>
 
-#ifdef LIBNDT_HAVE_OPENSSL
+#ifdef LIBNDT_HAVE_OPENSSL  // Define this macro to enable OpenSSL support
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 #endif
 
-#ifdef LIBNDT_HAVE_CURL
+#ifdef LIBNDT_HAVE_CURL  // Likewise but to enable cURL support
 #include <curl/curl.h>
 #endif
 
@@ -198,7 +198,8 @@ constexpr ProtocolFlags protocol_flag_websocket = ProtocolFlags{1 << 2};
 // Policy for auto-selecting a NDT server
 // ``````````````````````````````````````
 
-/// Flags modifying the behavior of mlab-ns.
+/// Flags modifying the behavior of mlab-ns. Mlab-ns is the web service used
+/// to automatically discover NDT's (and other experiments') servers.
 using MlabnsPolicy = unsigned short;
 
 /// Request just the closest NDT server.
@@ -207,7 +208,8 @@ constexpr MlabnsPolicy mlabns_policy_closest = MlabnsPolicy{0};
 /// Request for a random NDT server.
 constexpr MlabnsPolicy mlabns_policy_random = MlabnsPolicy{1};
 
-/// Return a list of nearby NDT servers.
+/// Return a list of nearby NDT servers. When more than one server is returned
+/// all the available servers will be tried in case some of them are down.
 constexpr MlabnsPolicy mlabns_policy_geo_options = MlabnsPolicy{2};
 
 // NDT message types
@@ -215,7 +217,6 @@ constexpr MlabnsPolicy mlabns_policy_geo_options = MlabnsPolicy{2};
 // See <https://github.com/ndt-project/ndt/wiki/NDTProtocol#message-types>.
 
 using MsgType = unsigned char;
-
 constexpr MsgType msg_comm_failure = MsgType{0};
 constexpr MsgType msg_srv_queue = MsgType{1};
 constexpr MsgType msg_login = MsgType{2};
@@ -276,9 +277,11 @@ class Settings {
       {"client.application", "measurement-kit/libndt"},
   };
 
-  /// Type of NDT protocol that you want to use. Depending on the requested
-  /// protocol, you may need to change also the port. By default, NDT listens
-  /// on port 3001 for in-clear communications and port 3010 for TLS ones.
+  /// Type of NDT protocol that you want to use. Selecting the protocol may
+  /// cause libndt to use different default settings for the port or for
+  /// mlab-ns. Clear text NDT uses port 3001, NDT-over-TLS uses 3010. There
+  /// will most likely be servers listening on port 443 in the future, but
+  /// they will only support the TLS+WebSocket protocol.
   ProtocolFlags protocol_flags = ProtocolFlags{0};
 
   /// Maximum time for which a nettest (i.e. download) is allowed to run. After
@@ -293,12 +296,15 @@ class Settings {
 
   /// CA bundle path to be used to verify TLS connections. If you do not
   /// set this variable and you're on Unix, we'll attempt to use some reasonable
-  /// default value. Otherwise, the test will fail.
+  /// default value. Otherwise, the test will fail (unless you set the
+  /// tls_verify_peer setting to false, indicating that you do not care about
+  /// verifying the peer -- insecure, not recommended).
   std::string ca_bundle_path;
 
   /// Whether to use the CA bundle and OpenSSL's builtin hostname validation to
   /// make sure we are talking to the correct host. Enabled by default, but it
-  /// may be useful sometimes to disable it for testing purposes.
+  /// may be useful sometimes to disable it for testing purposes. You should
+  /// not disable this option in general, since doing that is insecure.
   bool tls_verify_peer = true;
 };
 
@@ -345,9 +351,9 @@ enum class Err {
   //
   // Libndt misc error codes.
   //
-  eof,
-  socks5h,
-  ws_proto,
+  eof,       // We go an unexpected EOF
+  socks5h,   // SOCKSv5 protocol error
+  ws_proto,  // WebSocket protocol error
 };
 
 // Client
@@ -387,15 +393,18 @@ class Client {
   // .. [1] https://github.com/swig/swig/issues/526
 
   /// Called when a warning message is emitted. The default behavior is to write
-  /// the warning onto the `std::clog` standard stream.
+  /// the warning onto the `std::clog` standard stream. \warning This method
+  /// could be called from a different thread context.
   virtual void on_warning(const std::string &s);
 
   /// Called when an informational message is emitted. The default behavior is
-  /// to write the warning onto the `std::clog` standard stream.
+  /// to write the message onto the `std::clog` standard stream. \warning This method
+  /// could be called from a different thread context.
   virtual void on_info(const std::string &s);
 
   /// Called when a debug message is emitted. The default behavior is
-  /// to write the warning onto the `std::clog` standard stream.
+  /// to write the message onto the `std::clog` standard stream. \warning This method
+  /// could be called from a different thread context.
   virtual void on_debug(const std::string &s);
 
   /// Called to inform you about the measured speed. The default behavior is
@@ -409,7 +418,8 @@ class Client {
   /// the Settings. @remark By dividing @p elapsed by @p max_runtime, you can
   /// get the percentage of completion of the current nettest. @remark We
   /// provide you with @p tid, so you know whether the nettest is downloading
-  /// bytes from the server or uploading bytes to the server.
+  /// bytes from the server or uploading bytes to the server. \warning This
+  /// method could be called from another thread context.
   virtual void on_performance(NettestFlags tid, uint8_t nflows,
                               double measured_bytes,
                               double measurement_interval, double elapsed,
@@ -421,6 +431,7 @@ class Client {
   /// we're passing you TCP info variables, or "summary" when we're passing you
   /// summary variables. @param name is the name of the variable. @param value
   /// is the variable value (variables are typically int, float, or string).
+  /// \warning This method could be called from another thread context.
   virtual void on_result(std::string scope, std::string name,
                          std::string value);
 
@@ -430,7 +441,8 @@ class Client {
   /// we will autodiscover one or more servers, depending on the configured
   /// policy; in the event in which we autodiscover more than one server, we
   /// will attempt to use each of them, hence, this method may be called more
-  /// than once if some of these servers happen to be busy.
+  /// than once if some of these servers happen to be busy. \warning This
+  /// method could be called from another thread context.
   virtual void on_server_busy(std::string msg);
 
   /*
@@ -865,7 +877,6 @@ constexpr const char *ws_proto_s2c = "s2c";
 // `````````````````
 
 constexpr auto max_loops = 256;
-
 constexpr char msg_kickoff[] = "123456 654321";
 constexpr size_t msg_kickoff_size = sizeof(msg_kickoff) - 1;
 
@@ -1787,19 +1798,16 @@ bool Client::msg_write_login(const std::string &version) noexcept {
                 "nettest_flags too large");
   MsgType code = MsgType{0};
   impl->settings.nettest_flags |= nettest_flag_status | nettest_flag_meta;
-  if ((impl->settings.nettest_flags & nettest_flag_middlebox) !=
-      NettestFlags{0}) {
+  if ((impl->settings.nettest_flags & nettest_flag_middlebox) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING("msg_write_login: nettest_flag_middlebox: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_middlebox;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_simple_firewall) !=
-      NettestFlags{0}) {
+  if ((impl->settings.nettest_flags & nettest_flag_simple_firewall) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING(
         "msg_write_login: nettest_flag_simple_firewall: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_simple_firewall;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_upload_ext) !=
-      NettestFlags{0}) {
+  if ((impl->settings.nettest_flags & nettest_flag_upload_ext) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING("msg_write_login: nettest_flag_upload_ext: not implemented");
     impl->settings.nettest_flags &= ~nettest_flag_upload_ext;
   }
