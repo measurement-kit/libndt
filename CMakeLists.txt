@@ -156,14 +156,10 @@ target_link_libraries(libndt-client "${LIBNDT_LIBS}")
 
 # Testing
 # -------
-#
-# We have two different settings for testing so that we can control
-# whether to build and run tests also when we're a subrepository.
 
-set(LIBNDT_ENABLE_TESTS "TRUE" CACHE BOOL "Whether to enable tests")
 set(BUILD_TESTING "ON" CACHE BOOL "Whether to build tests")
 
-if(${BUILD_TESTING} AND ${LIBNDT_ENABLE_TESTS})
+if(${BUILD_TESTING})
   enable_testing()
   if(${CURL_FOUND})
     add_executable(tests-curl curlx_test.cpp)
