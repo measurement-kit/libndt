@@ -43,7 +43,7 @@ preprocessor macros to tell libndt that such dependencies are available:
 - `LIBNDT_HAVE_CURL`: just define to use cURL (likewise).
 
 If these dependencies are not installed in canonical locations, make sure you
-add the proper preprocessor and linker search path command line flags.
+add the pass the compiler the proper flags.
 
 See [codedocs.xyz/measurement-kit/libndt](
 https://codedocs.xyz/measurement-kit/libndt/) for API documentation;
