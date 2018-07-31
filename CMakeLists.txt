@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1.0)
-project(libndt LANGUAGES C CXX)
+project(libndt LANGUAGES CXX)
 
 # Settings
 
