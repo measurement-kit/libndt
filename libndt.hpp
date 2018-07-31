@@ -367,15 +367,20 @@ enum class Err {
 /// show such results to a user or store them on the disk.
 class Client {
  public:
-  // Implementation note: this is the classic implementation of the pimpl
-  // pattern where we use a unique pointer, constructor and destructor are
-  // defined in the ndt.cpp file so the code compiles, and copy/move
-  // constructors and operators are not defined, thus resulting deleted.
-  //
-  // See <https://herbsutter.com/gotw/_100/>.
-
   /// Constructs a Client with default settings.
   Client() noexcept;
+
+  /// Deleted copy constructor.
+  Client(const Client &) noexcept = delete;
+
+  /// Deleted copy assignment.
+  Client &operator=(const Client &) noexcept = delete;
+
+  /// Deleted move constructor.
+  Client(Client &&) noexcept = delete;
+
+  /// Deleted move assignment.
+  Client &operator=(Client &&) noexcept = delete;
 
   /// Constructs a Client with the specified @p settings.
   explicit Client(Settings settings) noexcept;
@@ -761,8 +766,25 @@ class Client {
                              socklen_t *len) noexcept;
 
  private:
-  class Impl;
-  std::unique_ptr<Impl> impl;
+  class Winsock {
+   public:
+    Winsock() noexcept;
+    Winsock(const Winsock &) = delete;
+    Winsock &operator=(const Winsock &) = delete;
+    Winsock(Winsock &&) = delete;
+    Winsock &operator=(Winsock &&) = delete;
+    ~Winsock() noexcept;
+  };
+
+  Socket sock = -1;
+  std::vector<NettestFlags> granted_suite;
+  Settings settings;
+#ifdef LIBNDT_HAVE_OPENSSL
+  std::map<Socket, SSL *> fd_to_ssl;
+#endif
+#ifdef _WIN32
+  Winsock winsock;
+#endif
 };
 
 // Implementation section
@@ -1066,17 +1088,8 @@ static bool emit_result(Client *client, std::string scope,
 //  to WSAStartup. Only the final WSACleanup function call performs
 //  the actual cleanup. The preceding calls simply decrement
 //  an internal reference count in the WS2_32.DLL."
-class Winsock {
- public:
-  Winsock() noexcept;
-  Winsock(const Winsock &) = delete;
-  Winsock &operator=(const Winsock &) = delete;
-  Winsock(Winsock &&) = delete;
-  Winsock &operator=(Winsock &&) = delete;
-  ~Winsock() noexcept;
-};
 
-Winsock::Winsock() noexcept {
+Client::Winsock::Winsock() noexcept {
   WORD requested = MAKEWORD(2, 2);
   WSADATA data;
   if (::WSAStartup(requested, &data) != 0) {
@@ -1084,25 +1097,12 @@ Winsock::Winsock() noexcept {
   }
 }
 
-Winsock::~Winsock() noexcept {
+Client::Winsock::~Winsock() noexcept {
   if (::WSACleanup() != 0) {
     abort();
   }
 }
 #endif  // _WIN32
-
-class Client::Impl {
- public:
-  Socket sock = -1;
-  std::vector<NettestFlags> granted_suite;
-  Settings settings;
-#ifdef LIBNDT_HAVE_OPENSSL
-  std::map<Socket, SSL *> fd_to_ssl;
-#endif
-#ifdef _WIN32
-  Winsock winsock;
-#endif
-};
 
 class SocketVector {
  public:
