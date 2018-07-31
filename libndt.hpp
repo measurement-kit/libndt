@@ -776,14 +776,14 @@ class Client {
     ~Winsock() noexcept;
   };
 
-  Socket sock = -1;
-  std::vector<NettestFlags> granted_suite;
-  Settings settings;
+  Socket sock_ = -1;
+  std::vector<NettestFlags> granted_suite_;
+  Settings settings_;
 #ifdef LIBNDT_HAVE_OPENSSL
-  std::map<Socket, SSL *> fd_to_ssl;
+  std::map<Socket, SSL *> fd_to_ssl_;
 #endif
 #ifdef _WIN32
-  Winsock winsock;
+  Winsock winsock_;
 #endif
 };
 
@@ -1125,15 +1125,15 @@ SocketVector::~SocketVector() noexcept {
 // Client constructor and destructor
 // `````````````````````````````````
 
-Client::Client() noexcept { impl.reset(new Client::Impl); }
+Client::Client() noexcept {}
 
 Client::Client(Settings settings) noexcept : Client::Client() {
-  std::swap(impl->settings, settings);
+  std::swap(settings_, settings);
 }
 
 Client::~Client() noexcept {
-  if (impl->sock != -1) {
-    netx_closesocket(impl->sock);
+  if (sock_ != -1) {
+    netx_closesocket(sock_);
   }
 }
 
@@ -1147,7 +1147,7 @@ bool Client::run() noexcept {
   }
   for (auto &fqdn : fqdns) {
     LIBNDT_EMIT_INFO("trying to connect to " << fqdn);
-    impl->settings.hostname = fqdn;
+    settings_.hostname = fqdn;
     if (!connect()) {
       LIBNDT_EMIT_WARNING("cannot connect to remote host; trying another one");
       continue;
@@ -1233,36 +1233,36 @@ void Client::on_server_busy(std::string msg) {
 
 bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
   assert(fqdns != nullptr);
-  if (!impl->settings.hostname.empty()) {
+  if (!settings_.hostname.empty()) {
     LIBNDT_EMIT_DEBUG("no need to query mlab-ns; we have hostname");
     // When we already know the hostname that we want to use just fake out the
     // result of a mlabns query as like mlabns returned that hostname.
-    fqdns->push_back(std::move(impl->settings.hostname));
+    fqdns->push_back(std::move(settings_.hostname));
     return true;
   }
-  std::string mlabns_url = impl->settings.mlabns_base_url;
-  if ((impl->settings.nettest_flags & nettest_flag_download_ext) != 0) {
+  std::string mlabns_url = settings_.mlabns_base_url;
+  if ((settings_.nettest_flags & nettest_flag_download_ext) != 0) {
     LIBNDT_EMIT_WARNING("tweaking mlabns settings to allow for multi stream download");
     LIBNDT_EMIT_WARNING("we need to use the neubot sliver and to force json since");
     LIBNDT_EMIT_WARNING("this is the only configuration supported by neubot's sliver");
-    impl->settings.protocol_flags &= ~protocol_flag_tls;
-    impl->settings.protocol_flags &= ~protocol_flag_websocket;
-    impl->settings.protocol_flags |= protocol_flag_json;
+    settings_.protocol_flags &= ~protocol_flag_tls;
+    settings_.protocol_flags &= ~protocol_flag_websocket;
+    settings_.protocol_flags |= protocol_flag_json;
     mlabns_url += "/neubot";  // only botticelli implements multi stream dload
   } else {
-    if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
       mlabns_url += "/ndt_ssl";
     } else {
       mlabns_url += "/ndt";
     }
   }
-  if (impl->settings.mlabns_policy == mlabns_policy_random) {
+  if (settings_.mlabns_policy == mlabns_policy_random) {
     mlabns_url += "?policy=random";
-  } else if (impl->settings.mlabns_policy == mlabns_policy_geo_options) {
+  } else if (settings_.mlabns_policy == mlabns_policy_geo_options) {
     mlabns_url += "?policy=geo_options";
   }
   std::string body;
-  if (!query_mlabns_curl(mlabns_url, impl->settings.timeout, &body)) {
+  if (!query_mlabns_curl(mlabns_url, settings_.timeout, &body)) {
     return false;
   }
   LIBNDT_EMIT_DEBUG("mlabns reply: " << body);
@@ -1297,9 +1297,9 @@ bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
 
 bool Client::connect() noexcept {
   std::string port;
-  if (!impl->settings.port.empty()) {
-    port = impl->settings.port;
-  } else if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+  if (!settings_.port.empty()) {
+    port = settings_.port;
+  } else if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     port = "3010";
   } else {
     port = "3001";
@@ -1307,16 +1307,16 @@ bool Client::connect() noexcept {
   // We may be called more than once when looping over the list returned by
   // geo_options. Therefore, the socket may already be open. In such case we
   // want to close it such that we don't leak resources.
-  if (is_socket_valid(impl->sock)) {
+  if (is_socket_valid(sock_)) {
     LIBNDT_EMIT_DEBUG("closing socket openned in previous attempt");
-    (void)netx_closesocket(impl->sock);
-    impl->sock = (Socket)-1;
+    (void)netx_closesocket(sock_);
+    sock_ = (Socket)-1;
   }
   return netx_maybews_dial(  //
-             impl->settings.hostname, port,
+             settings_.hostname, port,
              ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
                  ws_f_sec_ws_protocol,
-             ws_proto_control, &impl->sock) == Err::none;
+             ws_proto_control, &sock_) == Err::none;
 }
 
 bool Client::send_login() noexcept {
@@ -1324,12 +1324,12 @@ bool Client::send_login() noexcept {
 }
 
 bool Client::recv_kickoff() noexcept {
-  if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+  if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
     LIBNDT_EMIT_INFO("no kickoff when using websocket");
     return true;
   }
   char buf[msg_kickoff_size];
-  auto err = netx_recvn(impl->sock, buf, sizeof(buf));
+  auto err = netx_recvn(sock_, buf, sizeof(buf));
   if (err != Err::none) {
     LIBNDT_EMIT_WARNING("recv_kickoff: netx_recvn() failed");
     return false;
@@ -1383,13 +1383,13 @@ bool Client::recv_tests_ids() noexcept {
                    << cur.data() << " (error: " << errstr << ")");
       return false;
     }
-    impl->granted_suite.push_back(NettestFlags{tid});
+    granted_suite_.push_back(NettestFlags{tid});
   }
   return true;
 }
 
 bool Client::run_tests() noexcept {
-  for (auto &tid : impl->granted_suite) {
+  for (auto &tid : granted_suite_) {
     if (tid == nettest_flag_upload) {
       LIBNDT_EMIT_INFO("running upload test");
       if (!run_upload()) {
@@ -1453,8 +1453,8 @@ bool Client::wait_close() noexcept {
   // connection rather than the client: so that the TIME_WAIT state is entered
   // by the server, such that there is little server side impact.
   constexpr Timeout wait_for_close = 3;
-  (void)netx_wait_readable(impl->sock, wait_for_close);
-  (void)netx_closesocket(impl->sock);
+  (void)netx_wait_readable(sock_, wait_for_close);
+  (void)netx_closesocket(sock_);
   return true;
 }
 
@@ -1476,7 +1476,7 @@ bool Client::run_download() noexcept {
     // namely with requirement 2: "If multiple connections to the same IP
     // address are attempted simultaneously, the client MUST serialize them".
     Err err = netx_maybews_dial(  //
-        impl->settings.hostname, port,
+        settings_.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
           | ws_f_sec_ws_protocol, ws_proto_s2c,
         &sock);
@@ -1501,9 +1501,9 @@ bool Client::run_download() noexcept {
     auto begin = std::chrono::steady_clock::now();
     std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
-    auto max_runtime = impl->settings.max_runtime;
-    auto ws = (impl->settings.protocol_flags & protocol_flag_websocket) != 0;
-    const auto const_this = this;
+    auto max_runtime = settings_.max_runtime;
+    auto ws = (settings_.protocol_flags & protocol_flag_websocket) != 0;
+    const Client *const_this = this;
     for (Socket fd : dload_socks.sockets) {
       active += 1;  // atomic
       auto main = [
@@ -1568,7 +1568,7 @@ bool Client::run_download() noexcept {
                        static_cast<double>(recent_data),  // atomic
                        measurement_interval.count(),      //
                        elapsed.count(),                   //
-                       impl->settings.max_runtime);
+                       settings_.max_runtime);
         recent_data = 0;  // atomic
         prev = now;
       }
@@ -1630,7 +1630,7 @@ bool Client::run_meta() noexcept {
     return false;
   }
 
-  for (auto &kv : impl->settings.metadata) {
+  for (auto &kv : settings_.metadata) {
     std::stringstream ss;
     ss << kv.first << ":" << kv.second;
     if (!msg_write(msg_test_msg, ss.str())) {
@@ -1667,7 +1667,7 @@ bool Client::run_upload() noexcept {
     // Remark: in case we'll even implement multi-stream here, remember that
     // websocket requires connections to be serialized. See above.
     Err err = netx_maybews_dial(  //
-        impl->settings.hostname, port,
+        settings_.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
           | ws_f_sec_ws_protocol, ws_proto_c2s,
         &sock);
@@ -1687,9 +1687,9 @@ bool Client::run_upload() noexcept {
     auto begin = std::chrono::steady_clock::now();
     std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
-    auto max_runtime = impl->settings.max_runtime;
-    auto ws = (impl->settings.protocol_flags & protocol_flag_websocket) != 0;
-    const auto const_this = this;
+    auto max_runtime = settings_.max_runtime;
+    auto ws = (settings_.protocol_flags & protocol_flag_websocket) != 0;
+    const Client *const_this = this;
     for (Socket fd : upload_socks.sockets) {
       active += 1;  // atomic
       auto main = [
@@ -1759,7 +1759,7 @@ bool Client::run_upload() noexcept {
                        static_cast<double>(recent_data),  // atomic
                        measurement_interval.count(),      //
                        elapsed.count(),                   //
-                       impl->settings.max_runtime);
+                       settings_.max_runtime);
         recent_data = 0;  // atomic
         prev = now;
       }
@@ -1791,33 +1791,33 @@ bool Client::run_upload() noexcept {
 // ````````````````
 
 bool Client::msg_write_login(const std::string &version) noexcept {
-  static_assert(sizeof(impl->settings.nettest_flags) == 1,
+  static_assert(sizeof(settings_.nettest_flags) == 1,
                 "nettest_flags too large");
   MsgType code = MsgType{0};
-  impl->settings.nettest_flags |= nettest_flag_status | nettest_flag_meta;
-  if ((impl->settings.nettest_flags & nettest_flag_middlebox) != NettestFlags{0}) {
+  settings_.nettest_flags |= nettest_flag_status | nettest_flag_meta;
+  if ((settings_.nettest_flags & nettest_flag_middlebox) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING("msg_write_login: nettest_flag_middlebox: not implemented");
-    impl->settings.nettest_flags &= ~nettest_flag_middlebox;
+    settings_.nettest_flags &= ~nettest_flag_middlebox;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_simple_firewall) != NettestFlags{0}) {
+  if ((settings_.nettest_flags & nettest_flag_simple_firewall) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING(
         "msg_write_login: nettest_flag_simple_firewall: not implemented");
-    impl->settings.nettest_flags &= ~nettest_flag_simple_firewall;
+    settings_.nettest_flags &= ~nettest_flag_simple_firewall;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_upload_ext) != NettestFlags{0}) {
+  if ((settings_.nettest_flags & nettest_flag_upload_ext) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING("msg_write_login: nettest_flag_upload_ext: not implemented");
-    impl->settings.nettest_flags &= ~nettest_flag_upload_ext;
+    settings_.nettest_flags &= ~nettest_flag_upload_ext;
   }
   std::string serio;
-  if ((impl->settings.protocol_flags & protocol_flag_json) == 0) {
-    serio = std::string{(char *)&impl->settings.nettest_flags,
-                        sizeof(impl->settings.nettest_flags)};
+  if ((settings_.protocol_flags & protocol_flag_json) == 0) {
+    serio = std::string{(char *)&settings_.nettest_flags,
+                        sizeof(settings_.nettest_flags)};
     code = msg_login;
   } else {
     code = msg_extended_login;
     nlohmann::json msg{
         {"msg", version},
-        {"tests", std::to_string((unsigned)impl->settings.nettest_flags)},
+        {"tests", std::to_string((unsigned)settings_.nettest_flags)},
     };
     try {
       serio = msg.dump();
@@ -1835,7 +1835,7 @@ bool Client::msg_write_login(const std::string &version) noexcept {
 
 bool Client::msg_write(MsgType code, std::string &&msg) noexcept {
   LIBNDT_EMIT_DEBUG("msg_write: message to send: " << represent(msg));
-  if ((impl->settings.protocol_flags & protocol_flag_json) != 0) {
+  if ((settings_.protocol_flags & protocol_flag_json) != 0) {
     nlohmann::json json;
     json["msg"] = msg;
     try {
@@ -1869,13 +1869,13 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
     LIBNDT_EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
     {
       auto err = Err::none;
-      if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+      if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
         err = ws_send_frame(
-            impl->sock,
+            sock_,
             ws_opcode_binary | ((msg.size() <= 0) ? ws_fin_flag : 0),
             (uint8_t *)header, sizeof(header));
       } else {
-        err = netx_sendn(impl->sock, header, sizeof(header));
+        err = netx_sendn(sock_, header, sizeof(header));
       }
       if (err != Err::none) {
         LIBNDT_EMIT_WARNING("msg_write_legacy: cannot send NDT message header");
@@ -1890,11 +1890,11 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
   }
   {
     auto err = Err::none;
-    if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
-      err = ws_send_frame(impl->sock, ws_opcode_continue | ws_fin_flag,
+    if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
+      err = ws_send_frame(sock_, ws_opcode_continue | ws_fin_flag,
                           (uint8_t *)msg.data(), msg.size());
     } else {
-      err = netx_sendn(impl->sock, msg.data(), msg.size());
+      err = netx_sendn(sock_, msg.data(), msg.size());
     }
     if (err != Err::none) {
       LIBNDT_EMIT_WARNING("msg_write_legacy: cannot send NDT message body");
@@ -1990,7 +1990,7 @@ bool Client::msg_read(MsgType *code, std::string *msg) noexcept {
   if (!msg_read_legacy(code, &s)) {
     return false;
   }
-  if ((impl->settings.protocol_flags & protocol_flag_json) == 0) {
+  if ((settings_.protocol_flags & protocol_flag_json) == 0) {
     std::swap(s, *msg);
   } else {
     nlohmann::json json;
@@ -2021,10 +2021,10 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
   *msg = "";
   {
     Size ws_msg_len = 0;
-    if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+    if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
       uint8_t opcode = 0;
       auto err = ws_recvmsg(  //
-          impl->sock, &opcode, (uint8_t *)buffer, sizeof(buffer), &ws_msg_len);
+          sock_, &opcode, (uint8_t *)buffer, sizeof(buffer), &ws_msg_len);
       if (err != Err::none) {
         LIBNDT_EMIT_WARNING(
             "msg_read_legacy: cannot read NDT message using websocket");
@@ -2043,7 +2043,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
     } else {
       static_assert(sizeof(buffer) >= header_size,
                     "Not enough room in buffer to read the NDT header");
-      auto err = netx_recvn(impl->sock, buffer, header_size);
+      auto err = netx_recvn(sock_, buffer, header_size);
       if (err != Err::none) {
         LIBNDT_EMIT_WARNING("msg_read_legacy: cannot read NDT message header");
         return false;
@@ -2057,7 +2057,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
     *code = MsgType{(unsigned char)buffer[0]};
     memcpy(&len, &buffer[1], sizeof(len));
     len = ntohs(len);
-    if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+    if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
       assert(ws_msg_len >= header_size);  // Proper check above
       if (len != ws_msg_len - header_size) {
         LIBNDT_EMIT_WARNING("msg_read_legacy: got inconsistent websocket message");
@@ -2070,10 +2070,10 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
     LIBNDT_EMIT_DEBUG("msg_read_legacy: zero length message");
     return true;
   }
-  if ((impl->settings.protocol_flags & protocol_flag_websocket) == 0) {
+  if ((settings_.protocol_flags & protocol_flag_websocket) == 0) {
     assert(sizeof(buffer) >= header_size &&
            sizeof(buffer) - header_size >= len);
-    auto err = netx_recvn(impl->sock, &buffer[header_size], len);
+    auto err = netx_recvn(sock_, &buffer[header_size], len);
     if (err != Err::none) {
       LIBNDT_EMIT_WARNING("msg_read_legacy: cannot read NDT message body");
       return false;
@@ -2142,9 +2142,9 @@ Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
     // varies for each connection. Or we're not compliant.
     constexpr auto key_header = "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==";
     std::stringstream host_header;
-    host_header << "Host: " << impl->settings.hostname;
+    host_header << "Host: " << settings_.hostname;
     // Adding nonstandard port as specified in RFC6455 Sect. 4.1.
-    if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
       if (port != "443") {
         host_header << ":" << port;
       }
@@ -2834,7 +2834,7 @@ Err Client::netx_maybews_dial(const std::string &hostname,
     return err;
   }
   LIBNDT_EMIT_DEBUG("netx_maybews_dial: netx_maybessl_dial() returned successfully");
-  if ((impl->settings.protocol_flags & protocol_flag_websocket) == 0) {
+  if ((settings_.protocol_flags & protocol_flag_websocket) == 0) {
     LIBNDT_EMIT_DEBUG("netx_maybews_dial: websocket not enabled");
     return Err::none;
   }
@@ -2854,22 +2854,22 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   // Temporarily clear the TLS flag because I/O functions inside of socks5h
   // code would otherwise fail given we've not established TLS yet. Then restore
   // the original flags right after the socks5h code returns.
-  auto flags = impl->settings.protocol_flags;
-  impl->settings.protocol_flags &= ~protocol_flag_tls;
+  auto flags = settings_.protocol_flags;
+  settings_.protocol_flags &= ~protocol_flag_tls;
   auto err = netx_maybesocks5h_dial(hostname, port, sock);
-  impl->settings.protocol_flags = flags;
+  settings_.protocol_flags = flags;
   if (err != Err::none) {
     return err;
   }
   LIBNDT_EMIT_DEBUG(
       "netx_maybessl_dial: netx_maybesocks5h_dial() returned successfully");
-  if ((impl->settings.protocol_flags & protocol_flag_tls) == 0) {
+  if ((settings_.protocol_flags & protocol_flag_tls) == 0) {
     LIBNDT_EMIT_DEBUG("netx_maybessl_dial: TLS not enabled");
     return Err::none;
   }
 #ifdef LIBNDT_HAVE_OPENSSL
   LIBNDT_EMIT_DEBUG("netx_maybetls_dial: about to start TLS handshake");
-  if (impl->settings.ca_bundle_path.empty() && impl->settings.tls_verify_peer) {
+  if (settings_.ca_bundle_path.empty() && settings_.tls_verify_peer) {
 #ifndef _WIN32
     // See <https://serverfault.com/a/722646>
     std::vector<std::string> candidates{
@@ -2879,11 +2879,11 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     for (auto &candidate : candidates) {
       if (access(candidate.c_str(), R_OK) == 0) {
         LIBNDT_EMIT_DEBUG("Using '" << candidate.c_str() << "' as CA");
-        impl->settings.ca_bundle_path = candidate;
+        settings_.ca_bundle_path = candidate;
         break;
       }
     }
-    if (impl->settings.ca_bundle_path.empty()) {
+    if (settings_.ca_bundle_path.empty()) {
 #endif
       LIBNDT_EMIT_WARNING(
           "You did not provide me with a CA bundle path. Without this "
@@ -2905,9 +2905,9 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
       return Err::ssl_generic;
     }
     LIBNDT_EMIT_DEBUG("SSL_CTX created");
-    if (impl->settings.tls_verify_peer) {
+    if (settings_.tls_verify_peer) {
       if (!::SSL_CTX_load_verify_locations(  //
-              ctx, impl->settings.ca_bundle_path.c_str(), nullptr)) {
+              ctx, settings_.ca_bundle_path.c_str(), nullptr)) {
         LIBNDT_EMIT_WARNING("Cannot load the CA bundle path from the file system");
         ::SSL_CTX_free(ctx);
         netx_closesocket(*sock);
@@ -2924,10 +2924,10 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     }
     LIBNDT_EMIT_DEBUG("SSL created");
     ::SSL_CTX_free(ctx);  // Referenced by `ssl` so safe to free here
-    assert(impl->fd_to_ssl.count(*sock) == 0);
+    assert(fd_to_ssl_.count(*sock) == 0);
     // Implementation note: after this point `netx_closesocket(*sock)` will
     // imply that `::SSL_free(ssl)` is also called.
-    impl->fd_to_ssl[*sock] = ssl;
+    fd_to_ssl_[*sock] = ssl;
   }
   BIO *bio = ::BIO_new(libndt_bio_method());
   if (bio == nullptr) {
@@ -2946,7 +2946,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   ::BIO_set_data(bio, this);
   ::SSL_set_connect_state(ssl);
   LIBNDT_EMIT_DEBUG("Socket added to SSL context");
-  if (impl->settings.tls_verify_peer) {
+  if (settings_.tls_verify_peer) {
     // This approach for validating the hostname should work with versions
     // of OpenSSL greater than v1.0.2 and with LibreSSL. Code taken from the
     // wiki: <https://wiki.openssl.org/index.php/Hostname_validation>.
@@ -2963,7 +2963,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     LIBNDT_EMIT_DEBUG("SSL_VERIFY_PEER configured");
   }
   err = ssl_retry_unary_op("SSL_do_handshake", this, ssl, *sock,
-                           impl->settings.timeout, [](SSL *ssl) -> int {
+                           settings_.timeout, [](SSL *ssl) -> int {
                              ERR_clear_error();
                              return ::SSL_do_handshake(ssl);
                            });
@@ -2983,12 +2983,12 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
 Err Client::netx_maybesocks5h_dial(const std::string &hostname,
                                    const std::string &port,
                                    Socket *sock) noexcept {
-  if (impl->settings.socks5h_port.empty()) {
+  if (settings_.socks5h_port.empty()) {
     LIBNDT_EMIT_DEBUG("socks5h: not configured, connecting directly");
     return netx_dial(hostname, port, sock);
   }
   {
-    auto err = netx_dial("127.0.0.1", impl->settings.socks5h_port, sock);
+    auto err = netx_dial("127.0.0.1", settings_.socks5h_port, sock);
     if (err != Err::none) {
       return err;
     }
@@ -3334,7 +3334,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       }
       auto err = netx_map_errno(sys_get_last_error());
       if (CONNECT_IN_PROGRESS(err)) {
-        err = netx_wait_writeable(*sock, impl->settings.timeout);
+        err = netx_wait_writeable(*sock, settings_.timeout);
         if (err == Err::none) {
           int soerr = 0;
           socklen_t soerrlen = sizeof(soerr);
@@ -3374,9 +3374,9 @@ again:
     return Err::none;
   }
   if (err == Err::operation_would_block || err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, impl->settings.timeout);
+    err = netx_wait_readable(fd, settings_.timeout);
   } else if (err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, impl->settings.timeout);
+    err = netx_wait_writeable(fd, settings_.timeout);
   }
   if (err == Err::none) {
     goto again;
@@ -3398,14 +3398,14 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
   }
   sys_set_last_error(0);
 #ifdef LIBNDT_HAVE_OPENSSL
-  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+  if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (count > INT_MAX) {
       return Err::invalid_argument;
     }
-    if (impl->fd_to_ssl.count(fd) != 1) {
+    if (fd_to_ssl_.count(fd) != 1) {
       return Err::invalid_argument;
     }
-    auto ssl = impl->fd_to_ssl.at(fd);
+    auto ssl = fd_to_ssl_.at(fd);
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
     ERR_clear_error();
     int ret = ::SSL_read(ssl, base, count);
@@ -3457,9 +3457,9 @@ again:
     return Err::none;
   }
   if (err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, impl->settings.timeout);
+    err = netx_wait_readable(fd, settings_.timeout);
   } else if (err == Err::operation_would_block || err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, impl->settings.timeout);
+    err = netx_wait_writeable(fd, settings_.timeout);
   }
   if (err == Err::none) {
     goto again;
@@ -3481,14 +3481,14 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
   }
   sys_set_last_error(0);
 #ifdef LIBNDT_HAVE_OPENSSL
-  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+  if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (count > INT_MAX) {
       return Err::invalid_argument;
     }
-    if (impl->fd_to_ssl.count(fd) != 1) {
+    if (fd_to_ssl_.count(fd) != 1) {
       return Err::invalid_argument;
     }
-    auto ssl = impl->fd_to_ssl.at(fd);
+    auto ssl = fd_to_ssl_.at(fd);
     ERR_clear_error();
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
     int ret = ::SSL_write(ssl, base, count);
@@ -3691,13 +3691,13 @@ again:
 
 Err Client::netx_shutdown_both(Socket fd) noexcept {
 #ifdef LIBNDT_HAVE_OPENSSL
-  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
-    if (impl->fd_to_ssl.count(fd) != 1) {
+  if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
+    if (fd_to_ssl_.count(fd) != 1) {
       return Err::invalid_argument;
     }
-    auto ssl = impl->fd_to_ssl.at(fd);
+    auto ssl = fd_to_ssl_.at(fd);
     auto err = ssl_retry_unary_op(  //
-        "SSL_shutdown", this, ssl, fd, impl->settings.timeout,
+        "SSL_shutdown", this, ssl, fd, settings_.timeout,
         [](SSL *ssl) -> int {
           ERR_clear_error();
           return ::SSL_shutdown(ssl);
@@ -3715,12 +3715,12 @@ Err Client::netx_shutdown_both(Socket fd) noexcept {
 
 Err Client::netx_closesocket(Socket fd) noexcept {
 #if LIBNDT_HAVE_OPENSSL
-  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
-    if (impl->fd_to_ssl.count(fd) != 1) {
+  if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
+    if (fd_to_ssl_.count(fd) != 1) {
       return Err::invalid_argument;
     }
-    ::SSL_free(impl->fd_to_ssl.at(fd));
-    impl->fd_to_ssl.erase(fd);
+    ::SSL_free(fd_to_ssl_.at(fd));
+    fd_to_ssl_.erase(fd);
   }
 #endif
   if (sys_closesocket(fd) != 0) {
@@ -3855,7 +3855,7 @@ Client::UniqueCurl Client::curlx_easy_init() noexcept {
 bool Client::query_mlabns_curl(const std::string &url, long timeout,
                                std::string *body) noexcept {
 #ifdef LIBNDT_HAVE_CURL
-  return curlx_get_maybe_socks5(impl->settings.socks5h_port, url, timeout, body);
+  return curlx_get_maybe_socks5(settings_.socks5h_port, url, timeout, body);
 #else
   (void)url, (void)timeout, (void)body;
   LIBNDT_EMIT_WARNING("cURL not compiled in; don't know how to get server");
@@ -3867,7 +3867,7 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 // `````````````
 
 Verbosity Client::get_verbosity() const noexcept {
-  return impl->settings.verbosity;
+  return settings_.verbosity;
 }
 
 // Dependencies (libc)
