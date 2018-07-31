@@ -158,7 +158,6 @@ target_link_libraries(libndt-client "${LIBNDT_LIBS}")
 # -------
 
 set(BUILD_TESTING "ON" CACHE BOOL "Whether to build tests")
-
 if(${BUILD_TESTING})
   enable_testing()
   if(${CURL_FOUND})
