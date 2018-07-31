@@ -18,4 +18,5 @@
 /libndt.a
 /libndt.dylib
 /rules.ninja
-/tests
+/tests-curl
+/tests-libndt

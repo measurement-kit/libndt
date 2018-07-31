@@ -2,6 +2,7 @@
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
 
+#include "json.hpp"
 #include "libndt.hpp"
 
 #include <stdlib.h>
@@ -10,6 +11,8 @@
 #include <sstream>
 
 #include "argh.h"
+
+using namespace measurement_kit;
 
 static void usage() {
   // clang-format off
@@ -45,7 +48,7 @@ static void usage() {
 int main(int, char **argv) {
   libndt::Settings settings;
   settings.verbosity = libndt::verbosity_info;
-  // You need to enable tests explicitly
+  // You need to enable tests explicitly by passing command line flags.
   settings.nettest_flags = libndt::NettestFlags{0};
 
   {
@@ -57,25 +60,25 @@ int main(int, char **argv) {
     for (auto &flag : cmdline.flags()) {
       if (flag == "download") {
         settings.nettest_flags |= libndt::nettest_flag_download;
-        std::clog << "will run download" << std::endl;
+        std::clog << "will run the download sub-test" << std::endl;
       } else if (flag == "download-ext") {
         settings.nettest_flags |= libndt::nettest_flag_download_ext;
-        std::clog << "will run download-ext" << std::endl;
+        std::clog << "will run the multi-stream download sub-test" << std::endl;
       } else if (flag == "insecure") {
         settings.tls_verify_peer = false;
         std::clog << "WILL NOT verify the TLS peer (INSECURE!)" << std::endl;
       } else if (flag == "json") {
         settings.protocol_flags |= libndt::protocol_flag_json;
-        std::clog << "will use json" << std::endl;
+        std::clog << "will use the JSON-based NDT protocol" << std::endl;
       } else if (flag == "random") {
         settings.mlabns_policy = libndt::mlabns_policy_random;
-        std::clog << "will use a random server" << std::endl;
+        std::clog << "will auto-select a random server" << std::endl;
       } else if (flag == "tls") {
         settings.protocol_flags |= libndt::protocol_flag_tls;
-        std::clog << "will use TLS" << std::endl;
+        std::clog << "will secure communications using TLS" << std::endl;
       } else if (flag == "upload") {
         settings.nettest_flags |= libndt::nettest_flag_upload;
-        std::clog << "will run upload" << std::endl;
+        std::clog << "will run the upload sub-test" << std::endl;
       } else if (flag == "verbose") {
         settings.verbosity = libndt::verbosity_debug;
         std::clog << "will be verbose" << std::endl;
@@ -85,7 +88,7 @@ int main(int, char **argv) {
         exit(EXIT_SUCCESS);
       } else if (flag == "websocket") {
         settings.protocol_flags |= libndt::protocol_flag_websocket;
-        std::clog << "will use WebSocket" << std::endl;
+        std::clog << "will use the NDT-over-WebSocket protocol" << std::endl;
       } else {
         std::clog << "fatal: unrecognized flag: " << flag << std::endl;
         usage();
@@ -95,14 +98,13 @@ int main(int, char **argv) {
     for (auto &param : cmdline.params()) {
       if (param.first == "ca-bundle-path") {
         settings.ca_bundle_path = param.second;
-        std::clog << "will use CA bundle path: " << param.second << std::endl;
+        std::clog << "will use this CA bundle: " << param.second << std::endl;
       } else if (param.first == "port") {
         settings.port = param.second;
-        std::clog << "will use port: " << param.second << std::endl;
+        std::clog << "will use this port: " << param.second << std::endl;
       } else if (param.first == "socks5h") {
         settings.socks5h_port = param.second;
-        std::clog << "will use socks5h proxy at: 127.0.0.1:" << param.second
-                  << std::endl;
+        std::clog << "will use the socks5h proxy at: 127.0.0.1:" << param.second << std::endl;
       } else {
         std::clog << "fatal: unrecognized param: " << param.first << std::endl;
         usage();
@@ -116,23 +118,11 @@ int main(int, char **argv) {
     }
     if (sz == 2) {
       settings.hostname = cmdline.pos_args()[1];
-      std::clog << "will use host: " << cmdline.pos_args()[1] << std::endl;
+      std::clog << "will use this NDT server: " << cmdline.pos_args()[1] << std::endl;
     } else {
-      std::clog << "will find a suitable server" << std::endl;
+      std::clog << "will auto-select a suitable server" << std::endl;
     }
   }
-
-#ifdef _WIN32
-  {
-    WORD requested = MAKEWORD(2, 2);
-    WSADATA data;
-    if (::WSAStartup(requested, &data) != 0) {
-      std::clog << "fatal: WSAStartup() failed" << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    std::clog << "have initialized winsock v2.2." << std::endl;
-  }
-#endif
 
   libndt::Client client{settings};
   bool rv = client.run();

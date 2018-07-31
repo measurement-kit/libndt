@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1.0)
-project(libndt LANGUAGES C CXX)
+project(libndt LANGUAGES CXX)
 
 # Settings
 
@@ -13,25 +13,22 @@ endif()
 # Download header only dependencies
 
 message(STATUS "Downloading adishavit/argh")
-file(
-  DOWNLOAD https://raw.githubusercontent.com/adishavit/argh/v1.2.1/argh.h
-  "${CMAKE_CURRENT_BINARY_DIR}/argh.h" EXPECTED_HASH
-  SHA256=ca14a63ea5be5b924019b4844218142936b6f4e3ef57dfe4c81ba35a7f07004e
-  TLS_VERIFY ON SHOW_PROGRESS)
+file(DOWNLOAD https://raw.githubusercontent.com/adishavit/argh/v1.2.1/argh.h
+     "${CMAKE_CURRENT_BINARY_DIR}/argh.h" EXPECTED_HASH
+     SHA256=ca14a63ea5be5b924019b4844218142936b6f4e3ef57dfe4c81ba35a7f07004e
+     TLS_VERIFY ON SHOW_PROGRESS)
 
 message(STATUS "Downloading nlohmann/json")
-file(
-  DOWNLOAD https://raw.githubusercontent.com/nlohmann/json/v3.1.2/single_include/nlohmann/json.hpp
-  "${CMAKE_CURRENT_BINARY_DIR}/json.hpp" EXPECTED_HASH
-  SHA256=fbdfec4b4cf63b3b565d09f87e6c3c183bdd45c5be1864d3fcb338f6f02c1733
-  TLS_VERIFY ON SHOW_PROGRESS)
+file(DOWNLOAD https://raw.githubusercontent.com/nlohmann/json/v3.1.2/single_include/nlohmann/json.hpp
+     "${CMAKE_CURRENT_BINARY_DIR}/json.hpp" EXPECTED_HASH
+     SHA256=fbdfec4b4cf63b3b565d09f87e6c3c183bdd45c5be1864d3fcb338f6f02c1733
+     TLS_VERIFY ON SHOW_PROGRESS)
 
 message(STATUS "Downloading catchorg/Catch2")
-file(
-  DOWNLOAD https://github.com/catchorg/Catch2/releases/download/v2.2.2/catch.hpp
-  "${CMAKE_CURRENT_BINARY_DIR}/catch.hpp" EXPECTED_HASH
-  SHA256=e0e0d85b65ffaab0006160e2238d9761212e93182716fcc85a87863042932919
-  TLS_VERIFY ON SHOW_PROGRESS)
+file(DOWNLOAD https://github.com/catchorg/Catch2/releases/download/v2.2.2/catch.hpp
+     "${CMAKE_CURRENT_BINARY_DIR}/catch.hpp" EXPECTED_HASH
+     SHA256=e0e0d85b65ffaab0006160e2238d9761212e93182716fcc85a87863042932919
+     TLS_VERIFY ON SHOW_PROGRESS)
 
 set(LIBNDT_ENABLE_CURL "TRUE" CACHE BOOL "Whether to enable cURL")
 if("${MSVC}" AND "${LIBNDT_ENABLE_CURL}")
@@ -41,17 +38,13 @@ if("${MSVC}" AND "${LIBNDT_ENABLE_CURL}")
   set(_CURL_VERSION "7.59.0-1")
   set(_CURL_URL "${_CURL_BASEURL}/${_CURL_CHANNEL}/windows-curl-${_CURL_VERSION}.tar.gz")
   message(STATUS "Downloading precompiled cURL: ${_CURL_URL}")
-  file(
-    DOWNLOAD "${_CURL_URL}"
-    "${CMAKE_CURRENT_BINARY_DIR}/curl-prebuilt.tar.gz"
-    EXPECTED_HASH SHA256=${_CURL_HASH}
-    TLS_VERIFY ON SHOW_PROGRESS
-  )
-  execute_process(
-    COMMAND ${CMAKE_COMMAND} -E tar xf "curl-prebuilt.tar.gz"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    RESULT_VARIABLE TAR_FAILURE
-  )
+  file(DOWNLOAD "${_CURL_URL}"
+       "${CMAKE_CURRENT_BINARY_DIR}/curl-prebuilt.tar.gz"
+       EXPECTED_HASH SHA256=${_CURL_HASH}
+       TLS_VERIFY ON SHOW_PROGRESS)
+  execute_process(COMMAND ${CMAKE_COMMAND} -E tar xf "curl-prebuilt.tar.gz"
+                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                  RESULT_VARIABLE TAR_FAILURE)
   if("${TAR_FAILURE}")
     message(FATAL_ERROR "Cannot unpack cURL: ${TAR_FAILURE}")
   endif()
@@ -67,7 +60,7 @@ if("${MSVC}" AND "${LIBNDT_ENABLE_CURL}")
   message(STATUS "CMAKE_INCLUDE_PATH: ${CMAKE_INCLUDE_PATH}")
   message(STATUS "CMAKE_LIBRARY_PATH: ${CMAKE_LIBRARY_PATH}")
   add_definitions(-DCURL_STATICLIB)
-  list(APPEND _EXTRA_LIBS Crypt32)
+  list(APPEND LIBNDT_LIBS Crypt32)
 endif()
 
 # Checks
@@ -79,31 +72,31 @@ include(CheckFunctionExists)
 include(CheckIncludeFiles)
 include(CheckSymbolExists)
 
-check_function_exists(strtonum HAVE_STRTONUM)
-if(${HAVE_STRTONUM})
-  add_definitions(-DHAVE_STRTONUM)
+check_function_exists(strtonum LIBNDT_HAVE_STRTONUM)
+if(${LIBNDT_HAVE_STRTONUM})
+  add_definitions(-DLIBNDT_HAVE_STRTONUM)
 endif()
 
-check_symbol_exists(SO_NOSIGPIPE sys/socket.h HAVE_SO_NOSIGPIPE)
-if(${HAVE_SO_NOSIGPIPE})
-  add_definitions(-DHAVE_SO_NOSIGPIPE)
+check_symbol_exists(SO_NOSIGPIPE sys/socket.h LIBNDT_HAVE_SO_NOSIGPIPE)
+if(${LIBNDT_HAVE_SO_NOSIGPIPE})
+  add_definitions(-DLIBNDT_HAVE_SO_NOSIGPIPE)
 endif()
-check_symbol_exists(MSG_NOSIGNAL sys/socket.h HAVE_MSG_NOSIGNAL)
-if(${HAVE_MSG_NOSIGNAL})
-  add_definitions(-DHAVE_MSG_NOSIGNAL)
+check_symbol_exists(MSG_NOSIGNAL sys/socket.h LIBNDT_HAVE_MSG_NOSIGNAL)
+if(${LIBNDT_HAVE_MSG_NOSIGNAL})
+  add_definitions(-DLIBNDT_HAVE_MSG_NOSIGNAL)
 endif()
 
-check_include_files(openssl/ssl.h HAVE_OPENSSL_SSL_H)
+check_include_files(openssl/ssl.h LIBNDT_HAVE_OPENSSL_SSL_H)
 find_library(CRYPTO_LIBRARY crypto)
 find_library(SSL_LIBRARY ssl)
-if (NOT ("${HAVE_OPENSSL_SSL_H}" STREQUAL "") AND NOT
+if (NOT ("${LIBNDT_HAVE_OPENSSL_SSL_H}" STREQUAL "") AND NOT
     ("${CRYPTO_LIBRARY}" STREQUAL "CRYPTO_LIBRARY-NOTFOUND") AND NOT
     ("${SSL_LIBRARY}" STREQUAL "SSL_LIBRARY-NOTFOUND"))
   message(STATUS "crypto library: ${CRYPTO_LIBRARY}")
-  list(APPEND _EXTRA_LIBS "${CRYPTO_LIBRARY}")
+  list(APPEND LIBNDT_LIBS "${CRYPTO_LIBRARY}")
   message(STATUS "ssl library: ${SSL_LIBRARY}")
-  list(APPEND _EXTRA_LIBS "${SSL_LIBRARY}")
-  add_definitions(-DHAVE_OPENSSL)
+  list(APPEND LIBNDT_LIBS "${SSL_LIBRARY}")
+  add_definitions(-DLIBNDT_HAVE_OPENSSL)
 else()
   message(WARNING "OpenSSL not found; will disable TLS support")
 endif()
@@ -111,7 +104,7 @@ endif()
 if(${LIBNDT_ENABLE_CURL})
   find_package(CURL)
   if(${CURL_FOUND})
-    add_definitions(-DHAVE_CURL)
+    add_definitions(-DLIBNDT_HAVE_CURL)
   endif()
 endif()
 
@@ -141,96 +134,55 @@ if(${WIN32})
   add_definitions(-D_WIN32_WINNT=0x0600) # for NI_NUMERICSERV and WSAPoll
 endif()
 
-# Library
+# Library and binary
+# ------------------
 
-add_library(
-  ndt
-  curlx.cpp
-  curlx.hpp
-  libndt.cpp
-  libndt.hpp
-  strtonum.c
-  strtonum.h
-)
-target_include_directories(
-  ndt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
-  ${CURL_INCLUDE_DIRS} ${CMAKE_REQUIRED_INCLUDES}
-)
-target_link_libraries(ndt ${CURL_LIBRARIES})
+set(LIBNDT_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
+    ${CURL_INCLUDE_DIRS} ${CMAKE_REQUIRED_INCLUDES})
+
 add_executable(libndt-client libndt-client.cpp)
-target_link_libraries(libndt-client ndt)
-install(
-  FILES
-  libndt.hpp
-  DESTINATION
-  include
-)
-install(
-  TARGETS
-  ndt
-  DESTINATION
-  lib
-)
-install(
-  TARGETS
-  libndt-client
-  DESTINATION
-  bin
-)
+target_include_directories(libndt-client PUBLIC ${LIBNDT_INCLUDES})
+list (APPEND LIBNDT_LIBS ${CURL_LIBRARIES})
+install(FILES libndt.hpp DESTINATION include)
+install(TARGETS libndt-client DESTINATION bin)
 if("${WIN32}" OR "${MINGW}")
-  list(APPEND _EXTRA_LIBS "ws2_32")
+  list(APPEND LIBNDT_LIBS "ws2_32")
   if ("${MINGW}")
-    target_link_libraries(ndt -static-libgcc -static-libstdc++)
+      list(APPEND LIBNDT_LIBS -static-libgcc -static-libstdc++)
   endif()
 endif()
-target_link_libraries(ndt "${_EXTRA_LIBS}" Threads::Threads)
+list(APPEND LIBNDT_LIBS Threads::Threads)
+target_link_libraries(libndt-client "${LIBNDT_LIBS}")
 
 # Testing
 # -------
-#
-# We have two different settings for testing so that we can control
-# whether to build and run tests also when we're a subrepository.
 
-set(LIBNDT_ENABLE_TESTS "TRUE" CACHE BOOL "Whether to enable tests")
 set(BUILD_TESTING "ON" CACHE BOOL "Whether to build tests")
-
-if(${BUILD_TESTING} AND ${LIBNDT_ENABLE_TESTS})
+if(${BUILD_TESTING})
   enable_testing()
-  add_executable(
-    tests
-    curlx_test.cpp
-    libndt_test.cpp
-    strtonum_test.cpp
-    tests_main.cpp
-  )
-  target_link_libraries(tests ndt)
-  add_test(
-    NAME unit_tests
-    COMMAND tests
-  )
+  if(${CURL_FOUND})
+    add_executable(tests-curl curlx_test.cpp)
+    target_link_libraries(tests-curl "${LIBNDT_LIBS}")
+    target_include_directories(tests-curl PUBLIC ${LIBNDT_INCLUDES})
+    add_test(NAME curl_unit_tests COMMAND tests-curl)
+  endif()
+  add_executable(tests-libndt libndt_test.cpp strtonum_test.cpp)
+  target_link_libraries(tests-libndt "${LIBNDT_LIBS}")
+  target_include_directories(tests-libndt PUBLIC ${LIBNDT_INCLUDES})
+  add_test(NAME other_unit_tests COMMAND tests-libndt)
   if(${CURL_FOUND}) # Some tests require cURL for mlab-ns
-    add_test(
-      NAME simple_test
-      COMMAND libndt-client --verbose --download --upload
-    )
-    add_test(
-      NAME json_test
-      COMMAND libndt-client --verbose --json --download --upload
-    )
-    add_test(
-      NAME websocket_test
-      COMMAND libndt-client --verbose --websocket --download --upload
-    )
+    add_test(NAME simple_test COMMAND libndt-client --verbose
+             --download --upload)
+    add_test(NAME json_test COMMAND libndt-client --verbose --json
+             --download --upload)
+    add_test(NAME websocket_test COMMAND libndt-client --verbose --websocket
+             --download --upload)
     if(${UNIX})  # On UNIX We auto-discover the CA bundle path
-      add_test(
-        NAME tls_test
-        COMMAND libndt-client --verbose --download --upload --tls --json
-      )
-      add_test(
-        NAME modern_test  # This is how NDT should run
-        COMMAND libndt-client --verbose --download --upload --tls --json
-                              --websocket
-      )
+      add_test(NAME tls_test COMMAND libndt-client --verbose --download
+               --upload --tls --json)
+      # This is how NDT should run
+      add_test(NAME modern_test COMMAND libndt-client --verbose --download
+               --upload --tls --json --websocket)
     endif()
   endif()
 endif()
