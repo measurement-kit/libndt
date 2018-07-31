@@ -3,11 +3,11 @@
 // and LICENSE for more information on the copying conditions.
 
 #include "json.hpp"
-#define LIBNDT_NO_INLINE_IMPL
 #include "libndt.hpp"
 
 #include <string.h>
 
+#define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
 using namespace measurement_kit::libndt;

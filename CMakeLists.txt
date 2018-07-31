@@ -184,19 +184,16 @@ set(BUILD_TESTING "ON" CACHE BOOL "Whether to build tests")
 
 if(${BUILD_TESTING} AND ${LIBNDT_ENABLE_TESTS})
   enable_testing()
-  add_executable(
-    tests
-    curlx_test.cpp
-    libndt_test.cpp
-    strtonum_test.cpp
-    tests_main.cpp
-  )
-  target_include_directories(tests PUBLIC ${LIBNDT_INCLUDES})
-  target_link_libraries(tests "${LIBNDT_LIBS}")
-  add_test(
-    NAME unit_tests
-    COMMAND tests
-  )
+  if(${CURL_FOUND})
+    add_executable(tests-curl curlx_test.cpp)
+    target_link_libraries(tests-curl "${LIBNDT_LIBS}")
+    target_include_directories(tests-curl PUBLIC ${LIBNDT_INCLUDES})
+    add_test(NAME curl_unit_tests COMMAND tests-curl)
+  endif()
+  add_executable(tests-libndt libndt_test.cpp strtonum_test.cpp)
+  target_link_libraries(tests-libndt "${LIBNDT_LIBS}")
+  target_include_directories(tests-libndt PUBLIC ${LIBNDT_INCLUDES})
+  add_test(NAME other_unit_tests COMMAND tests-libndt)
   if(${CURL_FOUND}) # Some tests require cURL for mlab-ns
     add_test(
       NAME simple_test
