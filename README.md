@@ -81,7 +81,8 @@ ctest -a --output-on-failure .
 
 ## Command line client 
 
-Building with CMake also builds a simple command line client. Check usage with:
+Building with CMake also builds a simple command line client. Get usage info
+by running:
 
 ```
 ./libndt-client -help
