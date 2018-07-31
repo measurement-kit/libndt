@@ -8,13 +8,20 @@ C++11 client library.
 
 ## Synopsis
 
-This example runs a NDT download-only nettest with a nearby server. Make sure
-you've downloaded the single include files of [nlohmann/json](
-https://github.com/nlohmann/json) >= 3.0.0 and of libndt. Assuming you have
-put them in the current directory, you can build a minimal NDT client with:
+Make sure you download [nlohmann/json](https://github.com/nlohmann/json)
+single include header [json.hpp](
+https://github.com/nlohmann/json/blob/develop/single_include/nlohmann/json.hpp)
+before proceeding. The minimum supported version is v3.0.0. Put `json.hpp`
+in the current working directory.
+
+Then, download [libndt.hpp](
+https://github.com/measurement-kit/libndt/blob/master/libndt.hpp) and
+put it in the current working directory.
+
+This example runs a NDT download-only nettest with a nearby server.
 
 ```C++
-#include "json.hpp"  // Nlohmann/json must be included before libndt
+#include "json.hpp"  // MUST be included before libndt
 #include "libndt.hpp"
 
 int main() {
