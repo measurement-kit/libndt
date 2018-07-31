@@ -261,7 +261,8 @@ class Settings {
   /// the most correct port depending on the configuration.
   std::string port;
 
-  /// The tests you want to run with the NDT server.
+  /// The tests you want to run with the NDT server. By default we run
+  /// a download test, because that is probably the typical usage.
   NettestFlags nettest_flags = nettest_flag_download;
 
   /// Verbosity of the client. By default no message is emitted. Set to other
