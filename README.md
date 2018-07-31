@@ -51,27 +51,38 @@ https://codedocs.xyz/measurement-kit/libndt/) for API documentation;
 
 See [libndt-client.cpp](libndt-client.cpp) for a comprehensive usage example.
 
-## Clone
+## Cloning the repository
+
+To develop libndt or run tests, you need a clone of the repository. Make sure
+you pass the `--recursive` flag to properly fetch all sub-repositories.
 
 ```
 git clone --recursive https://github.com/measurement-kit/libndt
 ```
 
-## Build and test
+## Building and testing
 
-The library is a single header library, so it does not need to be built. Yet
-it is possible to build a simple client and the tests. We use CMake for this
-purpose. When using CMake, it will search for OpenSSL and cURL, and if they
-are present, it will enable the corresponding features. CMake also downloads
-a copy of nlohmann/json as part of configuring the build.
+We use CMake for building libndt for testing. CMake will search for OpenSSL
+and cURL, defining the above described macros if they are found. CMake also
+downloads a recent version of nlohmann/json and puts it in the current
+directory, so you do not have to worry about this aspect.
 
-(To see the exact dependencies required on Debian, please check out the
+To see the exact dependencies required on Debian, please check out the
 [Dockerfile](https://github.com/measurement-kit/docker-ci/blob/master/debian/Dockerfile)
-used when testing in Travis-CI.)
+used when testing in Travis-CI.
+
+Build and run tests with:
 
 ```
 cmake .
 cmake --build .
 ctest -a --output-on-failure .
-./libndt-client  -download  # Run a test
+```
+
+## Command line client 
+
+Building with CMake also builds a simple command line client. Check usage with:
+
+```
+./libndt-client -help
 ```
