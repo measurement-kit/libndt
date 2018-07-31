@@ -1503,6 +1503,7 @@ bool Client::run_download() noexcept {
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = impl->settings.max_runtime;
     auto ws = (impl->settings.protocol_flags & protocol_flag_websocket) != 0;
+    const auto const_this = this;
     for (Socket fd : dload_socks.sockets) {
       active += 1;  // atomic
       auto main = [
@@ -1511,7 +1512,7 @@ bool Client::run_download() noexcept {
         fd,            // copy for safety
         max_runtime,   // copy for safety
         &recent_data,  // reference to atomic
-        this,          // pointer (careful!)
+        const_this,    // const pointer
         &total_data,   // reference to atomic
         ws             // copy for safety
       ]() noexcept {
@@ -1521,18 +1522,20 @@ bool Client::run_download() noexcept {
           Size n = 0;
           if (ws) {
             uint8_t op = 0;
-            err = ws_recvmsg(fd, &op, (uint8_t *)buf, sizeof (buf), &n);
+            err = const_this->ws_recvmsg(
+                    fd, &op, (uint8_t *)buf, sizeof (buf), &n);
             if (err == Err::none && op != ws_opcode_binary) {
-              LIBNDT_EMIT_WARNING("run_download: unexpected opcode: "
-                           << (unsigned int)op);
+              LIBNDT_EMIT_WARNING_EX(const_this,
+                "run_download: unexpected opcode: " << (unsigned int)op);
               break;
             }
           } else {
-            err = netx_recv(fd, buf, sizeof(buf), &n);
+            err = const_this->netx_recv(fd, buf, sizeof(buf), &n);
           }
           if (err != Err::none) {
             if (err != Err::eof) {
-              LIBNDT_EMIT_WARNING("run_download: receiving: " << libndt_perror(err));
+              LIBNDT_EMIT_WARNING_EX(const_this,
+                "run_download: receiving: " << libndt_perror(err));
             }
             break;
           }
@@ -1686,6 +1689,7 @@ bool Client::run_upload() noexcept {
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = impl->settings.max_runtime;
     auto ws = (impl->settings.protocol_flags & protocol_flag_websocket) != 0;
+    const auto const_this = this;
     for (Socket fd : upload_socks.sockets) {
       active += 1;  // atomic
       auto main = [
@@ -1694,7 +1698,7 @@ bool Client::run_upload() noexcept {
         fd,            // copy for safety
         max_runtime,   // copy for safety
         &recent_data,  // reference to atomic
-        this,          // pointer (careful!)
+        const_this,    // const pointer
         &total_data,   // reference to atomic
         ws             // copy for safety
       ]() noexcept {
@@ -1704,24 +1708,25 @@ bool Client::run_upload() noexcept {
           random_printable_fill(buf, sizeof(buf));
           auto now = std::chrono::steady_clock::now();
           std::chrono::duration<double> elapsed = now - begin;
-          LIBNDT_EMIT_DEBUG("run_upload: time to fill random buffer: "
-                     << elapsed.count());
+          LIBNDT_EMIT_DEBUG_EX(const_this,
+            "run_upload: time to fill random buffer: " << elapsed.count());
         }
         for (;;) {
           Size n = 0;
           auto err = Err::none;
           if (ws) {
-            err = ws_send_frame(fd, ws_opcode_binary | ws_fin_flag,
+            err = const_this->ws_send_frame(fd, ws_opcode_binary | ws_fin_flag,
                       (uint8_t *)buf, sizeof (buf));
             if (err == Err::none) {
               n = sizeof (buf);
             }
           } else {
-            err = netx_send(fd, buf, sizeof(buf), &n);
+            err = const_this->netx_send(fd, buf, sizeof(buf), &n);
           }
           if (err != Err::none) {
             if (err != Err::broken_pipe) {
-              LIBNDT_EMIT_WARNING("run_upload: sending: " << libndt_perror(err));
+              LIBNDT_EMIT_WARNING_EX(const_this,
+                "run_upload: sending: " << libndt_perror(err));
             }
             break;
           }
