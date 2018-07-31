@@ -3,7 +3,9 @@
 // and LICENSE for more information on the copying conditions.
 #ifdef HAVE_CURL
 
-#include "curlx.hpp"
+#include "json.hpp"
+#define LIBNDT_NO_INLINE_IMPL
+#include "libndt.hpp"
 
 #include "catch.hpp"
 

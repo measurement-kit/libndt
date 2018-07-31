@@ -2,6 +2,8 @@
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
 
+#include "json.hpp"
+#define LIBNDT_NO_INLINE_IMPL
 #include "libndt.hpp"
 
 #ifndef _WIN32
@@ -31,6 +33,8 @@
 #define OS_EINVAL EINVAL
 #define OS_EWOULDBLOCK EWOULDBLOCK
 #endif
+
+using namespace measurement_kit;
 
 // Unit tests
 // ==========

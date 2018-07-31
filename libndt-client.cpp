@@ -2,6 +2,7 @@
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
 
+#include "json.hpp"
 #include "libndt.hpp"
 
 #include <stdlib.h>
@@ -10,6 +11,8 @@
 #include <sstream>
 
 #include "argh.h"
+
+using namespace measurement_kit;
 
 static void usage() {
   // clang-format off

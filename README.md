@@ -6,16 +6,29 @@
 
 ## Synopsis
 
-This example runs a NDT download-only nettest with a nearby server:
+This example runs a NDT download-only nettest with a nearby server. Make sure
+you've downloaded the single include files of [nlohmann/json](
+https://github.com/nlohmann/json) >= 3.0.0 and of libndt. Assuming you have
+put them in the current directory, you can build a minimal NDT client with:
 
 ```C++
-#include <libndt.hpp>
+#include "json.hpp"  // Nlohmann/json must be included before libndt
+#include "libndt.hpp"
 
 int main() {
   libndt::Client client;
   client.run();
 }
 ```
+
+Libndt optionally depends on OpenSSL (for TLS support and in the future for
+WebSocket support) and cURL (to autodiscover servers). You can use the following
+preprocessor macros to tell libndt that such dependencies are available:
+
+- `LIBNDT_HAVE_OPENSSL`: just define this macro to use OpenSSL (it does not
+  matter whether the macro is defined to a true or false value);
+
+- `LIBNDT_HAVE_CURL`: just define to use cURL (likewise).
 
 See [codedocs.xyz/measurement-kit/libndt](
 https://codedocs.xyz/measurement-kit/libndt/) for API documentation. See
@@ -30,9 +43,11 @@ git clone --recursive https://github.com/measurement-kit/libndt
 
 ## Build and test
 
-We use `cmake`. If you install `OpenSSL` library and headers, libndt will
-have support for TLS based tests. If you install `cURL` library and headers,
-libndt will perform server auto-discovery using the `mlab-ns` service.
+The library is a single header library, so it does not need to be built. Yet
+it is possible to build a simple client and the tests. We use CMake for this
+purpose. When using CMake, it will search for OpenSSL and cURL, and if they
+are present, it will enable the corresponding features. CMake also downloads
+a copy of nlohmann/json as part of configuring the build.
 
 (To see the exact dependencies required on Debian, please check out the
 [Dockerfile](https://github.com/measurement-kit/docker-ci/blob/master/debian/Dockerfile)
@@ -42,5 +57,5 @@ used when testing in Travis-CI.)
 cmake .
 cmake --build .
 ctest -a --output-on-failure .
-./libndt-client
+./libndt-client  -download  # Run a test
 ```

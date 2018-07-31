@@ -67,7 +67,7 @@ if("${MSVC}" AND "${LIBNDT_ENABLE_CURL}")
   message(STATUS "CMAKE_INCLUDE_PATH: ${CMAKE_INCLUDE_PATH}")
   message(STATUS "CMAKE_LIBRARY_PATH: ${CMAKE_LIBRARY_PATH}")
   add_definitions(-DCURL_STATICLIB)
-  list(APPEND _EXTRA_LIBS Crypt32)
+  list(APPEND LIBNDT_LIBS Crypt32)
 endif()
 
 # Checks
@@ -79,31 +79,31 @@ include(CheckFunctionExists)
 include(CheckIncludeFiles)
 include(CheckSymbolExists)
 
-check_function_exists(strtonum HAVE_STRTONUM)
-if(${HAVE_STRTONUM})
-  add_definitions(-DHAVE_STRTONUM)
+check_function_exists(strtonum LIBNDT_HAVE_STRTONUM)
+if(${LIBNDT_HAVE_STRTONUM})
+  add_definitions(-DLIBNDT_HAVE_STRTONUM)
 endif()
 
-check_symbol_exists(SO_NOSIGPIPE sys/socket.h HAVE_SO_NOSIGPIPE)
-if(${HAVE_SO_NOSIGPIPE})
-  add_definitions(-DHAVE_SO_NOSIGPIPE)
+check_symbol_exists(SO_NOSIGPIPE sys/socket.h LIBNDT_HAVE_SO_NOSIGPIPE)
+if(${LIBNDT_HAVE_SO_NOSIGPIPE})
+  add_definitions(-DLIBNDT_HAVE_SO_NOSIGPIPE)
 endif()
-check_symbol_exists(MSG_NOSIGNAL sys/socket.h HAVE_MSG_NOSIGNAL)
-if(${HAVE_MSG_NOSIGNAL})
-  add_definitions(-DHAVE_MSG_NOSIGNAL)
+check_symbol_exists(MSG_NOSIGNAL sys/socket.h LIBNDT_HAVE_MSG_NOSIGNAL)
+if(${LIBNDT_HAVE_MSG_NOSIGNAL})
+  add_definitions(-DLIBNDT_HAVE_MSG_NOSIGNAL)
 endif()
 
-check_include_files(openssl/ssl.h HAVE_OPENSSL_SSL_H)
+check_include_files(openssl/ssl.h LIBNDT_HAVE_OPENSSL_SSL_H)
 find_library(CRYPTO_LIBRARY crypto)
 find_library(SSL_LIBRARY ssl)
-if (NOT ("${HAVE_OPENSSL_SSL_H}" STREQUAL "") AND NOT
+if (NOT ("${LIBNDT_HAVE_OPENSSL_SSL_H}" STREQUAL "") AND NOT
     ("${CRYPTO_LIBRARY}" STREQUAL "CRYPTO_LIBRARY-NOTFOUND") AND NOT
     ("${SSL_LIBRARY}" STREQUAL "SSL_LIBRARY-NOTFOUND"))
   message(STATUS "crypto library: ${CRYPTO_LIBRARY}")
-  list(APPEND _EXTRA_LIBS "${CRYPTO_LIBRARY}")
+  list(APPEND LIBNDT_LIBS "${CRYPTO_LIBRARY}")
   message(STATUS "ssl library: ${SSL_LIBRARY}")
-  list(APPEND _EXTRA_LIBS "${SSL_LIBRARY}")
-  add_definitions(-DHAVE_OPENSSL)
+  list(APPEND LIBNDT_LIBS "${SSL_LIBRARY}")
+  add_definitions(-DLIBNDT_HAVE_OPENSSL)
 else()
   message(WARNING "OpenSSL not found; will disable TLS support")
 endif()
@@ -111,7 +111,7 @@ endif()
 if(${LIBNDT_ENABLE_CURL})
   find_package(CURL)
   if(${CURL_FOUND})
-    add_definitions(-DHAVE_CURL)
+    add_definitions(-DLIBNDT_HAVE_CURL)
   endif()
 endif()
 
@@ -141,24 +141,17 @@ if(${WIN32})
   add_definitions(-D_WIN32_WINNT=0x0600) # for NI_NUMERICSERV and WSAPoll
 endif()
 
-# Library
+# Library and binary
+# ------------------
 
-add_library(
-  ndt
-  curlx.cpp
-  curlx.hpp
-  libndt.cpp
-  libndt.hpp
-  strtonum.c
-  strtonum.h
-)
-target_include_directories(
-  ndt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
-  ${CURL_INCLUDE_DIRS} ${CMAKE_REQUIRED_INCLUDES}
-)
-target_link_libraries(ndt ${CURL_LIBRARIES})
+set(LIBNDT_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
+    ${CURL_INCLUDE_DIRS} ${CMAKE_REQUIRED_INCLUDES})
+
 add_executable(libndt-client libndt-client.cpp)
-target_link_libraries(libndt-client ndt)
+target_include_directories(
+  libndt-client PUBLIC ${LIBNDT_INCLUDES}
+)
+list (APPEND LIBNDT_LIBS ${CURL_LIBRARIES})
 install(
   FILES
   libndt.hpp
@@ -167,23 +160,18 @@ install(
 )
 install(
   TARGETS
-  ndt
-  DESTINATION
-  lib
-)
-install(
-  TARGETS
   libndt-client
   DESTINATION
   bin
 )
 if("${WIN32}" OR "${MINGW}")
-  list(APPEND _EXTRA_LIBS "ws2_32")
+  list(APPEND LIBNDT_LIBS "ws2_32")
   if ("${MINGW}")
-    target_link_libraries(ndt -static-libgcc -static-libstdc++)
+      list(APPEND LIBNDT_LIBS -static-libgcc -static-libstdc++)
   endif()
 endif()
-target_link_libraries(ndt "${_EXTRA_LIBS}" Threads::Threads)
+list(APPEND LIBNDT_LIBS Threads::Threads)
+target_link_libraries(libndt-client "${LIBNDT_LIBS}")
 
 # Testing
 # -------
@@ -203,7 +191,8 @@ if(${BUILD_TESTING} AND ${LIBNDT_ENABLE_TESTS})
     strtonum_test.cpp
     tests_main.cpp
   )
-  target_link_libraries(tests ndt)
+  target_include_directories(tests PUBLIC ${LIBNDT_INCLUDES})
+  target_link_libraries(tests "${LIBNDT_LIBS}")
   add_test(
     NAME unit_tests
     COMMAND tests
