@@ -3,7 +3,7 @@
 // and LICENSE for more information on the copying conditions.
 
 #include "json.hpp"
-#define LIBNDT_NO_INLINE_IMPL
+#define LIBNDT_NO_INLINE_IMPL  // Impl included in strtonum_test.cpp
 #include "libndt.hpp"
 
 #ifndef _WIN32
