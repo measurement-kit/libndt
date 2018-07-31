@@ -1057,6 +1057,36 @@ static bool emit_result(Client *client, std::string scope,
 // Private classes
 // ```````````````
 
+#ifdef _WIN32
+// "There must be a call to WSACleanup for each successful call
+//  to WSAStartup. Only the final WSACleanup function call performs
+//  the actual cleanup. The preceding calls simply decrement
+//  an internal reference count in the WS2_32.DLL."
+class Winsock {
+ public:
+  Winsock() noexcept;
+  Winsock(const Winsock &) = delete;
+  Winsock &operator=(const Winsock &) = delete;
+  Winsock(Winsock &&) = delete;
+  Winsock &operator=(Winsock &&) = delete;
+  ~Winsock() noexcept;
+};
+
+Winsock::Winsock() noexcept {
+  WORD requested = MAKEWORD(2, 2);
+  WSADATA data;
+  if (::WSAStartup(requested, &data) != 0) {
+    abort();
+  }
+}
+
+Winsock::~Winsock() noexcept {
+  if (::WSACleanup() != 0) {
+    abort();
+  }
+}
+#endif  // _WIN32
+
 class Client::Impl {
  public:
   Socket sock = -1;
@@ -1066,6 +1096,9 @@ class Client::Impl {
   std::map<Socket, SSL *> fd_to_ssl;
 #endif
   std::mutex mutex;
+#ifdef _WIN32
+  Winsock winsock;
+#endif
 };
 
 class SocketVector {

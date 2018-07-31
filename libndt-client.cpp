@@ -124,18 +124,6 @@ int main(int, char **argv) {
     }
   }
 
-#ifdef _WIN32
-  {
-    WORD requested = MAKEWORD(2, 2);
-    WSADATA data;
-    if (::WSAStartup(requested, &data) != 0) {
-      std::clog << "fatal: WSAStartup() failed" << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    std::clog << "have initialized winsock v2.2." << std::endl;
-  }
-#endif
-
   libndt::Client client{settings};
   bool rv = client.run();
   return (rv) ? EXIT_SUCCESS : EXIT_FAILURE;
