@@ -7,7 +7,7 @@
 #include "libndt.hpp"
 
 #ifndef _WIN32
-#include <arpa/inet.h>  // IWYU pragma: keep
+#include <arpa/inet.h>
 #include <netdb.h>
 #endif
 
