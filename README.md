@@ -6,7 +6,7 @@
 https://github.com/ndt-project/ndt/wiki/NDTProtocol) (NDT) single-include
 C++11 client library.
 
-## Tutorial
+## Getting started
 
 Make sure you download [nlohmann/json](https://github.com/nlohmann/json)
 single include header [json.hpp](
