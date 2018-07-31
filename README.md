@@ -43,9 +43,10 @@ preprocessor macros to tell libndt that such dependencies are available:
 - `LIBNDT_HAVE_CURL`: just define to use cURL (likewise).
 
 See [codedocs.xyz/measurement-kit/libndt](
-https://codedocs.xyz/measurement-kit/libndt/) for API documentation. See
-[libndt-client.cpp](libndt-client.cpp) for a usage example. See
+https://codedocs.xyz/measurement-kit/libndt/) for API documentation;
 [libndt.hpp](libndt.hpp) for the full API.
+
+See [libndt-client.cpp](libndt-client.cpp) for a comprehensive usage example.
 
 ## Clone
 
