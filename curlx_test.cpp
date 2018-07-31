@@ -11,7 +11,7 @@
 using namespace measurement_kit;
 
 // Client::curlx_get_maybe_socks5() tests
-// ------------------------------------
+// --------------------------------------
 
 class FailCurlxEasyInit : public libndt::Client {
  public:

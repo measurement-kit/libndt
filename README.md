@@ -26,6 +26,7 @@ a file named `main.cpp` with this content.
 #include "libndt.hpp"
 
 int main() {
+  using namespace measurement_kit;
   libndt::Client client;
   client.run();
 }
