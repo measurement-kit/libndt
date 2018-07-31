@@ -311,7 +311,7 @@ class FailNetxRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_recvn(libndt::Socket, void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::io_error;
   }
 };
@@ -325,7 +325,7 @@ class NetxRecvnEof : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_recvn(libndt::Socket, void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::eof;
   }
 };
@@ -339,7 +339,7 @@ class NetxRecvnInvalidKickoff : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_recvn(  //
-      libndt::Socket, void *buf, libndt::Size siz) noexcept override {
+      libndt::Socket, void *buf, libndt::Size siz) const noexcept override {
     REQUIRE(buf != nullptr);
     REQUIRE(siz >= 1);
     for (libndt::Size i = 0; i < siz; ++i) {
@@ -591,7 +591,7 @@ class FailNetxSelectDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::io_error;
   }
 };
@@ -613,11 +613,11 @@ class FailRecvDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::invalid_argument;
   }
 };
@@ -639,11 +639,11 @@ class RecvEofDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::eof;
   }
 };
@@ -667,11 +667,11 @@ class FailMsgReadLegacyDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *, std::string *) noexcept override {
@@ -697,11 +697,11 @@ class RecvNonTestMsgDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -727,11 +727,11 @@ class FailMsgWriteDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -760,11 +760,11 @@ class FailMsgReadDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -796,11 +796,11 @@ class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -833,11 +833,11 @@ class FailEmitResultDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -871,11 +871,11 @@ class TooManyTestMsgsDuringDownload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::eof;
   }
   bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
@@ -1026,11 +1026,11 @@ class FailSendDuringUpload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::io_error;
   }
 };
@@ -1059,11 +1059,11 @@ class FailMsgExpectDuringUpload : public libndt::Client {
     return libndt::Err::none;
   }
   bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::io_error;
   }
   bool msg_expect(libndt::MsgType, std::string *) noexcept override {
@@ -1090,11 +1090,11 @@ class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
   bool msg_expect_empty(libndt::MsgType code) noexcept override {
     return code != libndt::msg_test_finalize;
   }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
-                                    libndt::Size *) noexcept override {
+                                    libndt::Size *) const noexcept override {
     return libndt::Err::io_error;
   }
   bool msg_expect(libndt::MsgType, std::string *) noexcept override {
@@ -1231,7 +1231,7 @@ class FailNetxSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::io_error;
   }
 };
@@ -1250,7 +1250,7 @@ class FailLargeNetxSendn : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size siz) noexcept override {
+                         libndt::Size siz) const noexcept override {
     return siz == 3 ? libndt::Err::none : libndt::Err::io_error;
   }
 };
@@ -1441,7 +1441,7 @@ class FailLargeNetxRecvn : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_recvn(libndt::Socket, void *p,
-                         libndt::Size siz) noexcept override {
+                         libndt::Size siz) const noexcept override {
     if (siz == 3) {
       char *usablep = (char *)p;
       usablep[0] = libndt::msg_login;
@@ -1495,7 +1495,7 @@ class Maybesocks5hConnectFailFirstNetxSendn : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::io_error;
   }
 };
@@ -1520,11 +1520,11 @@ class Maybesocks5hConnectFailFirstNetxRecvn : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::io_error;
   }
 };
@@ -1549,11 +1549,11 @@ class Maybesocks5hConnectInvalidAuthResponseVersion : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 4;  // unexpected
@@ -1582,11 +1582,11 @@ class Maybesocks5hConnectInvalidAuthResponseMethod : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 5;
@@ -1615,11 +1615,11 @@ class Maybesocks5hConnectInitialHandshakeOkay : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 5;
@@ -1659,11 +1659,11 @@ class Maybesocks5hConnectFailSecondNetxSendn : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     return size == 3 ? libndt::Err::none : libndt::Err::io_error;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 5;
@@ -1692,11 +1692,11 @@ class Maybesocks5hConnectFailSecondNetxRecvn : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
@@ -1726,11 +1726,11 @@ class Maybesocks5hConnectInvalidSecondVersion : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
@@ -1765,11 +1765,11 @@ class Maybesocks5hConnectErrorResult : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
@@ -1804,11 +1804,11 @@ class Maybesocks5hConnectInvalidReserved : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::none;
   }
   libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
@@ -1844,20 +1844,20 @@ class Maybesocks5hConnectFailAddressNetxRecvn : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::none;
   }
   uint8_t type = 0;
-  bool seen = false;
+  std::shared_ptr<bool> seen = std::make_shared<bool>(false);
   libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
       return libndt::Err::none;
     }
     if (size == 4 && !seen) {
-      seen = true;  // use flag because IPv4 is also 4 bytes
+      *seen = true;  // use flag because IPv4 is also 4 bytes
       assert(type != 0);
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
@@ -1915,17 +1915,18 @@ class Maybesocks5hConnectWithArray : public libndt::Client {
     return libndt::Err::none;
   }
   libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return libndt::Err::none;
   }
-  std::deque<std::string> array;
+  std::shared_ptr<std::deque<std::string>> array = std::make_shared<
+      std::deque<std::string>>();
   libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
-    if (!array.empty() && size == array[0].size()) {
-      for (size_t idx = 0; idx < array[0].size(); ++idx) {
-        ((char *)buf)[idx] = array[0][idx];
+                         libndt::Size size) const noexcept override {
+    if (!array->empty() && size == (*array)[0].size()) {
+      for (size_t idx = 0; idx < (*array)[0].size(); ++idx) {
+        ((char *)buf)[idx] = (*array)[0][idx];
       }
-      array.pop_front();
+      array->pop_front();
       return libndt::Err::none;
     }
     return libndt::Err::io_error;
@@ -1938,7 +1939,7 @@ TEST_CASE(
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectWithArray client{settings};
-  client.array = {
+  *client.array = {
       std::string{"\5\0", 2},
       std::string{"\5\0\0\3", 4},
   };
@@ -1953,7 +1954,7 @@ TEST_CASE(
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectWithArray client{settings};
-  client.array = {
+  *client.array = {
       std::string{"\5\0", 2},
       std::string{"\5\0\0\3", 4},
       std::string{"\7", 1},
@@ -1969,7 +1970,7 @@ TEST_CASE(
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectWithArray client{settings};
-  client.array = {
+  *client.array = {
       std::string{"\5\0", 2},
       std::string{"\5\0\0\3", 4},
       std::string{"\7", 1},
@@ -1984,7 +1985,7 @@ TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv4 (mocked)") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectWithArray client{settings};
-  client.array = {
+  *client.array = {
       std::string{"\5\0", 2},
       std::string{"\5\0\0\1", 4},
       std::string{"\0\0\0\0", 4},
@@ -1999,7 +2000,7 @@ TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv6 (mocked)") {
   libndt::Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectWithArray client{settings};
-  client.array = {
+  *client.array = {
       std::string{"\5\0", 2},
       std::string{"\5\0\0\4", 4},
       std::string{"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16},
@@ -2174,7 +2175,7 @@ class FailSocketConnectTimeout : public libndt::Client {
     sys_set_last_error(OS_EINPROGRESS);
     return -1;
   }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) noexcept override {
+  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
     return libndt::Err::timed_out;
   }
 };
@@ -2193,7 +2194,8 @@ class FailSocketConnectGetsockoptError : public libndt::Client {
     sys_set_last_error(OS_EINPROGRESS);
     return -1;
   }
-  libndt::Err netx_poll(std::vector<pollfd> *pfds, int) noexcept override {
+  libndt::Err netx_poll(
+      std::vector<pollfd> *pfds, int) const noexcept override {
     for (auto &fd : *pfds) {
       fd.revents = fd.events;
     }
@@ -2221,7 +2223,8 @@ class FailSocketConnectSocketError : public libndt::Client {
     sys_set_last_error(OS_EINPROGRESS);
     return -1;
   }
-  libndt::Err netx_poll(std::vector<pollfd> *pfds, int) noexcept override {
+  libndt::Err netx_poll(
+      std::vector<pollfd> *pfds, int) const noexcept override {
     for (auto &fd : *pfds) {
       fd.revents = fd.events;
     }
@@ -2272,7 +2275,7 @@ class FailNetxRecv : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) noexcept override {
+                        libndt::Size *) const noexcept override {
     return libndt::Err::invalid_argument;
   }
 };
@@ -2288,7 +2291,7 @@ class RecvEof : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Ssize sys_recv(libndt::Socket, void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return 0;
   }
 };
@@ -2305,7 +2308,7 @@ class PartialNetxRecvAndThenError : public libndt::Client {
   static constexpr libndt::Size amount = 11;
   static constexpr libndt::Size good_amount = 3;
   libndt::Err netx_recv(libndt::Socket, void *buf, libndt::Size size,
-                        libndt::Size *rv) noexcept override {
+                        libndt::Size *rv) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       for (size_t i = 0; i < good_amount; ++i) {
@@ -2343,7 +2346,7 @@ class PartialRecvAndThenEof : public libndt::Client {
   static constexpr libndt::Size amount = 7;
   static constexpr libndt::Size good_amount = 5;
   libndt::Ssize sys_recv(libndt::Socket, void *buf,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       for (size_t i = 0; i < good_amount; ++i) {
@@ -2396,7 +2399,7 @@ class FailSend : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Ssize sys_send(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     sys_set_last_error(OS_EINVAL);
     return -1;
   }
@@ -2414,7 +2417,7 @@ class SendEof : public libndt::Client {
  public:
   using libndt::Client::Client;
   libndt::Ssize sys_send(libndt::Socket, const void *,
-                         libndt::Size) noexcept override {
+                         libndt::Size) const noexcept override {
     return 0;
   }
 };
@@ -2430,12 +2433,12 @@ class PartialSendAndThenError : public libndt::Client {
   using libndt::Client::Client;
   static constexpr libndt::Size amount = 11;
   static constexpr libndt::Size good_amount = 3;
-  libndt::Size successful = 0;
+  std::shared_ptr<libndt::Size> successful = std::make_shared<libndt::Size>(0);
   libndt::Ssize sys_send(libndt::Socket, const void *,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
-      successful += good_amount;
+      *successful += good_amount;
       return good_amount;
     }
     sys_set_last_error(OS_EINVAL);
@@ -2453,7 +2456,7 @@ TEST_CASE("Client::send() deals with partial Client::send() and then error") {
   //
   // Usage of `exp` is required to make clang compile (unclear to me why).
   auto exp = PartialSendAndThenError::good_amount;
-  REQUIRE(client.successful == exp);
+  REQUIRE((*client.successful) == exp);
 }
 
 // See above comment regarding likelihood of send returning EOF (i.e. zero)
@@ -2462,12 +2465,12 @@ class PartialSendAndThenEof : public libndt::Client {
   using libndt::Client::Client;
   static constexpr libndt::Size amount = 7;
   static constexpr libndt::Size good_amount = 5;
-  libndt::Size successful = 0;
+  std::shared_ptr<libndt::Size> successful = std::make_shared<libndt::Size>(0);
   libndt::Ssize sys_send(libndt::Socket, const void *,
-                         libndt::Size size) noexcept override {
+                         libndt::Size size) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
-      successful += good_amount;
+      *successful += good_amount;
       return good_amount;
     }
     return 0;
@@ -2484,7 +2487,7 @@ TEST_CASE(
   //
   // Usage of `exp` is required to make clang compile (unclear to me why).
   auto exp = PartialSendAndThenEof::good_amount;
-  REQUIRE(client.successful == exp);
+  REQUIRE((*client.successful) == exp);
 }
 
 // Client::netx_resolve() tests
@@ -2613,9 +2616,9 @@ TEST_CASE(
 class InterruptPoll : public libndt::Client {
  public:
   using libndt::Client::Client;
-  unsigned int count = 0;
-  int sys_poll(pollfd *, nfds_t, int) noexcept override {
-    if (count++ == 0) {
+  std::shared_ptr<unsigned int> count = std::make_shared<unsigned int>();
+  int sys_poll(pollfd *, nfds_t, int) const noexcept override {
+    if ((*count)++ == 0) {
       sys_set_last_error(EINTR);
     } else {
       sys_set_last_error(EIO);
@@ -2634,7 +2637,7 @@ TEST_CASE("Client::netx_poll() deals with EINTR") {
   InterruptPoll client;
   constexpr int timeout = 100;
   REQUIRE(client.netx_poll(&pfds, timeout) == libndt::Err::io_error);
-  REQUIRE(client.count == 2);
+  REQUIRE(*client.count == 2);
 }
 
 #endif  // !_WIN32
@@ -2643,9 +2646,9 @@ class TimeoutPoll : public libndt::Client {
  public:
   using libndt::Client::Client;
 #ifdef _WIN32
-  int sys_poll(LPWSAPOLLFD, ULONG, INT) noexcept override
+  int sys_poll(LPWSAPOLLFD, ULONG, INT) const noexcept override
 #else
-  int sys_poll(pollfd *, nfds_t, int) noexcept override
+  int sys_poll(pollfd *, nfds_t, int) const noexcept override
 #endif
   {
     return 0;

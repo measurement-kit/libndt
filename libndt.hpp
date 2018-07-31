@@ -400,17 +400,17 @@ class Client {
   /// Called when a warning message is emitted. The default behavior is to write
   /// the warning onto the `std::clog` standard stream. \warning This method
   /// could be called from a different thread context.
-  virtual void on_warning(const std::string &s);
+  virtual void on_warning(const std::string &s) const;
 
   /// Called when an informational message is emitted. The default behavior is
   /// to write the message onto the `std::clog` standard stream. \warning This method
   /// could be called from a different thread context.
-  virtual void on_info(const std::string &s);
+  virtual void on_info(const std::string &s) const;
 
   /// Called when a debug message is emitted. The default behavior is
   /// to write the message onto the `std::clog` standard stream. \warning This method
   /// could be called from a different thread context.
-  virtual void on_debug(const std::string &s);
+  virtual void on_debug(const std::string &s) const;
 
   /// Called to inform you about the measured speed. The default behavior is
   /// to write the provided information as an info message. @param tid is either
@@ -535,19 +535,19 @@ class Client {
   // Send @p count bytes from @p base over @p sock as a frame whose first byte
   // @p first_byte should contain the opcode and possibly the FIN flag.
   virtual Err ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
-                            Size count) noexcept;
+                            Size count) const noexcept;
 
   // Receive a frame from @p sock. Puts the opcode in @p *opcode. Puts whether
   // there is a FIN flag in @p *fin. The buffer starts at @p base and it
   // contains @p total bytes. Puts in @p *count the actual number of bytes
   // in the message. @return The error that occurred or Err::none.
   Err ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin, uint8_t *base,
-                        Size total, Size *count) noexcept;
+                        Size total, Size *count) const noexcept;
 
   // Receive a frame. Automatically and transparently responds to PING, ignores
   // PONG, and handles CLOSE frames. Arguments like ws_recv_any_frame().
   Err ws_recv_frame(Socket sock, uint8_t *opcode, bool *fin, uint8_t *base,
-                    Size total, Size *count) noexcept;
+                    Size total, Size *count) const noexcept;
 
   // Receive a message consisting of one or more frames. Transparently handles
   // PING and PONG frames. Handles CLOSE frames. @param sock is the socket to
@@ -556,7 +556,7 @@ class Client {
   // count contains the actual message size. @return An error on failure or
   // Err::none in case of success.
   Err ws_recvmsg(Socket sock, uint8_t *opcode, uint8_t *base, Size total,
-                 Size *count) noexcept;
+                 Size *count) const noexcept;
 
   // Networking layer
   // ````````````````
@@ -610,25 +610,26 @@ class Client {
 
   // Receive from the network.
   virtual Err netx_recv(Socket fd, void *base, Size count,
-                        Size *actual) noexcept;
+                        Size *actual) const noexcept;
 
   // Receive from the network without blocking.
   virtual Err netx_recv_nonblocking(Socket fd, void *base, Size count,
-                                    Size *actual) noexcept;
+                                    Size *actual) const noexcept;
 
   // Receive exactly N bytes from the network.
-  virtual Err netx_recvn(Socket fd, void *base, Size count) noexcept;
+  virtual Err netx_recvn(Socket fd, void *base, Size count) const noexcept;
 
   // Send data to the network.
   virtual Err netx_send(Socket fd, const void *base, Size count,
-                        Size *actual) noexcept;
+                        Size *actual) const noexcept;
 
   // Send to the network without blocking.
   virtual Err netx_send_nonblocking(Socket fd, const void *base, Size count,
-                                    Size *actual) noexcept;
+                                    Size *actual) const noexcept;
 
   // Send exactly N bytes to the network.
-  virtual Err netx_sendn(Socket fd, const void *base, Size count) noexcept;
+  virtual Err netx_sendn(
+    Socket fd, const void *base, Size count) const noexcept;
 
   // Resolve hostname into a list of IP addresses.
   virtual Err netx_resolve(const std::string &hostname,
@@ -638,13 +639,14 @@ class Client {
   virtual Err netx_setnonblocking(Socket fd, bool enable) noexcept;
 
   // Pauses until the socket becomes readable.
-  virtual Err netx_wait_readable(Socket, Timeout timeout) noexcept;
+  virtual Err netx_wait_readable(Socket, Timeout timeout) const noexcept;
 
   // Pauses until the socket becomes writeable.
-  virtual Err netx_wait_writeable(Socket, Timeout timeout) noexcept;
+  virtual Err netx_wait_writeable(Socket, Timeout timeout) const noexcept;
 
   // Main function for dealing with I/O patterned after poll(2).
-  virtual Err netx_poll(std::vector<pollfd> *fds, int timeout_msec) noexcept;
+  virtual Err netx_poll(
+    std::vector<pollfd> *fds, int timeout_msec) const noexcept;
 
   // Shutdown both ends of a socket.
   virtual Err netx_shutdown_both(Socket fd) noexcept;
@@ -701,10 +703,10 @@ class Client {
   // This section contains wrappers for system calls used in regress tests.
 
   // Access the value of errno in a portable way.
-  virtual int sys_get_last_error() noexcept;
+  virtual int sys_get_last_error() const noexcept;
 
   // Set the value of errno in a portable way.
-  virtual void sys_set_last_error(int err) noexcept;
+  virtual void sys_set_last_error(int err) const noexcept;
 
   // getaddrinfo() wrapper that can be mocked in tests.
   virtual int sys_getaddrinfo(const char *domain, const char *port,
@@ -725,10 +727,11 @@ class Client {
   virtual int sys_connect(Socket fd, const sockaddr *sa, socklen_t n) noexcept;
 
   // recv() wrapper that can be mocked in tests.
-  virtual Ssize sys_recv(Socket fd, void *base, Size count) noexcept;
+  virtual Ssize sys_recv(Socket fd, void *base, Size count) const noexcept;
 
   // send() wrapper that can be mocked in tests.
-  virtual Ssize sys_send(Socket fd, const void *base, Size count) noexcept;
+  virtual Ssize sys_send(
+    Socket fd, const void *base, Size count) const noexcept;
 
   // shutdown() wrapper that can be mocked in tests.
   virtual int sys_shutdown(Socket fd, int shutdown_how) noexcept;
@@ -738,9 +741,9 @@ class Client {
 
   // poll() wrapper that can be mocked in tests.
 #ifdef _WIN32
-  virtual int sys_poll(LPWSAPOLLFD fds, ULONG nfds, INT timeout) noexcept;
+  virtual int sys_poll(LPWSAPOLLFD fds, ULONG nfds, INT timeout) const noexcept;
 #else
-  virtual int sys_poll(pollfd *fds, nfds_t nfds, int timeout) noexcept;
+  virtual int sys_poll(pollfd *fds, nfds_t nfds, int timeout) const noexcept;
 #endif
 
   // If strtonum() is available, wrapper that can be mocked in tests, else
@@ -1197,13 +1200,15 @@ bool Client::run() noexcept {
   return false;
 }
 
-void Client::on_warning(const std::string &msg) {
+void Client::on_warning(const std::string &msg) const {
   std::clog << "[!] " << msg << std::endl;
 }
 
-void Client::on_info(const std::string &msg) { std::clog << msg << std::endl; }
+void Client::on_info(const std::string &msg) const {
+  std::clog << msg << std::endl;
+}
 
-void Client::on_debug(const std::string &msg) {
+void Client::on_debug(const std::string &msg) const {
   std::clog << "[D] " << msg << std::endl;
 }
 
@@ -2224,7 +2229,7 @@ Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
 }
 
 Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
-                          Size count) noexcept {
+                          Size count) const noexcept {
   // TODO(bassosimone): perhaps move the RNG into Client?
   constexpr Size mask_size = 4;
   uint8_t mask[mask_size] = {};
@@ -2331,7 +2336,7 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
 }
 
 Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
-                              uint8_t *base, Size total, Size *count) noexcept {
+      uint8_t *base, Size total, Size *count) const noexcept {
   if (opcode == nullptr || fin == nullptr || count == nullptr) {
     LIBNDT_EMIT_WARNING("ws_recv_any_frame: passed invalid return arguments");
     return Err::invalid_argument;
@@ -2486,7 +2491,7 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
 }
 
 Err Client::ws_recv_frame(Socket sock, uint8_t *opcode, bool *fin,
-                          uint8_t *base, Size total, Size *count) noexcept {
+      uint8_t *base, Size total, Size *count) const noexcept {
   // "Control frames (see Section 5.5) MAY be injected in the middle of
   // a fragmented message.  Control frames themselves MUST NOT be fragmented."
   //    -- RFC6455 Section 5.4.
@@ -2545,7 +2550,7 @@ again:
 
 Err Client::ws_recvmsg(  //
     Socket sock, uint8_t *opcode, uint8_t *base, Size total,
-    Size *count) noexcept {
+    Size *count) const noexcept {
   // General remark from RFC6455 Sect. 5.4: "[I]n absence of extensions, senders
   // and receivers must not depend on [...] specific frame boundaries."
   //
@@ -2773,7 +2778,7 @@ static BIO_METHOD *libndt_bio_method() noexcept {
 // } - - - END BIO IMPLEMENTATION - - -
 
 // Common function to map OpenSSL errors to Err.
-static Err map_ssl_error(Client *client, SSL *ssl, int ret) noexcept {
+static Err map_ssl_error(const Client *client, SSL *ssl, int ret) noexcept {
   auto reason = ::SSL_get_error(ssl, ret);
   switch (reason) {
     case SSL_ERROR_NONE:
@@ -3366,7 +3371,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
 #undef CONNECT_IN_PROGRESS  // Tidy
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
-                      Size *actual) noexcept {
+                      Size *actual) const noexcept {
   auto err = Err::none;
 again:
   err = netx_recv_nonblocking(fd, base, count, actual);
@@ -3387,7 +3392,7 @@ again:
 }
 
 Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
-                                  Size *actual) noexcept {
+                                  Size *actual) const noexcept {
   assert(base != nullptr && actual != nullptr);
   *actual = 0;
   if (count <= 0) {
@@ -3429,7 +3434,7 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
   return Err::none;
 }
 
-Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
+Err Client::netx_recvn(Socket fd, void *base, Size count) const noexcept {
   Size off = 0;
   while (off < count) {
     Size n = 0;
@@ -3449,7 +3454,7 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 }
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
-                      Size *actual) noexcept {
+                      Size *actual) const noexcept {
   auto err = Err::none;
 again:
   err = netx_send_nonblocking(fd, base, count, actual);
@@ -3470,7 +3475,7 @@ again:
 }
 
 Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
-                                  Size *actual) noexcept {
+                                  Size *actual) const noexcept {
   assert(base != nullptr && actual != nullptr);
   *actual = 0;
   if (count <= 0) {
@@ -3514,7 +3519,7 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
   return Err::none;
 }
 
-Err Client::netx_sendn(Socket fd, const void *base, Size count) noexcept {
+Err Client::netx_sendn(Socket fd, const void *base, Size count) const noexcept {
   Size off = 0;
   while (off < count) {
     Size n = 0;
@@ -3613,7 +3618,7 @@ Err Client::netx_setnonblocking(Socket fd, bool enable) noexcept {
   return Err::none;
 }
 
-static Err netx_wait(Client *client, Socket fd, Timeout timeout,
+static Err netx_wait(const Client *client, Socket fd, Timeout timeout,
                      short expected_events) noexcept {
   pollfd pfd{};
   pfd.fd = fd;
@@ -3637,15 +3642,16 @@ static Err netx_wait(Client *client, Socket fd, Timeout timeout,
   return err;
 }
 
-Err Client::netx_wait_readable(Socket fd, Timeout timeout) noexcept {
+Err Client::netx_wait_readable(Socket fd, Timeout timeout) const noexcept {
   return netx_wait(this, fd, timeout, POLLIN);
 }
 
-Err Client::netx_wait_writeable(Socket fd, Timeout timeout) noexcept {
+Err Client::netx_wait_writeable(Socket fd, Timeout timeout) const noexcept {
   return netx_wait(this, fd, timeout, POLLOUT);
 }
 
-Err Client::netx_poll(std::vector<pollfd> *pfds, int timeout_msec) noexcept {
+Err Client::netx_poll(
+      std::vector<pollfd> *pfds, int timeout_msec) const noexcept {
   if (pfds == nullptr) {
     LIBNDT_EMIT_WARNING("netx_poll: passed a null vector of descriptors");
     return Err::invalid_argument;
@@ -3885,7 +3891,7 @@ Verbosity Client::get_verbosity() const noexcept {
 #define LIBNDT_AS_OS_OPTION_VALUE(x) ((void *)x)
 #endif
 
-int Client::sys_get_last_error() noexcept {
+int Client::sys_get_last_error() const noexcept {
 #ifdef _WIN32
   return GetLastError();
 #else
@@ -3893,7 +3899,7 @@ int Client::sys_get_last_error() noexcept {
 #endif
 }
 
-void Client::sys_set_last_error(int err) noexcept {
+void Client::sys_set_last_error(int err) const noexcept {
 #ifdef _WIN32
   SetLastError(err);
 #else
@@ -3922,7 +3928,7 @@ int Client::sys_connect(Socket fd, const sockaddr *sa, socklen_t len) noexcept {
   return ::connect(fd, sa, len);
 }
 
-Ssize Client::sys_recv(Socket fd, void *base, Size count) noexcept {
+Ssize Client::sys_recv(Socket fd, void *base, Size count) const noexcept {
   if (count > LIBNDT_OS_SSIZE_MAX) {
     sys_set_last_error(OS_EINVAL);
     return -1;
@@ -3935,7 +3941,7 @@ Ssize Client::sys_recv(Socket fd, void *base, Size count) noexcept {
   return (Ssize)::recv(fd, LIBNDT_AS_OS_BUFFER(base), LIBNDT_AS_OS_BUFFER_LEN(count), flags);
 }
 
-Ssize Client::sys_send(Socket fd, const void *base, Size count) noexcept {
+Ssize Client::sys_send(Socket fd, const void *base, Size count) const noexcept {
   if (count > LIBNDT_OS_SSIZE_MAX) {
     sys_set_last_error(OS_EINVAL);
     return -1;
@@ -3961,11 +3967,11 @@ int Client::sys_closesocket(Socket fd) noexcept {
 }
 
 #ifdef _WIN32
-int Client::sys_poll(LPWSAPOLLFD fds, ULONG nfds, INT timeout) noexcept {
+int Client::sys_poll(LPWSAPOLLFD fds, ULONG nfds, INT timeout) const noexcept {
   return ::WSAPoll(fds, nfds, timeout);
 }
 #else
-int Client::sys_poll(pollfd *fds, nfds_t nfds, int timeout) noexcept {
+int Client::sys_poll(pollfd *fds, nfds_t nfds, int timeout) const noexcept {
   return ::poll(fds, nfds, timeout);
 }
 #endif
