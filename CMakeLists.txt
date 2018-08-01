@@ -25,17 +25,17 @@ file(DOWNLOAD https://raw.githubusercontent.com/nlohmann/json/v3.1.2/single_incl
      TLS_VERIFY ON SHOW_PROGRESS)
 
 message(STATUS "Downloading catchorg/Catch2")
-file(DOWNLOAD https://github.com/catchorg/Catch2/releases/download/v2.2.2/catch.hpp
+file(DOWNLOAD https://github.com/catchorg/Catch2/releases/download/v2.3.0/catch.hpp
      "${CMAKE_CURRENT_BINARY_DIR}/catch.hpp" EXPECTED_HASH
-     SHA256=e0e0d85b65ffaab0006160e2238d9761212e93182716fcc85a87863042932919
+     SHA256=5eb8532fd5ec0d28433eba8a749102fd1f98078c5ebf35ad607fb2455a000004
      TLS_VERIFY ON SHOW_PROGRESS)
 
 set(LIBNDT_ENABLE_CURL "TRUE" CACHE BOOL "Whether to enable cURL")
 if("${MSVC}" AND "${LIBNDT_ENABLE_CURL}")
   set(_CURL_BASEURL "https://github.com/measurement-kit/prebuilt/releases/download")
   set(_CURL_CHANNEL "testing")
-  set(_CURL_HASH "75f291c6da7c1d66ac932a5002ccc60a59442f725f291491dfda3e3c1027475b")
-  set(_CURL_VERSION "7.59.0-1")
+  set(_CURL_HASH "c4321f05ac238d42f2487536c4fdd8e55af68a3f364008271fe3b6741c6b855f")
+  set(_CURL_VERSION "7.61.0-1")
   set(_CURL_URL "${_CURL_BASEURL}/${_CURL_CHANNEL}/windows-curl-${_CURL_VERSION}.tar.gz")
   message(STATUS "Downloading precompiled cURL: ${_CURL_URL}")
   file(DOWNLOAD "${_CURL_URL}"
