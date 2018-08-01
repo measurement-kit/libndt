@@ -367,15 +367,20 @@ enum class Err {
 /// show such results to a user or store them on the disk.
 class Client {
  public:
-  // Implementation note: this is the classic implementation of the pimpl
-  // pattern where we use a unique pointer, constructor and destructor are
-  // defined in the ndt.cpp file so the code compiles, and copy/move
-  // constructors and operators are not defined, thus resulting deleted.
-  //
-  // See <https://herbsutter.com/gotw/_100/>.
-
   /// Constructs a Client with default settings.
   Client() noexcept;
+
+  /// Deleted copy constructor.
+  Client(const Client &) noexcept = delete;
+
+  /// Deleted copy assignment.
+  Client &operator=(const Client &) noexcept = delete;
+
+  /// Deleted move constructor.
+  Client(Client &&) noexcept = delete;
+
+  /// Deleted move assignment.
+  Client &operator=(Client &&) noexcept = delete;
 
   /// Constructs a Client with the specified @p settings.
   explicit Client(Settings settings) noexcept;
@@ -395,17 +400,17 @@ class Client {
   /// Called when a warning message is emitted. The default behavior is to write
   /// the warning onto the `std::clog` standard stream. \warning This method
   /// could be called from a different thread context.
-  virtual void on_warning(const std::string &s);
+  virtual void on_warning(const std::string &s) const;
 
   /// Called when an informational message is emitted. The default behavior is
   /// to write the message onto the `std::clog` standard stream. \warning This method
   /// could be called from a different thread context.
-  virtual void on_info(const std::string &s);
+  virtual void on_info(const std::string &s) const;
 
   /// Called when a debug message is emitted. The default behavior is
   /// to write the message onto the `std::clog` standard stream. \warning This method
   /// could be called from a different thread context.
-  virtual void on_debug(const std::string &s);
+  virtual void on_debug(const std::string &s) const;
 
   /// Called to inform you about the measured speed. The default behavior is
   /// to write the provided information as an info message. @param tid is either
@@ -530,19 +535,19 @@ class Client {
   // Send @p count bytes from @p base over @p sock as a frame whose first byte
   // @p first_byte should contain the opcode and possibly the FIN flag.
   virtual Err ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
-                            Size count) noexcept;
+                            Size count) const noexcept;
 
   // Receive a frame from @p sock. Puts the opcode in @p *opcode. Puts whether
   // there is a FIN flag in @p *fin. The buffer starts at @p base and it
   // contains @p total bytes. Puts in @p *count the actual number of bytes
   // in the message. @return The error that occurred or Err::none.
   Err ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin, uint8_t *base,
-                        Size total, Size *count) noexcept;
+                        Size total, Size *count) const noexcept;
 
   // Receive a frame. Automatically and transparently responds to PING, ignores
   // PONG, and handles CLOSE frames. Arguments like ws_recv_any_frame().
   Err ws_recv_frame(Socket sock, uint8_t *opcode, bool *fin, uint8_t *base,
-                    Size total, Size *count) noexcept;
+                    Size total, Size *count) const noexcept;
 
   // Receive a message consisting of one or more frames. Transparently handles
   // PING and PONG frames. Handles CLOSE frames. @param sock is the socket to
@@ -551,7 +556,7 @@ class Client {
   // count contains the actual message size. @return An error on failure or
   // Err::none in case of success.
   Err ws_recvmsg(Socket sock, uint8_t *opcode, uint8_t *base, Size total,
-                 Size *count) noexcept;
+                 Size *count) const noexcept;
 
   // Networking layer
   // ````````````````
@@ -605,25 +610,26 @@ class Client {
 
   // Receive from the network.
   virtual Err netx_recv(Socket fd, void *base, Size count,
-                        Size *actual) noexcept;
+                        Size *actual) const noexcept;
 
   // Receive from the network without blocking.
   virtual Err netx_recv_nonblocking(Socket fd, void *base, Size count,
-                                    Size *actual) noexcept;
+                                    Size *actual) const noexcept;
 
   // Receive exactly N bytes from the network.
-  virtual Err netx_recvn(Socket fd, void *base, Size count) noexcept;
+  virtual Err netx_recvn(Socket fd, void *base, Size count) const noexcept;
 
   // Send data to the network.
   virtual Err netx_send(Socket fd, const void *base, Size count,
-                        Size *actual) noexcept;
+                        Size *actual) const noexcept;
 
   // Send to the network without blocking.
   virtual Err netx_send_nonblocking(Socket fd, const void *base, Size count,
-                                    Size *actual) noexcept;
+                                    Size *actual) const noexcept;
 
   // Send exactly N bytes to the network.
-  virtual Err netx_sendn(Socket fd, const void *base, Size count) noexcept;
+  virtual Err netx_sendn(
+    Socket fd, const void *base, Size count) const noexcept;
 
   // Resolve hostname into a list of IP addresses.
   virtual Err netx_resolve(const std::string &hostname,
@@ -633,13 +639,14 @@ class Client {
   virtual Err netx_setnonblocking(Socket fd, bool enable) noexcept;
 
   // Pauses until the socket becomes readable.
-  virtual Err netx_wait_readable(Socket, Timeout timeout) noexcept;
+  virtual Err netx_wait_readable(Socket, Timeout timeout) const noexcept;
 
   // Pauses until the socket becomes writeable.
-  virtual Err netx_wait_writeable(Socket, Timeout timeout) noexcept;
+  virtual Err netx_wait_writeable(Socket, Timeout timeout) const noexcept;
 
   // Main function for dealing with I/O patterned after poll(2).
-  virtual Err netx_poll(std::vector<pollfd> *fds, int timeout_msec) noexcept;
+  virtual Err netx_poll(
+    std::vector<pollfd> *fds, int timeout_msec) const noexcept;
 
   // Shutdown both ends of a socket.
   virtual Err netx_shutdown_both(Socket fd) noexcept;
@@ -696,10 +703,10 @@ class Client {
   // This section contains wrappers for system calls used in regress tests.
 
   // Access the value of errno in a portable way.
-  virtual int sys_get_last_error() noexcept;
+  virtual int sys_get_last_error() const noexcept;
 
   // Set the value of errno in a portable way.
-  virtual void sys_set_last_error(int err) noexcept;
+  virtual void sys_set_last_error(int err) const noexcept;
 
   // getaddrinfo() wrapper that can be mocked in tests.
   virtual int sys_getaddrinfo(const char *domain, const char *port,
@@ -720,10 +727,11 @@ class Client {
   virtual int sys_connect(Socket fd, const sockaddr *sa, socklen_t n) noexcept;
 
   // recv() wrapper that can be mocked in tests.
-  virtual Ssize sys_recv(Socket fd, void *base, Size count) noexcept;
+  virtual Ssize sys_recv(Socket fd, void *base, Size count) const noexcept;
 
   // send() wrapper that can be mocked in tests.
-  virtual Ssize sys_send(Socket fd, const void *base, Size count) noexcept;
+  virtual Ssize sys_send(
+    Socket fd, const void *base, Size count) const noexcept;
 
   // shutdown() wrapper that can be mocked in tests.
   virtual int sys_shutdown(Socket fd, int shutdown_how) noexcept;
@@ -733,9 +741,9 @@ class Client {
 
   // poll() wrapper that can be mocked in tests.
 #ifdef _WIN32
-  virtual int sys_poll(LPWSAPOLLFD fds, ULONG nfds, INT timeout) noexcept;
+  virtual int sys_poll(LPWSAPOLLFD fds, ULONG nfds, INT timeout) const noexcept;
 #else
-  virtual int sys_poll(pollfd *fds, nfds_t nfds, int timeout) noexcept;
+  virtual int sys_poll(pollfd *fds, nfds_t nfds, int timeout) const noexcept;
 #endif
 
   // If strtonum() is available, wrapper that can be mocked in tests, else
@@ -761,8 +769,25 @@ class Client {
                              socklen_t *len) noexcept;
 
  private:
-  class Impl;
-  std::unique_ptr<Impl> impl;
+  class Winsock {
+   public:
+    Winsock() noexcept;
+    Winsock(const Winsock &) = delete;
+    Winsock &operator=(const Winsock &) = delete;
+    Winsock(Winsock &&) = delete;
+    Winsock &operator=(Winsock &&) = delete;
+    ~Winsock() noexcept;
+  };
+
+  Socket sock_ = -1;
+  std::vector<NettestFlags> granted_suite_;
+  Settings settings_;
+#ifdef LIBNDT_HAVE_OPENSSL
+  std::map<Socket, SSL *> fd_to_ssl_;
+#endif
+#ifdef _WIN32
+  Winsock winsock_;
+#endif
 };
 
 // Implementation section
@@ -1066,17 +1091,8 @@ static bool emit_result(Client *client, std::string scope,
 //  to WSAStartup. Only the final WSACleanup function call performs
 //  the actual cleanup. The preceding calls simply decrement
 //  an internal reference count in the WS2_32.DLL."
-class Winsock {
- public:
-  Winsock() noexcept;
-  Winsock(const Winsock &) = delete;
-  Winsock &operator=(const Winsock &) = delete;
-  Winsock(Winsock &&) = delete;
-  Winsock &operator=(Winsock &&) = delete;
-  ~Winsock() noexcept;
-};
 
-Winsock::Winsock() noexcept {
+Client::Winsock::Winsock() noexcept {
   WORD requested = MAKEWORD(2, 2);
   WSADATA data;
   if (::WSAStartup(requested, &data) != 0) {
@@ -1084,25 +1100,12 @@ Winsock::Winsock() noexcept {
   }
 }
 
-Winsock::~Winsock() noexcept {
+Client::Winsock::~Winsock() noexcept {
   if (::WSACleanup() != 0) {
     abort();
   }
 }
 #endif  // _WIN32
-
-class Client::Impl {
- public:
-  Socket sock = -1;
-  std::vector<NettestFlags> granted_suite;
-  Settings settings;
-#ifdef LIBNDT_HAVE_OPENSSL
-  std::map<Socket, SSL *> fd_to_ssl;
-#endif
-#ifdef _WIN32
-  Winsock winsock;
-#endif
-};
 
 class SocketVector {
  public:
@@ -1125,15 +1128,15 @@ SocketVector::~SocketVector() noexcept {
 // Client constructor and destructor
 // `````````````````````````````````
 
-Client::Client() noexcept { impl.reset(new Client::Impl); }
+Client::Client() noexcept {}
 
 Client::Client(Settings settings) noexcept : Client::Client() {
-  std::swap(impl->settings, settings);
+  std::swap(settings_, settings);
 }
 
 Client::~Client() noexcept {
-  if (impl->sock != -1) {
-    netx_closesocket(impl->sock);
+  if (sock_ != -1) {
+    netx_closesocket(sock_);
   }
 }
 
@@ -1147,7 +1150,7 @@ bool Client::run() noexcept {
   }
   for (auto &fqdn : fqdns) {
     LIBNDT_EMIT_INFO("trying to connect to " << fqdn);
-    impl->settings.hostname = fqdn;
+    settings_.hostname = fqdn;
     if (!connect()) {
       LIBNDT_EMIT_WARNING("cannot connect to remote host; trying another one");
       continue;
@@ -1197,13 +1200,15 @@ bool Client::run() noexcept {
   return false;
 }
 
-void Client::on_warning(const std::string &msg) {
+void Client::on_warning(const std::string &msg) const {
   std::clog << "[!] " << msg << std::endl;
 }
 
-void Client::on_info(const std::string &msg) { std::clog << msg << std::endl; }
+void Client::on_info(const std::string &msg) const {
+  std::clog << msg << std::endl;
+}
 
-void Client::on_debug(const std::string &msg) {
+void Client::on_debug(const std::string &msg) const {
   std::clog << "[D] " << msg << std::endl;
 }
 
@@ -1233,36 +1238,36 @@ void Client::on_server_busy(std::string msg) {
 
 bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
   assert(fqdns != nullptr);
-  if (!impl->settings.hostname.empty()) {
+  if (!settings_.hostname.empty()) {
     LIBNDT_EMIT_DEBUG("no need to query mlab-ns; we have hostname");
     // When we already know the hostname that we want to use just fake out the
     // result of a mlabns query as like mlabns returned that hostname.
-    fqdns->push_back(std::move(impl->settings.hostname));
+    fqdns->push_back(std::move(settings_.hostname));
     return true;
   }
-  std::string mlabns_url = impl->settings.mlabns_base_url;
-  if ((impl->settings.nettest_flags & nettest_flag_download_ext) != 0) {
+  std::string mlabns_url = settings_.mlabns_base_url;
+  if ((settings_.nettest_flags & nettest_flag_download_ext) != 0) {
     LIBNDT_EMIT_WARNING("tweaking mlabns settings to allow for multi stream download");
     LIBNDT_EMIT_WARNING("we need to use the neubot sliver and to force json since");
     LIBNDT_EMIT_WARNING("this is the only configuration supported by neubot's sliver");
-    impl->settings.protocol_flags &= ~protocol_flag_tls;
-    impl->settings.protocol_flags &= ~protocol_flag_websocket;
-    impl->settings.protocol_flags |= protocol_flag_json;
+    settings_.protocol_flags &= ~protocol_flag_tls;
+    settings_.protocol_flags &= ~protocol_flag_websocket;
+    settings_.protocol_flags |= protocol_flag_json;
     mlabns_url += "/neubot";  // only botticelli implements multi stream dload
   } else {
-    if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
       mlabns_url += "/ndt_ssl";
     } else {
       mlabns_url += "/ndt";
     }
   }
-  if (impl->settings.mlabns_policy == mlabns_policy_random) {
+  if (settings_.mlabns_policy == mlabns_policy_random) {
     mlabns_url += "?policy=random";
-  } else if (impl->settings.mlabns_policy == mlabns_policy_geo_options) {
+  } else if (settings_.mlabns_policy == mlabns_policy_geo_options) {
     mlabns_url += "?policy=geo_options";
   }
   std::string body;
-  if (!query_mlabns_curl(mlabns_url, impl->settings.timeout, &body)) {
+  if (!query_mlabns_curl(mlabns_url, settings_.timeout, &body)) {
     return false;
   }
   LIBNDT_EMIT_DEBUG("mlabns reply: " << body);
@@ -1297,9 +1302,9 @@ bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
 
 bool Client::connect() noexcept {
   std::string port;
-  if (!impl->settings.port.empty()) {
-    port = impl->settings.port;
-  } else if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+  if (!settings_.port.empty()) {
+    port = settings_.port;
+  } else if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     port = "3010";
   } else {
     port = "3001";
@@ -1307,16 +1312,16 @@ bool Client::connect() noexcept {
   // We may be called more than once when looping over the list returned by
   // geo_options. Therefore, the socket may already be open. In such case we
   // want to close it such that we don't leak resources.
-  if (is_socket_valid(impl->sock)) {
+  if (is_socket_valid(sock_)) {
     LIBNDT_EMIT_DEBUG("closing socket openned in previous attempt");
-    (void)netx_closesocket(impl->sock);
-    impl->sock = (Socket)-1;
+    (void)netx_closesocket(sock_);
+    sock_ = (Socket)-1;
   }
   return netx_maybews_dial(  //
-             impl->settings.hostname, port,
+             settings_.hostname, port,
              ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
                  ws_f_sec_ws_protocol,
-             ws_proto_control, &impl->sock) == Err::none;
+             ws_proto_control, &sock_) == Err::none;
 }
 
 bool Client::send_login() noexcept {
@@ -1324,12 +1329,12 @@ bool Client::send_login() noexcept {
 }
 
 bool Client::recv_kickoff() noexcept {
-  if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+  if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
     LIBNDT_EMIT_INFO("no kickoff when using websocket");
     return true;
   }
   char buf[msg_kickoff_size];
-  auto err = netx_recvn(impl->sock, buf, sizeof(buf));
+  auto err = netx_recvn(sock_, buf, sizeof(buf));
   if (err != Err::none) {
     LIBNDT_EMIT_WARNING("recv_kickoff: netx_recvn() failed");
     return false;
@@ -1383,13 +1388,13 @@ bool Client::recv_tests_ids() noexcept {
                    << cur.data() << " (error: " << errstr << ")");
       return false;
     }
-    impl->granted_suite.push_back(NettestFlags{tid});
+    granted_suite_.push_back(NettestFlags{tid});
   }
   return true;
 }
 
 bool Client::run_tests() noexcept {
-  for (auto &tid : impl->granted_suite) {
+  for (auto &tid : granted_suite_) {
     if (tid == nettest_flag_upload) {
       LIBNDT_EMIT_INFO("running upload test");
       if (!run_upload()) {
@@ -1453,8 +1458,8 @@ bool Client::wait_close() noexcept {
   // connection rather than the client: so that the TIME_WAIT state is entered
   // by the server, such that there is little server side impact.
   constexpr Timeout wait_for_close = 3;
-  (void)netx_wait_readable(impl->sock, wait_for_close);
-  (void)netx_closesocket(impl->sock);
+  (void)netx_wait_readable(sock_, wait_for_close);
+  (void)netx_closesocket(sock_);
   return true;
 }
 
@@ -1476,7 +1481,7 @@ bool Client::run_download() noexcept {
     // namely with requirement 2: "If multiple connections to the same IP
     // address are attempted simultaneously, the client MUST serialize them".
     Err err = netx_maybews_dial(  //
-        impl->settings.hostname, port,
+        settings_.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
           | ws_f_sec_ws_protocol, ws_proto_s2c,
         &sock);
@@ -1501,8 +1506,9 @@ bool Client::run_download() noexcept {
     auto begin = std::chrono::steady_clock::now();
     std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
-    auto max_runtime = impl->settings.max_runtime;
-    auto ws = (impl->settings.protocol_flags & protocol_flag_websocket) != 0;
+    auto max_runtime = settings_.max_runtime;
+    auto ws = (settings_.protocol_flags & protocol_flag_websocket) != 0;
+    const Client *const_this = this;
     for (Socket fd : dload_socks.sockets) {
       active += 1;  // atomic
       auto main = [
@@ -1511,7 +1517,7 @@ bool Client::run_download() noexcept {
         fd,            // copy for safety
         max_runtime,   // copy for safety
         &recent_data,  // reference to atomic
-        this,          // pointer (careful!)
+        const_this,    // const pointer
         &total_data,   // reference to atomic
         ws             // copy for safety
       ]() noexcept {
@@ -1521,18 +1527,20 @@ bool Client::run_download() noexcept {
           Size n = 0;
           if (ws) {
             uint8_t op = 0;
-            err = ws_recvmsg(fd, &op, (uint8_t *)buf, sizeof (buf), &n);
+            err = const_this->ws_recvmsg(
+                    fd, &op, (uint8_t *)buf, sizeof (buf), &n);
             if (err == Err::none && op != ws_opcode_binary) {
-              LIBNDT_EMIT_WARNING("run_download: unexpected opcode: "
-                           << (unsigned int)op);
+              LIBNDT_EMIT_WARNING_EX(const_this,
+                "run_download: unexpected opcode: " << (unsigned int)op);
               break;
             }
           } else {
-            err = netx_recv(fd, buf, sizeof(buf), &n);
+            err = const_this->netx_recv(fd, buf, sizeof(buf), &n);
           }
           if (err != Err::none) {
             if (err != Err::eof) {
-              LIBNDT_EMIT_WARNING("run_download: receiving: " << libndt_perror(err));
+              LIBNDT_EMIT_WARNING_EX(const_this,
+                "run_download: receiving: " << libndt_perror(err));
             }
             break;
           }
@@ -1565,7 +1573,7 @@ bool Client::run_download() noexcept {
                        static_cast<double>(recent_data),  // atomic
                        measurement_interval.count(),      //
                        elapsed.count(),                   //
-                       impl->settings.max_runtime);
+                       settings_.max_runtime);
         recent_data = 0;  // atomic
         prev = now;
       }
@@ -1627,7 +1635,7 @@ bool Client::run_meta() noexcept {
     return false;
   }
 
-  for (auto &kv : impl->settings.metadata) {
+  for (auto &kv : settings_.metadata) {
     std::stringstream ss;
     ss << kv.first << ":" << kv.second;
     if (!msg_write(msg_test_msg, ss.str())) {
@@ -1664,7 +1672,7 @@ bool Client::run_upload() noexcept {
     // Remark: in case we'll even implement multi-stream here, remember that
     // websocket requires connections to be serialized. See above.
     Err err = netx_maybews_dial(  //
-        impl->settings.hostname, port,
+        settings_.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
           | ws_f_sec_ws_protocol, ws_proto_c2s,
         &sock);
@@ -1684,8 +1692,9 @@ bool Client::run_upload() noexcept {
     auto begin = std::chrono::steady_clock::now();
     std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
-    auto max_runtime = impl->settings.max_runtime;
-    auto ws = (impl->settings.protocol_flags & protocol_flag_websocket) != 0;
+    auto max_runtime = settings_.max_runtime;
+    auto ws = (settings_.protocol_flags & protocol_flag_websocket) != 0;
+    const Client *const_this = this;
     for (Socket fd : upload_socks.sockets) {
       active += 1;  // atomic
       auto main = [
@@ -1694,7 +1703,7 @@ bool Client::run_upload() noexcept {
         fd,            // copy for safety
         max_runtime,   // copy for safety
         &recent_data,  // reference to atomic
-        this,          // pointer (careful!)
+        const_this,    // const pointer
         &total_data,   // reference to atomic
         ws             // copy for safety
       ]() noexcept {
@@ -1704,24 +1713,25 @@ bool Client::run_upload() noexcept {
           random_printable_fill(buf, sizeof(buf));
           auto now = std::chrono::steady_clock::now();
           std::chrono::duration<double> elapsed = now - begin;
-          LIBNDT_EMIT_DEBUG("run_upload: time to fill random buffer: "
-                     << elapsed.count());
+          LIBNDT_EMIT_DEBUG_EX(const_this,
+            "run_upload: time to fill random buffer: " << elapsed.count());
         }
         for (;;) {
           Size n = 0;
           auto err = Err::none;
           if (ws) {
-            err = ws_send_frame(fd, ws_opcode_binary | ws_fin_flag,
+            err = const_this->ws_send_frame(fd, ws_opcode_binary | ws_fin_flag,
                       (uint8_t *)buf, sizeof (buf));
             if (err == Err::none) {
               n = sizeof (buf);
             }
           } else {
-            err = netx_send(fd, buf, sizeof(buf), &n);
+            err = const_this->netx_send(fd, buf, sizeof(buf), &n);
           }
           if (err != Err::none) {
             if (err != Err::broken_pipe) {
-              LIBNDT_EMIT_WARNING("run_upload: sending: " << libndt_perror(err));
+              LIBNDT_EMIT_WARNING_EX(const_this,
+                "run_upload: sending: " << libndt_perror(err));
             }
             break;
           }
@@ -1754,7 +1764,7 @@ bool Client::run_upload() noexcept {
                        static_cast<double>(recent_data),  // atomic
                        measurement_interval.count(),      //
                        elapsed.count(),                   //
-                       impl->settings.max_runtime);
+                       settings_.max_runtime);
         recent_data = 0;  // atomic
         prev = now;
       }
@@ -1786,33 +1796,33 @@ bool Client::run_upload() noexcept {
 // ````````````````
 
 bool Client::msg_write_login(const std::string &version) noexcept {
-  static_assert(sizeof(impl->settings.nettest_flags) == 1,
+  static_assert(sizeof(settings_.nettest_flags) == 1,
                 "nettest_flags too large");
   MsgType code = MsgType{0};
-  impl->settings.nettest_flags |= nettest_flag_status | nettest_flag_meta;
-  if ((impl->settings.nettest_flags & nettest_flag_middlebox) != NettestFlags{0}) {
+  settings_.nettest_flags |= nettest_flag_status | nettest_flag_meta;
+  if ((settings_.nettest_flags & nettest_flag_middlebox) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING("msg_write_login: nettest_flag_middlebox: not implemented");
-    impl->settings.nettest_flags &= ~nettest_flag_middlebox;
+    settings_.nettest_flags &= ~nettest_flag_middlebox;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_simple_firewall) != NettestFlags{0}) {
+  if ((settings_.nettest_flags & nettest_flag_simple_firewall) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING(
         "msg_write_login: nettest_flag_simple_firewall: not implemented");
-    impl->settings.nettest_flags &= ~nettest_flag_simple_firewall;
+    settings_.nettest_flags &= ~nettest_flag_simple_firewall;
   }
-  if ((impl->settings.nettest_flags & nettest_flag_upload_ext) != NettestFlags{0}) {
+  if ((settings_.nettest_flags & nettest_flag_upload_ext) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING("msg_write_login: nettest_flag_upload_ext: not implemented");
-    impl->settings.nettest_flags &= ~nettest_flag_upload_ext;
+    settings_.nettest_flags &= ~nettest_flag_upload_ext;
   }
   std::string serio;
-  if ((impl->settings.protocol_flags & protocol_flag_json) == 0) {
-    serio = std::string{(char *)&impl->settings.nettest_flags,
-                        sizeof(impl->settings.nettest_flags)};
+  if ((settings_.protocol_flags & protocol_flag_json) == 0) {
+    serio = std::string{(char *)&settings_.nettest_flags,
+                        sizeof(settings_.nettest_flags)};
     code = msg_login;
   } else {
     code = msg_extended_login;
     nlohmann::json msg{
         {"msg", version},
-        {"tests", std::to_string((unsigned)impl->settings.nettest_flags)},
+        {"tests", std::to_string((unsigned)settings_.nettest_flags)},
     };
     try {
       serio = msg.dump();
@@ -1830,7 +1840,7 @@ bool Client::msg_write_login(const std::string &version) noexcept {
 
 bool Client::msg_write(MsgType code, std::string &&msg) noexcept {
   LIBNDT_EMIT_DEBUG("msg_write: message to send: " << represent(msg));
-  if ((impl->settings.protocol_flags & protocol_flag_json) != 0) {
+  if ((settings_.protocol_flags & protocol_flag_json) != 0) {
     nlohmann::json json;
     json["msg"] = msg;
     try {
@@ -1864,13 +1874,13 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
     LIBNDT_EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
     {
       auto err = Err::none;
-      if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+      if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
         err = ws_send_frame(
-            impl->sock,
+            sock_,
             ws_opcode_binary | ((msg.size() <= 0) ? ws_fin_flag : 0),
             (uint8_t *)header, sizeof(header));
       } else {
-        err = netx_sendn(impl->sock, header, sizeof(header));
+        err = netx_sendn(sock_, header, sizeof(header));
       }
       if (err != Err::none) {
         LIBNDT_EMIT_WARNING("msg_write_legacy: cannot send NDT message header");
@@ -1885,11 +1895,11 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
   }
   {
     auto err = Err::none;
-    if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
-      err = ws_send_frame(impl->sock, ws_opcode_continue | ws_fin_flag,
+    if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
+      err = ws_send_frame(sock_, ws_opcode_continue | ws_fin_flag,
                           (uint8_t *)msg.data(), msg.size());
     } else {
-      err = netx_sendn(impl->sock, msg.data(), msg.size());
+      err = netx_sendn(sock_, msg.data(), msg.size());
     }
     if (err != Err::none) {
       LIBNDT_EMIT_WARNING("msg_write_legacy: cannot send NDT message body");
@@ -1985,7 +1995,7 @@ bool Client::msg_read(MsgType *code, std::string *msg) noexcept {
   if (!msg_read_legacy(code, &s)) {
     return false;
   }
-  if ((impl->settings.protocol_flags & protocol_flag_json) == 0) {
+  if ((settings_.protocol_flags & protocol_flag_json) == 0) {
     std::swap(s, *msg);
   } else {
     nlohmann::json json;
@@ -2016,10 +2026,10 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
   *msg = "";
   {
     Size ws_msg_len = 0;
-    if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+    if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
       uint8_t opcode = 0;
       auto err = ws_recvmsg(  //
-          impl->sock, &opcode, (uint8_t *)buffer, sizeof(buffer), &ws_msg_len);
+          sock_, &opcode, (uint8_t *)buffer, sizeof(buffer), &ws_msg_len);
       if (err != Err::none) {
         LIBNDT_EMIT_WARNING(
             "msg_read_legacy: cannot read NDT message using websocket");
@@ -2038,7 +2048,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
     } else {
       static_assert(sizeof(buffer) >= header_size,
                     "Not enough room in buffer to read the NDT header");
-      auto err = netx_recvn(impl->sock, buffer, header_size);
+      auto err = netx_recvn(sock_, buffer, header_size);
       if (err != Err::none) {
         LIBNDT_EMIT_WARNING("msg_read_legacy: cannot read NDT message header");
         return false;
@@ -2052,7 +2062,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
     *code = MsgType{(unsigned char)buffer[0]};
     memcpy(&len, &buffer[1], sizeof(len));
     len = ntohs(len);
-    if ((impl->settings.protocol_flags & protocol_flag_websocket) != 0) {
+    if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
       assert(ws_msg_len >= header_size);  // Proper check above
       if (len != ws_msg_len - header_size) {
         LIBNDT_EMIT_WARNING("msg_read_legacy: got inconsistent websocket message");
@@ -2065,10 +2075,10 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
     LIBNDT_EMIT_DEBUG("msg_read_legacy: zero length message");
     return true;
   }
-  if ((impl->settings.protocol_flags & protocol_flag_websocket) == 0) {
+  if ((settings_.protocol_flags & protocol_flag_websocket) == 0) {
     assert(sizeof(buffer) >= header_size &&
            sizeof(buffer) - header_size >= len);
-    auto err = netx_recvn(impl->sock, &buffer[header_size], len);
+    auto err = netx_recvn(sock_, &buffer[header_size], len);
     if (err != Err::none) {
       LIBNDT_EMIT_WARNING("msg_read_legacy: cannot read NDT message body");
       return false;
@@ -2137,9 +2147,9 @@ Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
     // varies for each connection. Or we're not compliant.
     constexpr auto key_header = "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==";
     std::stringstream host_header;
-    host_header << "Host: " << impl->settings.hostname;
+    host_header << "Host: " << settings_.hostname;
     // Adding nonstandard port as specified in RFC6455 Sect. 4.1.
-    if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+    if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
       if (port != "443") {
         host_header << ":" << port;
       }
@@ -2219,7 +2229,7 @@ Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
 }
 
 Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
-                          Size count) noexcept {
+                          Size count) const noexcept {
   // TODO(bassosimone): perhaps move the RNG into Client?
   constexpr Size mask_size = 4;
   uint8_t mask[mask_size] = {};
@@ -2326,7 +2336,7 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
 }
 
 Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
-                              uint8_t *base, Size total, Size *count) noexcept {
+      uint8_t *base, Size total, Size *count) const noexcept {
   if (opcode == nullptr || fin == nullptr || count == nullptr) {
     LIBNDT_EMIT_WARNING("ws_recv_any_frame: passed invalid return arguments");
     return Err::invalid_argument;
@@ -2481,7 +2491,7 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
 }
 
 Err Client::ws_recv_frame(Socket sock, uint8_t *opcode, bool *fin,
-                          uint8_t *base, Size total, Size *count) noexcept {
+      uint8_t *base, Size total, Size *count) const noexcept {
   // "Control frames (see Section 5.5) MAY be injected in the middle of
   // a fragmented message.  Control frames themselves MUST NOT be fragmented."
   //    -- RFC6455 Section 5.4.
@@ -2540,7 +2550,7 @@ again:
 
 Err Client::ws_recvmsg(  //
     Socket sock, uint8_t *opcode, uint8_t *base, Size total,
-    Size *count) noexcept {
+    Size *count) const noexcept {
   // General remark from RFC6455 Sect. 5.4: "[I]n absence of extensions, senders
   // and receivers must not depend on [...] specific frame boundaries."
   //
@@ -2768,7 +2778,7 @@ static BIO_METHOD *libndt_bio_method() noexcept {
 // } - - - END BIO IMPLEMENTATION - - -
 
 // Common function to map OpenSSL errors to Err.
-static Err map_ssl_error(Client *client, SSL *ssl, int ret) noexcept {
+static Err map_ssl_error(const Client *client, SSL *ssl, int ret) noexcept {
   auto reason = ::SSL_get_error(ssl, ret);
   switch (reason) {
     case SSL_ERROR_NONE:
@@ -2829,7 +2839,7 @@ Err Client::netx_maybews_dial(const std::string &hostname,
     return err;
   }
   LIBNDT_EMIT_DEBUG("netx_maybews_dial: netx_maybessl_dial() returned successfully");
-  if ((impl->settings.protocol_flags & protocol_flag_websocket) == 0) {
+  if ((settings_.protocol_flags & protocol_flag_websocket) == 0) {
     LIBNDT_EMIT_DEBUG("netx_maybews_dial: websocket not enabled");
     return Err::none;
   }
@@ -2849,22 +2859,22 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   // Temporarily clear the TLS flag because I/O functions inside of socks5h
   // code would otherwise fail given we've not established TLS yet. Then restore
   // the original flags right after the socks5h code returns.
-  auto flags = impl->settings.protocol_flags;
-  impl->settings.protocol_flags &= ~protocol_flag_tls;
+  auto flags = settings_.protocol_flags;
+  settings_.protocol_flags &= ~protocol_flag_tls;
   auto err = netx_maybesocks5h_dial(hostname, port, sock);
-  impl->settings.protocol_flags = flags;
+  settings_.protocol_flags = flags;
   if (err != Err::none) {
     return err;
   }
   LIBNDT_EMIT_DEBUG(
       "netx_maybessl_dial: netx_maybesocks5h_dial() returned successfully");
-  if ((impl->settings.protocol_flags & protocol_flag_tls) == 0) {
+  if ((settings_.protocol_flags & protocol_flag_tls) == 0) {
     LIBNDT_EMIT_DEBUG("netx_maybessl_dial: TLS not enabled");
     return Err::none;
   }
 #ifdef LIBNDT_HAVE_OPENSSL
   LIBNDT_EMIT_DEBUG("netx_maybetls_dial: about to start TLS handshake");
-  if (impl->settings.ca_bundle_path.empty() && impl->settings.tls_verify_peer) {
+  if (settings_.ca_bundle_path.empty() && settings_.tls_verify_peer) {
 #ifndef _WIN32
     // See <https://serverfault.com/a/722646>
     std::vector<std::string> candidates{
@@ -2874,11 +2884,11 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     for (auto &candidate : candidates) {
       if (access(candidate.c_str(), R_OK) == 0) {
         LIBNDT_EMIT_DEBUG("Using '" << candidate.c_str() << "' as CA");
-        impl->settings.ca_bundle_path = candidate;
+        settings_.ca_bundle_path = candidate;
         break;
       }
     }
-    if (impl->settings.ca_bundle_path.empty()) {
+    if (settings_.ca_bundle_path.empty()) {
 #endif
       LIBNDT_EMIT_WARNING(
           "You did not provide me with a CA bundle path. Without this "
@@ -2900,9 +2910,9 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
       return Err::ssl_generic;
     }
     LIBNDT_EMIT_DEBUG("SSL_CTX created");
-    if (impl->settings.tls_verify_peer) {
+    if (settings_.tls_verify_peer) {
       if (!::SSL_CTX_load_verify_locations(  //
-              ctx, impl->settings.ca_bundle_path.c_str(), nullptr)) {
+              ctx, settings_.ca_bundle_path.c_str(), nullptr)) {
         LIBNDT_EMIT_WARNING("Cannot load the CA bundle path from the file system");
         ::SSL_CTX_free(ctx);
         netx_closesocket(*sock);
@@ -2919,10 +2929,10 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     }
     LIBNDT_EMIT_DEBUG("SSL created");
     ::SSL_CTX_free(ctx);  // Referenced by `ssl` so safe to free here
-    assert(impl->fd_to_ssl.count(*sock) == 0);
+    assert(fd_to_ssl_.count(*sock) == 0);
     // Implementation note: after this point `netx_closesocket(*sock)` will
     // imply that `::SSL_free(ssl)` is also called.
-    impl->fd_to_ssl[*sock] = ssl;
+    fd_to_ssl_[*sock] = ssl;
   }
   BIO *bio = ::BIO_new(libndt_bio_method());
   if (bio == nullptr) {
@@ -2941,7 +2951,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   ::BIO_set_data(bio, this);
   ::SSL_set_connect_state(ssl);
   LIBNDT_EMIT_DEBUG("Socket added to SSL context");
-  if (impl->settings.tls_verify_peer) {
+  if (settings_.tls_verify_peer) {
     // This approach for validating the hostname should work with versions
     // of OpenSSL greater than v1.0.2 and with LibreSSL. Code taken from the
     // wiki: <https://wiki.openssl.org/index.php/Hostname_validation>.
@@ -2958,7 +2968,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     LIBNDT_EMIT_DEBUG("SSL_VERIFY_PEER configured");
   }
   err = ssl_retry_unary_op("SSL_do_handshake", this, ssl, *sock,
-                           impl->settings.timeout, [](SSL *ssl) -> int {
+                           settings_.timeout, [](SSL *ssl) -> int {
                              ERR_clear_error();
                              return ::SSL_do_handshake(ssl);
                            });
@@ -2978,12 +2988,12 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
 Err Client::netx_maybesocks5h_dial(const std::string &hostname,
                                    const std::string &port,
                                    Socket *sock) noexcept {
-  if (impl->settings.socks5h_port.empty()) {
+  if (settings_.socks5h_port.empty()) {
     LIBNDT_EMIT_DEBUG("socks5h: not configured, connecting directly");
     return netx_dial(hostname, port, sock);
   }
   {
-    auto err = netx_dial("127.0.0.1", impl->settings.socks5h_port, sock);
+    auto err = netx_dial("127.0.0.1", settings_.socks5h_port, sock);
     if (err != Err::none) {
       return err;
     }
@@ -3329,7 +3339,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       }
       auto err = netx_map_errno(sys_get_last_error());
       if (CONNECT_IN_PROGRESS(err)) {
-        err = netx_wait_writeable(*sock, impl->settings.timeout);
+        err = netx_wait_writeable(*sock, settings_.timeout);
         if (err == Err::none) {
           int soerr = 0;
           socklen_t soerrlen = sizeof(soerr);
@@ -3361,7 +3371,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
 #undef CONNECT_IN_PROGRESS  // Tidy
 
 Err Client::netx_recv(Socket fd, void *base, Size count,
-                      Size *actual) noexcept {
+                      Size *actual) const noexcept {
   auto err = Err::none;
 again:
   err = netx_recv_nonblocking(fd, base, count, actual);
@@ -3369,9 +3379,9 @@ again:
     return Err::none;
   }
   if (err == Err::operation_would_block || err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, impl->settings.timeout);
+    err = netx_wait_readable(fd, settings_.timeout);
   } else if (err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, impl->settings.timeout);
+    err = netx_wait_writeable(fd, settings_.timeout);
   }
   if (err == Err::none) {
     goto again;
@@ -3382,7 +3392,7 @@ again:
 }
 
 Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
-                                  Size *actual) noexcept {
+                                  Size *actual) const noexcept {
   assert(base != nullptr && actual != nullptr);
   *actual = 0;
   if (count <= 0) {
@@ -3393,14 +3403,14 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
   }
   sys_set_last_error(0);
 #ifdef LIBNDT_HAVE_OPENSSL
-  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+  if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (count > INT_MAX) {
       return Err::invalid_argument;
     }
-    if (impl->fd_to_ssl.count(fd) != 1) {
+    if (fd_to_ssl_.count(fd) != 1) {
       return Err::invalid_argument;
     }
-    auto ssl = impl->fd_to_ssl.at(fd);
+    auto ssl = fd_to_ssl_.at(fd);
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
     ERR_clear_error();
     int ret = ::SSL_read(ssl, base, count);
@@ -3424,7 +3434,7 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
   return Err::none;
 }
 
-Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
+Err Client::netx_recvn(Socket fd, void *base, Size count) const noexcept {
   Size off = 0;
   while (off < count) {
     Size n = 0;
@@ -3444,7 +3454,7 @@ Err Client::netx_recvn(Socket fd, void *base, Size count) noexcept {
 }
 
 Err Client::netx_send(Socket fd, const void *base, Size count,
-                      Size *actual) noexcept {
+                      Size *actual) const noexcept {
   auto err = Err::none;
 again:
   err = netx_send_nonblocking(fd, base, count, actual);
@@ -3452,9 +3462,9 @@ again:
     return Err::none;
   }
   if (err == Err::ssl_want_read) {
-    err = netx_wait_readable(fd, impl->settings.timeout);
+    err = netx_wait_readable(fd, settings_.timeout);
   } else if (err == Err::operation_would_block || err == Err::ssl_want_write) {
-    err = netx_wait_writeable(fd, impl->settings.timeout);
+    err = netx_wait_writeable(fd, settings_.timeout);
   }
   if (err == Err::none) {
     goto again;
@@ -3465,7 +3475,7 @@ again:
 }
 
 Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
-                                  Size *actual) noexcept {
+                                  Size *actual) const noexcept {
   assert(base != nullptr && actual != nullptr);
   *actual = 0;
   if (count <= 0) {
@@ -3476,14 +3486,14 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
   }
   sys_set_last_error(0);
 #ifdef LIBNDT_HAVE_OPENSSL
-  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
+  if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (count > INT_MAX) {
       return Err::invalid_argument;
     }
-    if (impl->fd_to_ssl.count(fd) != 1) {
+    if (fd_to_ssl_.count(fd) != 1) {
       return Err::invalid_argument;
     }
-    auto ssl = impl->fd_to_ssl.at(fd);
+    auto ssl = fd_to_ssl_.at(fd);
     ERR_clear_error();
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
     int ret = ::SSL_write(ssl, base, count);
@@ -3509,7 +3519,7 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
   return Err::none;
 }
 
-Err Client::netx_sendn(Socket fd, const void *base, Size count) noexcept {
+Err Client::netx_sendn(Socket fd, const void *base, Size count) const noexcept {
   Size off = 0;
   while (off < count) {
     Size n = 0;
@@ -3608,7 +3618,7 @@ Err Client::netx_setnonblocking(Socket fd, bool enable) noexcept {
   return Err::none;
 }
 
-static Err netx_wait(Client *client, Socket fd, Timeout timeout,
+static Err netx_wait(const Client *client, Socket fd, Timeout timeout,
                      short expected_events) noexcept {
   pollfd pfd{};
   pfd.fd = fd;
@@ -3632,15 +3642,16 @@ static Err netx_wait(Client *client, Socket fd, Timeout timeout,
   return err;
 }
 
-Err Client::netx_wait_readable(Socket fd, Timeout timeout) noexcept {
+Err Client::netx_wait_readable(Socket fd, Timeout timeout) const noexcept {
   return netx_wait(this, fd, timeout, POLLIN);
 }
 
-Err Client::netx_wait_writeable(Socket fd, Timeout timeout) noexcept {
+Err Client::netx_wait_writeable(Socket fd, Timeout timeout) const noexcept {
   return netx_wait(this, fd, timeout, POLLOUT);
 }
 
-Err Client::netx_poll(std::vector<pollfd> *pfds, int timeout_msec) noexcept {
+Err Client::netx_poll(
+      std::vector<pollfd> *pfds, int timeout_msec) const noexcept {
   if (pfds == nullptr) {
     LIBNDT_EMIT_WARNING("netx_poll: passed a null vector of descriptors");
     return Err::invalid_argument;
@@ -3686,13 +3697,13 @@ again:
 
 Err Client::netx_shutdown_both(Socket fd) noexcept {
 #ifdef LIBNDT_HAVE_OPENSSL
-  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
-    if (impl->fd_to_ssl.count(fd) != 1) {
+  if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
+    if (fd_to_ssl_.count(fd) != 1) {
       return Err::invalid_argument;
     }
-    auto ssl = impl->fd_to_ssl.at(fd);
+    auto ssl = fd_to_ssl_.at(fd);
     auto err = ssl_retry_unary_op(  //
-        "SSL_shutdown", this, ssl, fd, impl->settings.timeout,
+        "SSL_shutdown", this, ssl, fd, settings_.timeout,
         [](SSL *ssl) -> int {
           ERR_clear_error();
           return ::SSL_shutdown(ssl);
@@ -3710,12 +3721,12 @@ Err Client::netx_shutdown_both(Socket fd) noexcept {
 
 Err Client::netx_closesocket(Socket fd) noexcept {
 #if LIBNDT_HAVE_OPENSSL
-  if ((impl->settings.protocol_flags & protocol_flag_tls) != 0) {
-    if (impl->fd_to_ssl.count(fd) != 1) {
+  if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
+    if (fd_to_ssl_.count(fd) != 1) {
       return Err::invalid_argument;
     }
-    ::SSL_free(impl->fd_to_ssl.at(fd));
-    impl->fd_to_ssl.erase(fd);
+    ::SSL_free(fd_to_ssl_.at(fd));
+    fd_to_ssl_.erase(fd);
   }
 #endif
   if (sys_closesocket(fd) != 0) {
@@ -3850,7 +3861,7 @@ Client::UniqueCurl Client::curlx_easy_init() noexcept {
 bool Client::query_mlabns_curl(const std::string &url, long timeout,
                                std::string *body) noexcept {
 #ifdef LIBNDT_HAVE_CURL
-  return curlx_get_maybe_socks5(impl->settings.socks5h_port, url, timeout, body);
+  return curlx_get_maybe_socks5(settings_.socks5h_port, url, timeout, body);
 #else
   (void)url, (void)timeout, (void)body;
   LIBNDT_EMIT_WARNING("cURL not compiled in; don't know how to get server");
@@ -3862,7 +3873,7 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 // `````````````
 
 Verbosity Client::get_verbosity() const noexcept {
-  return impl->settings.verbosity;
+  return settings_.verbosity;
 }
 
 // Dependencies (libc)
@@ -3880,7 +3891,7 @@ Verbosity Client::get_verbosity() const noexcept {
 #define LIBNDT_AS_OS_OPTION_VALUE(x) ((void *)x)
 #endif
 
-int Client::sys_get_last_error() noexcept {
+int Client::sys_get_last_error() const noexcept {
 #ifdef _WIN32
   return GetLastError();
 #else
@@ -3888,7 +3899,7 @@ int Client::sys_get_last_error() noexcept {
 #endif
 }
 
-void Client::sys_set_last_error(int err) noexcept {
+void Client::sys_set_last_error(int err) const noexcept {
 #ifdef _WIN32
   SetLastError(err);
 #else
@@ -3917,7 +3928,7 @@ int Client::sys_connect(Socket fd, const sockaddr *sa, socklen_t len) noexcept {
   return ::connect(fd, sa, len);
 }
 
-Ssize Client::sys_recv(Socket fd, void *base, Size count) noexcept {
+Ssize Client::sys_recv(Socket fd, void *base, Size count) const noexcept {
   if (count > LIBNDT_OS_SSIZE_MAX) {
     sys_set_last_error(OS_EINVAL);
     return -1;
@@ -3930,7 +3941,7 @@ Ssize Client::sys_recv(Socket fd, void *base, Size count) noexcept {
   return (Ssize)::recv(fd, LIBNDT_AS_OS_BUFFER(base), LIBNDT_AS_OS_BUFFER_LEN(count), flags);
 }
 
-Ssize Client::sys_send(Socket fd, const void *base, Size count) noexcept {
+Ssize Client::sys_send(Socket fd, const void *base, Size count) const noexcept {
   if (count > LIBNDT_OS_SSIZE_MAX) {
     sys_set_last_error(OS_EINVAL);
     return -1;
@@ -3956,11 +3967,11 @@ int Client::sys_closesocket(Socket fd) noexcept {
 }
 
 #ifdef _WIN32
-int Client::sys_poll(LPWSAPOLLFD fds, ULONG nfds, INT timeout) noexcept {
+int Client::sys_poll(LPWSAPOLLFD fds, ULONG nfds, INT timeout) const noexcept {
   return ::WSAPoll(fds, nfds, timeout);
 }
 #else
-int Client::sys_poll(pollfd *fds, nfds_t nfds, int timeout) noexcept {
+int Client::sys_poll(pollfd *fds, nfds_t nfds, int timeout) const noexcept {
   return ::poll(fds, nfds, timeout);
 }
 #endif
