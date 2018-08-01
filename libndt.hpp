@@ -1559,7 +1559,7 @@ bool Client::run_download() noexcept {
     }
     auto prev = begin;
     for (;;) {
-      constexpr int timeout_msec = 500;
+      constexpr int timeout_msec = 250;
       std::this_thread::sleep_for(std::chrono::milliseconds(timeout_msec));
       if (active <= 0) {
         break;
@@ -1567,16 +1567,14 @@ bool Client::run_download() noexcept {
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
-      if (measurement_interval.count() > 0.25) {
-        on_performance(nettest_flag_download,             //
-                       active,                            // atomic
-                       static_cast<double>(recent_data),  // atomic
-                       measurement_interval.count(),      //
-                       elapsed.count(),                   //
-                       settings_.max_runtime);
-        recent_data = 0;  // atomic
-        prev = now;
-      }
+      on_performance(nettest_flag_download,             //
+                     active,                            // atomic
+                     static_cast<double>(recent_data),  // atomic
+                     measurement_interval.count(),      //
+                     elapsed.count(),                   //
+                     settings_.max_runtime);
+      recent_data = 0;  // atomic
+      prev = now;
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -1750,7 +1748,7 @@ bool Client::run_upload() noexcept {
     }
     auto prev = begin;
     for (;;) {
-      constexpr int timeout_msec = 500;
+      constexpr int timeout_msec = 250;
       std::this_thread::sleep_for(std::chrono::milliseconds(timeout_msec));
       if (active <= 0) {
         break;
@@ -1758,16 +1756,14 @@ bool Client::run_upload() noexcept {
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
-      if (measurement_interval.count() > 0.25) {
-        on_performance(nettest_flag_upload,               //
-                       active,                            // atomic
-                       static_cast<double>(recent_data),  // atomic
-                       measurement_interval.count(),      //
-                       elapsed.count(),                   //
-                       settings_.max_runtime);
-        recent_data = 0;  // atomic
-        prev = now;
-      }
+      on_performance(nettest_flag_upload,               //
+                     active,                            // atomic
+                     static_cast<double>(recent_data),  // atomic
+                     measurement_interval.count(),      //
+                     elapsed.count(),                   //
+                     settings_.max_runtime);
+      recent_data = 0;  // atomic
+      prev = now;
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
