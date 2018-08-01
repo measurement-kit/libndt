@@ -690,8 +690,6 @@ class Client {
 
   Verbosity get_verbosity() const noexcept;
 
-  std::mutex &get_mutex() noexcept;
-
   // Dependencies (system)
   // `````````````````````
   //
@@ -957,15 +955,10 @@ static std::string libndt_perror(Err err) noexcept {
   return rv;
 }
 
-// Generic macro for emitting logs. We lock the mutex when logging because
-// some log messages are emitted by background threads. Accessing the verbosity
-// is constant and verbosity does not change throughout the Client lifecycle,
-// hence it is a safe thing to do. Usually you probably don't want to log like
-// crazy, hence it's probably okay to use a mutex in this macro.
-#define LIBNDT_EMIT_LOG_EX(client, level, statements)             \
+// Generic macro for emitting logs.
+#define LIBNDT_EMIT_LOG_EX(client, level, statements)      \
   do {                                                     \
     if (client->get_verbosity() >= verbosity_##level) {    \
-      std::unique_lock<std::mutex> _{client->get_mutex()}; \
       std::stringstream ss;                                \
       ss << statements;                                    \
       client->on_##level(ss.str());                        \
@@ -1106,7 +1099,6 @@ class Client::Impl {
 #ifdef LIBNDT_HAVE_OPENSSL
   std::map<Socket, SSL *> fd_to_ssl;
 #endif
-  std::mutex mutex;
 #ifdef _WIN32
   Winsock winsock;
 #endif
@@ -3872,8 +3864,6 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 Verbosity Client::get_verbosity() const noexcept {
   return impl->settings.verbosity;
 }
-
-std::mutex &Client::get_mutex() noexcept { return impl->mutex; }
 
 // Dependencies (libc)
 // ```````````````````
