@@ -1856,7 +1856,7 @@ class Maybesocks5hConnectFailAddressNetxRecvn : public libndt::Client {
       ((char *)buf)[1] = 0;
       return libndt::Err::none;
     }
-    if (size == 4 && !seen) {
+    if (size == 4 && !*seen) {
       *seen = true;  // use flag because IPv4 is also 4 bytes
       assert(type != 0);
       ((char *)buf)[0] = 5;
