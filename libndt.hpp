@@ -351,7 +351,7 @@ enum class Err {
   //
   // Libndt misc error codes.
   //
-  eof,       // We go an unexpected EOF
+  eof,       // We got an unexpected EOF
   socks5h,   // SOCKSv5 protocol error
   ws_proto,  // WebSocket protocol error
 };
