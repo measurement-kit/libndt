@@ -3627,9 +3627,12 @@ static Err netx_wait(const Client *client, Socket fd, Timeout timeout,
   auto err = client->netx_poll(&pfds, timeout * 1000);
   // Either it's success and something happened or we failed and nothing
   // must have happened on the socket. We previously checked whether we had
-  // `expected_events` set however that the flags actually set by poll are
+  // `expected_events` set however the flags actually set by poll are
   // dependent on the system and file descriptor type. Hence it is more
-  // robust to only make sure that some flag is actually set.
+  // robust to only make sure that at least a flag is set.
+  //
+  // Also, note that we explicitly clear revents in next_poll() before
+  // calling the system implementation of poll().
   //
   // See also Stack Overflow: <https://stackoverflow.com/a/25249958>.
   assert((err == Err::none && pfds[0].revents != 0) ||
