@@ -44,7 +44,6 @@
 #ifndef _WIN32
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <sys/select.h>
 #else
 #include <winsock2.h>
 #include <ws2tcpip.h>
