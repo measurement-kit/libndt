@@ -3393,7 +3393,7 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
   if (count <= 0) {
     LIBNDT_EMIT_WARNING(
         "netx_recv_nonblocking: explicitly disallowing zero read; use "
-        "netx_select() to check the state of a socket");
+        "netx_poll() to check the state of a socket");
     return Err::invalid_argument;
   }
   sys_set_last_error(0);
@@ -3476,7 +3476,7 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
   if (count <= 0) {
     LIBNDT_EMIT_WARNING(
         "netx_send_nonblocking: explicitly disallowing zero send; use "
-        "netx_select() to check the state of a socket");
+        "netx_poll() to check the state of a socket");
     return Err::invalid_argument;
   }
   sys_set_last_error(0);
