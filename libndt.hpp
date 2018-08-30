@@ -3687,10 +3687,7 @@ again:
     return err;
   }
 #endif
-  if (rv == 0) {
-    return Err::timed_out;
-  }
-  return Err::none;
+  return (rv == 0) ? Err::timed_out : Err::none;
 }
 
 Err Client::netx_shutdown_both(Socket fd) noexcept {
