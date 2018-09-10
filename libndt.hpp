@@ -4,6 +4,8 @@
 #ifndef MEASUREMENT_KIT_LIBNDT_HPP
 #define MEASUREMENT_KIT_LIBNDT_HPP
 
+// TODO(bassosimone): run through cppcheck and attempt to minimize warnings.
+
 /// \file libndt.hpp
 ///
 /// \brief Public header of measurement-kit/libndt. The basic usage is a simple
@@ -1215,6 +1217,7 @@ void Client::on_performance(NettestFlags tid, uint8_t nflows,
                             double measured_bytes, double measured_interval,
                             double elapsed_time, double max_runtime) {
   auto speed = compute_speed(measured_bytes, measured_interval);
+  // TODO(bassosimone): guard against division by zero in `max_runtime`.
   LIBNDT_EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
                   << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
                   << " elapsed: " << std::fixed << std::setprecision(3)
@@ -1520,6 +1523,8 @@ bool Client::run_download() noexcept {
         &total_data,   // reference to atomic
         ws             // copy for safety
       ]() noexcept {
+        // TODO(bassosimone): allocate on heap and keep safe using unique_ptr
+        // because with musl libc the stack is 80KB by default.
         char buf[131072];
         for (;;) {
           auto err = Err::none;
@@ -3740,7 +3745,7 @@ extern "C" {
 static size_t curl_callback(char *ptr, size_t size, size_t nmemb,
                             void *userdata) {
   if (nmemb <= 0) {
-    return 0;  // This means "no body"
+    return 0;  // This means "no body" (note: the <= check is defensive)
   }
   if (size > SIZE_MAX / nmemb) {
     assert(false);  // Also catches case where size is zero
