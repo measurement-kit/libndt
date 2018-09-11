@@ -3746,11 +3746,19 @@ extern "C" {
 
 static size_t curl_callback(char *ptr, size_t size, size_t nmemb,
                             void *userdata) {
+  // Note: I have this habit of using `<= 0` rather than `== 0` even for
+  // unsigned numbers because that makes the check robust when there is a
+  // refactoring in which the number later becomes signed. In this case
+  // it's probably a bit redundant because it's a cURL API but I still like
+  // to continue to use it to avoid losing the habit. Spelling this out
+  // explicitly here such that it's clear why I am doing it.
   if (nmemb <= 0) {
-    return 0;  // This means "no body" (note: the <= check is defensive)
+    return 0;  // This means "no body"
   }
   if (size > SIZE_MAX / nmemb) {
-    assert(false);  // Also catches case where size is zero
+    // Note: if size is zero we end up here because we already excluded with
+    // the above check the case where nmemb is zero.
+    assert(false);
     return 0;
   }
   auto realsiz = size * nmemb;  // Overflow not possible (see above)
