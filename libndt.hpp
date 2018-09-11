@@ -1709,6 +1709,8 @@ bool Client::run_upload() noexcept {
         &total_data,   // reference to atomic
         ws             // copy for safety
       ]() noexcept {
+        // TODO(bassosimone): allocate on heap and keep safe using unique_ptr
+        // because with musl libc the stack is 80KB by default.
         char buf[131072];
         {
           auto begin = std::chrono::steady_clock::now();
