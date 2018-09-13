@@ -1512,6 +1512,8 @@ bool Client::run_download() noexcept {
     auto ws = (settings_.protocol_flags & protocol_flag_websocket) != 0;
     const Client *const_this = this;
     for (Socket fd : dload_socks.sockets) {
+      // TODO(bassosimone): increment active inside the thread main function
+      // as this is more consistent with the fact that thread decrements it
       active += 1;  // atomic
       auto main = [
         &active,       // reference to atomic
@@ -1698,6 +1700,8 @@ bool Client::run_upload() noexcept {
     auto ws = (settings_.protocol_flags & protocol_flag_websocket) != 0;
     const Client *const_this = this;
     for (Socket fd : upload_socks.sockets) {
+      // TODO(bassosimone): increment active inside the thread main function
+      // as this is more consistent with the fact that thread decrements it
       active += 1;  // atomic
       auto main = [
         &active,       // reference to atomic
