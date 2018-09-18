@@ -4,7 +4,10 @@
 
 Libndt is a [Network-Diagnostic-Tool](
 https://github.com/ndt-project/ndt/wiki/NDTProtocol) (NDT) single-include
-C++11 client library.
+C++11 client library. NDT is a widely used network performance test that
+measures the download and upload speed, and complements these measurements
+with kernel-level measurements. NDT is the most popular network performance
+test hosted by [Measurement Lab](https://www.measurementlab.net/).
 
 ## Getting started
 
