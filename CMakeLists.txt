@@ -170,7 +170,7 @@ if(${BUILD_TESTING})
   target_link_libraries(tests-libndt "${LIBNDT_LIBS}")
   target_include_directories(tests-libndt PUBLIC ${LIBNDT_INCLUDES})
   add_test(NAME other_unit_tests COMMAND tests-libndt)
-  if(${CURL_FOUND}) # Some tests require cURL for mlab-ns
+  if(FALSE) # Some tests require cURL for mlab-ns
     add_test(NAME simple_test COMMAND libndt-client --verbose
              --download --upload)
     add_test(NAME json_test COMMAND libndt-client --verbose --json
