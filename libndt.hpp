@@ -2329,7 +2329,9 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
                << represent(std::string{(char *)base, count}));
     */
     for (Size i = 0; i < count; ++i) {
-      base[i] ^= (uint8_t)mask[i % mask_size];
+      // Implementation note: judging from a GCC 8 warning, it seems that using
+      // `^=` causes -Wconversion warnings, while using `= ... ^` does not.
+      base[i] = base[i] ^ mask[i % mask_size];
     }
     /*
     LIBNDT_EMIT_DEBUG("ws_send_frame: body masked: "
