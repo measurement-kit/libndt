@@ -780,7 +780,7 @@ class Client {
     ~Winsock() noexcept;
   };
 
-  Socket sock_ = -1;
+  Socket sock_ = (Socket)-1;
   std::vector<NettestFlags> granted_suite_;
   Settings settings_;
 #ifdef LIBNDT_HAVE_OPENSSL
@@ -985,9 +985,9 @@ static std::string libndt_perror(Err err) noexcept {
 #define LIBNDT_EMIT_LOG_EX(client, level, statements)      \
   do {                                                     \
     if (client->get_verbosity() >= verbosity_##level) {    \
-      std::stringstream ss;                                \
-      ss << statements;                                    \
-      client->on_##level(ss.str());                        \
+      std::stringstream ss_log_line;                       \
+      ss_log_line << statements;                           \
+      client->on_##level(ss_log_line.str());               \
     }                                                      \
   } while (0)
 
@@ -1065,13 +1065,13 @@ static std::string trim(std::string s) noexcept {
 
 static bool emit_result(Client *client, std::string scope,
                         std::string message) noexcept {
-  std::stringstream ss{message};
+  std::stringstream ss_line{message};
   std::string line;
-  while ((std::getline(ss, line, '\n'))) {
+  while ((std::getline(ss_line, line, '\n'))) {
     std::vector<std::string> keyval;
     std::string token;
-    std::stringstream ss{line};
-    while ((std::getline(ss, token, ':'))) {
+    std::stringstream ss_token{line};
+    while ((std::getline(ss_token, token, ':'))) {
       keyval.push_back(token);
     }
     if (keyval.size() != 2) {
@@ -1288,10 +1288,10 @@ bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
     array.push_back(json);
     std::swap(json, array);
   }
-  for (auto &json : json) {
+  for (auto &entry : json) {
     std::string fqdn;
     try {
-      fqdn = json.at("fqdn");
+      fqdn = entry.at("fqdn").get<std::string>();
     } catch (const nlohmann::json::exception &exc) {
       LIBNDT_EMIT_WARNING("cannot access FQDN field: " << exc.what());
       return false;
@@ -1477,7 +1477,7 @@ bool Client::run_download() noexcept {
   }
 
   for (uint8_t i = 0; i < nflows; ++i) {
-    Socket sock = -1;
+    Socket sock = (Socket)-1;
     // Implementation note: here connection attempts are serialized. This is
     // consistent with <https://tools.ietf.org/html/rfc6455#section-4.1>, and
     // namely with requirement 2: "If multiple connections to the same IP
@@ -1672,7 +1672,7 @@ bool Client::run_upload() noexcept {
   }
 
   {
-    Socket sock = -1;
+    Socket sock = (Socket)-1;
     // Remark: in case we'll even implement multi-stream here, remember that
     // websocket requires connections to be serialized. See above.
     Err err = netx_maybews_dial(  //
@@ -1717,10 +1717,10 @@ bool Client::run_upload() noexcept {
         // because with musl libc the stack is 80KB by default.
         char buf[131072];
         {
-          auto begin = std::chrono::steady_clock::now();
+          auto start = std::chrono::steady_clock::now();
           random_printable_fill(buf, sizeof(buf));
           auto now = std::chrono::steady_clock::now();
-          std::chrono::duration<double> elapsed = now - begin;
+          std::chrono::duration<double> elapsed = now - start;
           LIBNDT_EMIT_DEBUG_EX(const_this,
             "run_upload: time to fill random buffer: " << elapsed.count());
         }
@@ -2016,7 +2016,7 @@ bool Client::msg_read(MsgType *code, std::string *msg) noexcept {
       return false;
     }
     try {
-      *msg = json.at("msg");
+      *msg = json.at("msg").get<std::string>();
     } catch (const nlohmann::json::exception &) {
       LIBNDT_EMIT_WARNING("msg_read: cannot find 'msg' field");
       return false;
@@ -2212,9 +2212,9 @@ Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
     constexpr size_t max_headers = 1000;
     for (size_t i = 0; i < max_headers; ++i) {
       // TODO(bassosimone): make header processing case insensitive.
-      auto err = ws_recvln(fd, &line, max_line_length);
-      if (err != Err::none) {
-        return err;
+      auto recvln_err = ws_recvln(fd, &line, max_line_length);
+      if (recvln_err != Err::none) {
+        return recvln_err;
       }
       if (line == "Upgrade: websocket") {
         flags |= ws_f_upgrade;
@@ -2434,43 +2434,43 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
     // it's nice to enforce assertions to make assumptions explicit.
     assert(length <= 127);
     if (length == 126) {
-      uint8_t buf[2];
-      auto err = netx_recvn(sock, buf, sizeof(buf));
-      if (err != Err::none) {
+      uint8_t len_buf[2];
+      auto recvn_err = netx_recvn(sock, len_buf, sizeof(len_buf));
+      if (recvn_err != Err::none) {
         LIBNDT_EMIT_WARNING(
             "ws_recv_any_frame: netx_recvn() failed for 16 bit length");
-        return err;
+        return recvn_err;
       }
       LIBNDT_EMIT_DEBUG("ws_recv_any_frame: 16 bit length: "
-                 << represent(std::string{(char *)buf, sizeof(buf)}));
+                 << represent(std::string{(char *)len_buf, sizeof(len_buf)}));
       length = 0;  // Need to reset the length as AL() does +=
-      AL(((Size)buf[0]) << 8);
-      AL((Size)buf[1]);
+      AL(((Size)len_buf[0]) << 8);
+      AL((Size)len_buf[1]);
     } else if (length == 127) {
-      uint8_t buf[8];
-      auto err = netx_recvn(sock, buf, sizeof(buf));
-      if (err != Err::none) {
+      uint8_t len_buf[8];
+      auto recvn_err = netx_recvn(sock, len_buf, sizeof(len_buf));
+      if (recvn_err != Err::none) {
         LIBNDT_EMIT_WARNING(
             "ws_recv_any_frame: netx_recvn() failed for 64 bit length");
-        return err;
+        return recvn_err;
       }
       LIBNDT_EMIT_DEBUG("ws_recv_any_frame: 64 bit length: "
-                 << represent(std::string{(char *)buf, sizeof(buf)}));
+                 << represent(std::string{(char *)len_buf, sizeof(len_buf)}));
       length = 0;  // Need to reset the length as AL() does +=
-      AL(((Size)buf[0]) << 56);
-      if ((buf[0] & 0x80) != 0) {
+      AL(((Size)len_buf[0]) << 56);
+      if ((len_buf[0] & 0x80) != 0) {
         // See <https://tools.ietf.org/html/rfc6455#section-5.2>: "[...] the
         // most significant bit MUST be 0."
         LIBNDT_EMIT_WARNING("ws_recv_any_frame: 64 bit length: invalid first bit");
         return Err::ws_proto;
       }
-      AL(((Size)buf[1]) << 48);
-      AL(((Size)buf[2]) << 40);
-      AL(((Size)buf[3]) << 32);
-      AL(((Size)buf[4]) << 24);
-      AL(((Size)buf[5]) << 16);
-      AL(((Size)buf[6]) << 8);
-      AL(((Size)buf[7]));
+      AL(((Size)len_buf[1]) << 48);
+      AL(((Size)len_buf[2]) << 40);
+      AL(((Size)len_buf[3]) << 32);
+      AL(((Size)len_buf[4]) << 24);
+      AL(((Size)len_buf[5]) << 16);
+      AL(((Size)len_buf[6]) << 8);
+      AL(((Size)len_buf[7]));
     }
 #undef AL  // Tidy
     if (length > total) {
@@ -3021,7 +3021,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     if (err != Err::none) {
       LIBNDT_EMIT_WARNING("socks5h: cannot send auth_request");
       netx_closesocket(*sock);
-      *sock = -1;
+      *sock = (libndt::Socket)-1;
       return err;
     }
     LIBNDT_EMIT_DEBUG("socks5h: sent this auth request: "
@@ -3036,21 +3036,21 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     if (err != Err::none) {
       LIBNDT_EMIT_WARNING("socks5h: cannot recv auth_response");
       netx_closesocket(*sock);
-      *sock = -1;
+      *sock = (libndt::Socket)-1;
       return err;
     }
     constexpr uint8_t version = 5;
     if (auth_response[0] != version) {
       LIBNDT_EMIT_WARNING("socks5h: received unexpected version number");
       netx_closesocket(*sock);
-      *sock = -1;
+      *sock = (libndt::Socket)-1;
       return Err::socks5h;
     }
     constexpr uint8_t auth_method = 0;
     if (auth_response[1] != auth_method) {
       LIBNDT_EMIT_WARNING("socks5h: received unexpected auth_method");
       netx_closesocket(*sock);
-      *sock = -1;
+      *sock = (libndt::Socket)-1;
       return Err::socks5h;
     }
     LIBNDT_EMIT_DEBUG("socks5h: authenticated with proxy; response: "
@@ -3067,7 +3067,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       if (hostname.size() > UINT8_MAX) {
         LIBNDT_EMIT_WARNING("socks5h: hostname is too long");
         netx_closesocket(*sock);
-        *sock = -1;
+        *sock = (libndt::Socket)-1;
         return Err::invalid_argument;
       }
       ss << (uint8_t)hostname.size();
@@ -3079,7 +3079,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         if (errstr != nullptr) {
           LIBNDT_EMIT_WARNING("socks5h: invalid port number: " << errstr);
           netx_closesocket(*sock);
-          *sock = -1;
+          *sock = (libndt::Socket)-1;
           return Err::invalid_argument;
         }
       }
@@ -3093,7 +3093,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     if (err != Err::none) {
       LIBNDT_EMIT_WARNING("socks5h: cannot send connect_request");
       netx_closesocket(*sock);
-      *sock = -1;
+      *sock = (libndt::Socket)-1;
       return err;
     }
     LIBNDT_EMIT_DEBUG("socks5h: sent connect request");
@@ -3110,7 +3110,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     if (err != Err::none) {
       LIBNDT_EMIT_WARNING("socks5h: cannot recv connect_response_hdr");
       netx_closesocket(*sock);
-      *sock = -1;
+      *sock = (libndt::Socket)-1;
       return err;
     }
     LIBNDT_EMIT_DEBUG("socks5h: connect_response_hdr: " << represent(std::string{
@@ -3119,7 +3119,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     if (connect_response_hdr[0] != version) {
       LIBNDT_EMIT_WARNING("socks5h: invalid message version");
       netx_closesocket(*sock);
-      *sock = -1;
+      *sock = (libndt::Socket)-1;
       return Err::socks5h;
     }
     if (connect_response_hdr[1] != 0) {
@@ -3127,13 +3127,13 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       LIBNDT_EMIT_WARNING("socks5h: connect() failed: "
                    << (unsigned)(uint8_t)connect_response_hdr[1]);
       netx_closesocket(*sock);
-      *sock = -1;
+      *sock = (libndt::Socket)-1;
       return Err::io_error;
     }
     if (connect_response_hdr[2] != 0) {
       LIBNDT_EMIT_WARNING("socks5h: invalid reserved field");
       netx_closesocket(*sock);
-      *sock = -1;
+      *sock = (libndt::Socket)-1;
       return Err::socks5h;
     }
     // receive IP or domain
@@ -3142,12 +3142,12 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       {
         constexpr Size expected = 4;  // ipv4
         char buf[expected];
-        auto err = netx_recvn(*sock, buf, sizeof(buf));
-        if (err != Err::none) {
+        auto recvn_err = netx_recvn(*sock, buf, sizeof(buf));
+        if (recvn_err != Err::none) {
           LIBNDT_EMIT_WARNING("socks5h: cannot recv ipv4 address");
           netx_closesocket(*sock);
-          *sock = -1;
-          return err;
+          *sock = (libndt::Socket)-1;
+          return recvn_err;
         }
         // TODO(bassosimone): log the ipv4 address. However tor returns a zero
         // ipv4 and so there is little added value in logging.
@@ -3156,20 +3156,20 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       case 3:  // domain
       {
         uint8_t len = 0;
-        auto err = netx_recvn(*sock, &len, sizeof(len));
-        if (err != Err::none) {
+        auto recvn_err = netx_recvn(*sock, &len, sizeof(len));
+        if (recvn_err != Err::none) {
           LIBNDT_EMIT_WARNING("socks5h: cannot recv domain length");
           netx_closesocket(*sock);
-          *sock = -1;
-          return err;
+          *sock = (libndt::Socket)-1;
+          return recvn_err;
         }
         char domain[UINT8_MAX + 1];  // space for final '\0'
-        err = netx_recvn(*sock, domain, len);
-        if (err != Err::none) {
+        recvn_err = netx_recvn(*sock, domain, len);
+        if (recvn_err != Err::none) {
           LIBNDT_EMIT_WARNING("socks5h: cannot recv domain");
           netx_closesocket(*sock);
-          *sock = -1;
-          return err;
+          *sock = (libndt::Socket)-1;
+          return recvn_err;
         }
         domain[len] = 0;
         LIBNDT_EMIT_DEBUG("socks5h: domain: " << domain);
@@ -3179,12 +3179,12 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       {
         constexpr Size expected = 16;  // ipv6
         char buf[expected];
-        auto err = netx_recvn(*sock, buf, sizeof(buf));
-        if (err != Err::none) {
+        auto recvn_err = netx_recvn(*sock, buf, sizeof(buf));
+        if (recvn_err != Err::none) {
           LIBNDT_EMIT_WARNING("socks5h: cannot recv ipv6 address");
           netx_closesocket(*sock);
-          *sock = -1;
-          return err;
+          *sock = (libndt::Socket)-1;
+          return recvn_err;
         }
         // TODO(bassosimone): log the ipv6 address. However tor returns a zero
         // ipv6 and so there is little added value in logging.
@@ -3193,21 +3193,21 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       default:
         LIBNDT_EMIT_WARNING("socks5h: invalid address type");
         netx_closesocket(*sock);
-        *sock = -1;
+        *sock = (libndt::Socket)-1;
         return Err::socks5h;
     }
     // receive the port
     {
-      uint16_t port = 0;
-      auto err = netx_recvn(*sock, &port, sizeof(port));
-      if (err != Err::none) {
+      uint16_t real_port = 0;
+      auto recvn_err = netx_recvn(*sock, &real_port, sizeof(real_port));
+      if (recvn_err != Err::none) {
         LIBNDT_EMIT_WARNING("socks5h: cannot recv port");
         netx_closesocket(*sock);
-        *sock = -1;
-        return err;
+        *sock = (libndt::Socket)-1;
+        return recvn_err;
       }
-      port = ntohs(port);
-      LIBNDT_EMIT_DEBUG("socks5h: port number: " << port);
+      real_port = ntohs(real_port);
+      LIBNDT_EMIT_DEBUG("socks5h: port number: " << real_port);
     }
   }
   LIBNDT_EMIT_INFO("socks5h: the proxy has successfully connected");
@@ -3330,7 +3330,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       if (netx_setnonblocking(*sock, true) != Err::none) {
         LIBNDT_EMIT_WARNING("netx_dial: netx_setnonblocking() failed");
         sys_closesocket(*sock);
-        *sock = -1;
+        *sock = (libndt::Socket)-1;
         continue;
       }
       // While on Unix ai_addrlen is socklen_t, it's size_t on Windows. Just
@@ -3341,7 +3341,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       if (aip->ai_addrlen > sizeof(sockaddr_in6)) {
         LIBNDT_EMIT_WARNING("netx_dial: unexpected size of aip->ai_addrlen");
         sys_closesocket(*sock);
-        *sock = -1;
+        *sock = (libndt::Socket)-1;
         continue;
       }
 #endif
@@ -3349,10 +3349,10 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         LIBNDT_EMIT_DEBUG("netx_dial: connect(): okay immediately");
         break;
       }
-      auto err = netx_map_errno(sys_get_last_error());
-      if (CONNECT_IN_PROGRESS(err)) {
-        err = netx_wait_writeable(*sock, settings_.timeout);
-        if (err == Err::none) {
+      auto connect_err = netx_map_errno(sys_get_last_error());
+      if (CONNECT_IN_PROGRESS(connect_err)) {
+        connect_err = netx_wait_writeable(*sock, settings_.timeout);
+        if (connect_err == Err::none) {
           int soerr = 0;
           socklen_t soerrlen = sizeof(soerr);
           if (sys_getsockopt(*sock, SOL_SOCKET, SO_ERROR, (void *)&soerr,
@@ -3369,7 +3369,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       LIBNDT_EMIT_WARNING("netx_dial: connect() failed: "
                    << libndt_perror(netx_map_errno(sys_get_last_error())));
       sys_closesocket(*sock);
-      *sock = -1;
+      *sock = (libndt::Socket)-1;
     }
     sys_freeaddrinfo(rp);
     if (*sock != -1) {
