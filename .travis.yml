@@ -1,14 +1,13 @@
 language: c++
 
-env: CMAKE_BUILD_OPTIONS="-v"
-     CTEST_OPTIONS="--output-on-failure -j2"
-
 matrix:
   include:
 
     - os: linux
       env: BUILD_TYPE="vanilla"
+           CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Release"
+           CTEST_OPTIONS="--output-on-failure -j2"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -20,7 +19,9 @@ matrix:
            CFLAGS="-fsanitize=address"
            CXXFLAGS="-fsanitize=address"
            LDFLAGS="-fsanitize=address"
+           CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
+           CTEST_OPTIONS="--output-on-failure -j2"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -32,7 +33,9 @@ matrix:
            CFLAGS="-fsanitize=leak"
            CXXFLAGS="-fsanitize=leak"
            LDFLAGS="-fsanitize=leak"
+           CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
+           CTEST_OPTIONS="--output-on-failure -j2"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -44,7 +47,9 @@ matrix:
            CFLAGS="-fsanitize=undefined -fno-sanitize-recover"
            CXXFLAGS="-fsanitize=undefined -fno-sanitize-recover"
            LDFLAGS="-fsanitize=undefined"
+           CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
+           CTEST_OPTIONS="--output-on-failure -j2"
       script:
         - ./.ci/docker/script/docker-run bassosimone/mk-debian:testing cmake
       services:
@@ -53,7 +58,9 @@ matrix:
 
     - os: linux
       env: BUILD_TYPE="libc++-n-clang"
+           CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Release"
+           CTEST_OPTIONS="--output-on-failure -j2"
            CXXFLAGS="-stdlib=libc++"
            MK_CC=clang
            MK_CXX=clang++
@@ -66,7 +73,10 @@ matrix:
     - os: linux
       env: BUILD_TYPE="coverage"
            CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
+           CMAKE_BUILD_OPTIONS="-v"
            CMAKE_OPTIONS="-G Ninja -D CMAKE_BUILD_TYPE=Debug"
+           COVERALLS_OPTIONS="--include curlx_test.cpp --include libndt.hpp --include libndt_test.cpp --include strtonum_test.cpp"
+           CTEST_OPTIONS="--output-on-failure -j2"
            CXXFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
            LDFLAGS="-lgcov"
       script:
