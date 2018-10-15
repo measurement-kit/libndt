@@ -2561,6 +2561,7 @@ TEST_CASE(
 class FailFcntlGet : public libndt::Client {
  public:
   using libndt::Client::Client;
+  using libndt::Client::sys_fcntl;
   int sys_fcntl(libndt::Socket, int cmd) noexcept override {
     REQUIRE(cmd == F_GETFL);
     errno = EINVAL;
