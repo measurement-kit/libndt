@@ -1806,18 +1806,22 @@ bool Client::msg_write_login(const std::string &version) noexcept {
                 "nettest_flags too large");
   MsgType code = MsgType{0};
   settings_.nettest_flags |= nettest_flag_status | nettest_flag_meta;
+  // Implementation note: judging from a GCC 8 warning, it seems that bitwise negation
+  // leads to a promotion to `int` (not even `unsigned int`) on Linux. So, after that
+  // we need first to ensure any bit except from 0xff is zero. After that, we can then
+  // reduce again the size to NettestFlags (aka uint8_t; see above) to do the &=.
   if ((settings_.nettest_flags & nettest_flag_middlebox) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING("msg_write_login: nettest_flag_middlebox: not implemented");
-    settings_.nettest_flags &= ~nettest_flag_middlebox;
+    settings_.nettest_flags &= (NettestFlags)((~nettest_flag_middlebox) & 0xff);
   }
   if ((settings_.nettest_flags & nettest_flag_simple_firewall) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING(
         "msg_write_login: nettest_flag_simple_firewall: not implemented");
-    settings_.nettest_flags &= ~nettest_flag_simple_firewall;
+    settings_.nettest_flags &= (NettestFlags)((~nettest_flag_simple_firewall) & 0xff);
   }
   if ((settings_.nettest_flags & nettest_flag_upload_ext) != NettestFlags{0}) {
     LIBNDT_EMIT_WARNING("msg_write_login: nettest_flag_upload_ext: not implemented");
-    settings_.nettest_flags &= ~nettest_flag_upload_ext;
+    settings_.nettest_flags &= (NettestFlags)((~nettest_flag_upload_ext) & 0xff);
   }
   std::string serio;
   if ((settings_.protocol_flags & protocol_flag_json) == 0) {
