@@ -3419,7 +3419,7 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
     auto ssl = fd_to_ssl_.at(fd);
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
     ERR_clear_error();
-    int ret = ::SSL_read(ssl, base, count);
+    int ret = ::SSL_read(ssl, base, (int)count);
     if (ret <= 0) {
       return map_ssl_error(this, ssl, ret);
     }
@@ -3502,7 +3502,7 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
     auto ssl = fd_to_ssl_.at(fd);
     ERR_clear_error();
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
-    int ret = ::SSL_write(ssl, base, count);
+    int ret = ::SSL_write(ssl, base, (int)count);
     if (ret <= 0) {
       return map_ssl_error(this, ssl, ret);
     }
