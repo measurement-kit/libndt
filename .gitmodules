@@ -1,3 +1,6 @@
 [submodule ".ci/docker"]
 	path = .ci/docker
 	url = https://github.com/bassosimone/mk-docker-ci
+[submodule "cmake/Modules"]
+	path = cmake/Modules
+	url = git@github.com:measurement-kit/cmake-modules
