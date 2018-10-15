@@ -434,28 +434,28 @@ class RunTestsMock : public libndt::Client {
 
 TEST_CASE("Client::run_tests() deals with Client::run_upload() failure") {
   RunTestsMock client;
-  client.tests_ids = std::to_string(libndt::nettest_flag_upload);
+  client.tests_ids = std::to_string((uint64_t)libndt::nettest_flag_upload);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
 
 TEST_CASE("Client::run_tests() deals with Client::run_meta() failure") {
   RunTestsMock client;
-  client.tests_ids = std::to_string(libndt::nettest_flag_meta);
+  client.tests_ids = std::to_string((uint64_t)libndt::nettest_flag_meta);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
 
 TEST_CASE("Client::run_tests() deals with Client::run_download() failure") {
   RunTestsMock client;
-  client.tests_ids = std::to_string(libndt::nettest_flag_download);
+  client.tests_ids = std::to_string((uint64_t)libndt::nettest_flag_download);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
 
 TEST_CASE("Client::run_tests() deals with unexpected test-id") {
   RunTestsMock client;
-  client.tests_ids = std::to_string(libndt::nettest_flag_status);
+  client.tests_ids = std::to_string((uint64_t)libndt::nettest_flag_status);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
