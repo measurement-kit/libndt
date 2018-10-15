@@ -3674,17 +3674,15 @@ Err Client::netx_poll(
 #ifndef _WIN32
 again:
 #endif
-#ifdef _WIN64
-  // When compiling for Windows 64 we have the issue that WSAPoll second
-  // argument is unsigned long but pfds->size() is size_t.
-  if (pfds->size() > ULONG_MAX) {
+  // Different operating systems have different representations of size_t
+  // and of nfds_t. Overcome these differences by choosing a smaller
+  // representation of the fdset size and letting the compiler promote
+  // it to the correct integer. We don't need many fds in any case.
+  if (pfds->size() > UINT8_MAX) {
     LIBNDT_EMIT_WARNING("netx_poll: avoiding overflow");
     return Err::value_too_large;
   }
-  rv = sys_poll(pfds->data(), (unsigned long)pfds->size(), timeout_msec);
-#else
-  rv = sys_poll(pfds->data(), pfds->size(), timeout_msec);
-#endif
+  rv = sys_poll(pfds->data(), (uint8_t)pfds->size(), timeout_msec);
   // TODO(bassosimone): handle the case where POLLNVAL is returned.
 #ifdef _WIN32
   if (rv == SOCKET_ERROR) {
