@@ -10,7 +10,10 @@
 #include <iostream>
 #include <sstream>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
 #include "argh.h"
+#pragma clang diagnostic pop
 
 using namespace measurement_kit;
 
