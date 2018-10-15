@@ -1867,7 +1867,7 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
     LIBNDT_EMIT_DEBUG("msg_write_legacy: raw message: " << represent(msg));
     LIBNDT_EMIT_DEBUG("msg_write_legacy: message length: " << msg.size());
     char header[3];
-    header[0] = code;
+    header[0] = (char)code;  // Sign change safe because we're serializing
     if (msg.size() > UINT16_MAX) {
       LIBNDT_EMIT_WARNING("msg_write_legacy: message too long");
       return false;

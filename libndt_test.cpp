@@ -1862,7 +1862,7 @@ class Maybesocks5hConnectFailAddressNetxRecvn : public libndt::Client {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
       ((char *)buf)[2] = 0;
-      ((char *)buf)[3] = type;
+      ((char *)buf)[3] = (char)type;  // Sign change safe b/c we're serializing
       return libndt::Err::none;
     }
     // the subsequent recvn() will fail
