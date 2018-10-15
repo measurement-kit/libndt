@@ -3631,11 +3631,13 @@ static Err netx_wait(const Client *client, Socket fd, Timeout timeout,
   pfd.events |= expected_events;
   std::vector<pollfd> pfds;
   pfds.push_back(pfd);
+  // The following makes sure that it's okay to cast Timeout (an unsigned int
+  // type) to poll()'s timeout type (i.e. signed int).
   static_assert(sizeof(timeout) == sizeof(int), "Unexpected Timeout size");
   if (timeout > INT_MAX / 1000) {
     timeout = INT_MAX / 1000;
   }
-  auto err = client->netx_poll(&pfds, timeout * 1000);
+  auto err = client->netx_poll(&pfds, (int)timeout * 1000);
   // Either it's success and something happened or we failed and nothing
   // must have happened on the socket. We previously checked whether we had
   // `expected_events` set however the flags actually set by poll are
