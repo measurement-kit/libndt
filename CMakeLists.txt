@@ -13,7 +13,8 @@ if(NOT ("${LIBNDT_OPENSSL}" STREQUAL ""))
   list(APPEND CMAKE_LIBRARY_PATH "${LIBNDT_OPENSSL}/lib")
 endif()
 
-# Download header only dependencies
+# Download dependencies
+# ---------------------
 
 MkDownloadAdishavitArgh()
 MkDownloadNlohmannJson()
@@ -53,6 +54,7 @@ if("${MSVC}" AND "${LIBNDT_ENABLE_CURL}")
 endif()
 
 # Checks
+# ------
 
 include(CheckFunctionExists)
 include(CheckIncludeFiles)
