@@ -85,7 +85,7 @@ set(LIBNDT_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
 add_executable(libndt-client libndt-client.cpp)
 target_include_directories(libndt-client PUBLIC ${LIBNDT_INCLUDES})
 list (APPEND LIBNDT_LIBS ${CURL_LIBRARIES})
-install(FILES libndt.hpp DESTINATION include/measurement_kit)
+install(FILES libndt.hpp DESTINATION include/measurement-kit)
 install(TARGETS libndt-client DESTINATION bin)
 if("${WIN32}" OR "${MINGW}")
   list(APPEND LIBNDT_LIBS "ws2_32")
