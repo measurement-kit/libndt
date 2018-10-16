@@ -22,35 +22,11 @@ MkDownloadCatchorgCatch2()
 
 set(LIBNDT_ENABLE_CURL "TRUE" CACHE BOOL "Whether to enable cURL")
 if("${MSVC}" AND "${LIBNDT_ENABLE_CURL}")
-  set(_CURL_BASEURL "https://github.com/measurement-kit/prebuilt/releases/download")
-  set(_CURL_CHANNEL "testing")
-  set(_CURL_HASH "c4321f05ac238d42f2487536c4fdd8e55af68a3f364008271fe3b6741c6b855f")
-  set(_CURL_VERSION "7.61.0-1")
-  set(_CURL_URL "${_CURL_BASEURL}/${_CURL_CHANNEL}/windows-curl-${_CURL_VERSION}.tar.gz")
-  message(STATUS "Downloading precompiled cURL: ${_CURL_URL}")
-  file(DOWNLOAD "${_CURL_URL}"
-       "${CMAKE_CURRENT_BINARY_DIR}/curl-prebuilt.tar.gz"
-       EXPECTED_HASH SHA256=${_CURL_HASH}
-       TLS_VERIFY ON SHOW_PROGRESS)
-  execute_process(COMMAND ${CMAKE_COMMAND} -E tar xf "curl-prebuilt.tar.gz"
-                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-                  RESULT_VARIABLE TAR_FAILURE)
-  if("${TAR_FAILURE}")
-    message(FATAL_ERROR "Cannot unpack cURL: ${TAR_FAILURE}")
-  endif()
-  if("${CMAKE_SIZEOF_VOID_P}" EQUAL 8)
-    set(_CURL_ARCH x64)
-  elseif("${CMAKE_SIZEOF_VOID_P}" EQUAL 4)
-    set(_CURL_ARCH x86)
-  else()
-    message(FATAL_ERROR "No prebuilt cURL for your system")
-  endif()
-  list(APPEND CMAKE_INCLUDE_PATH "${CMAKE_BINARY_DIR}/MK_DIST/windows/curl/${_CURL_VERSION}/${_CURL_ARCH}/include")
-  list(APPEND CMAKE_LIBRARY_PATH "${CMAKE_BINARY_DIR}/MK_DIST/windows/curl/${_CURL_VERSION}/${_CURL_ARCH}/lib")
-  message(STATUS "CMAKE_INCLUDE_PATH: ${CMAKE_INCLUDE_PATH}")
-  message(STATUS "CMAKE_LIBRARY_PATH: ${CMAKE_LIBRARY_PATH}")
-  add_definitions(-DCURL_STATICLIB)
-  list(APPEND LIBNDT_LIBS Crypt32)
+  MkDownloadMeasurementKitPrebuiltWindowsCurl()
+  list(APPEND CMAKE_INCLUDE_PATH "${MK_WINDOWS_CURL_INCLUDE_PATH}")
+  list(APPEND CMAKE_LIBRARY_PATH "${MK_WINDOWS_CURL_LIBRARY_PATH}")
+  add_definitions(${MK_WINDOWS_CURL_DEFINITIONS})
+  list(APPEND LIBNDT_LIBS ${MK_WINDOWS_CURL_EXTRA_LINK_LIBS})
 endif()
 
 # Checks
