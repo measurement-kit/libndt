@@ -72,7 +72,7 @@ downloads a recent version of nlohmann/json and puts it in the current
 directory, so you do not have to worry about this aspect.
 
 To see the exact dependencies required on Debian, please check out the
-[Dockerfile](https://github.com/measurement-kit/docker-ci/blob/master/debian/Dockerfile)
+[Dockerfile](https://github.com/measurement-kit/ci-common/blob/master/debian/Dockerfile)
 used when testing in Travis-CI.
 
 Build and run tests with:
