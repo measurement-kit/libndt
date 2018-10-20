@@ -1,6 +1,6 @@
-[submodule ".ci/docker"]
-	path = .ci/docker
-	url = https://github.com/measurement-kit/docker-ci
+[submodule ".ci/common"]
+	path = .ci/common
+	url = https://github.com/measurement-kit/ci-common
 [submodule "cmake/Modules"]
 	path = cmake/Modules
 	url = https://github.com/measurement-kit/cmake-modules
