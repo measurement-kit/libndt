@@ -17,6 +17,13 @@
 /// NDT over TLS and NDT over websocket. For more information on the NDT
 /// protocol, \see https://github.com/ndt-project/ndt/wiki/NDTProtocol.
 ///
+/// The NDT protocol described above is version 5 (aka ndt5). The code in this
+/// library also implements the ndt7 specification, which is described at
+/// \see https://github.com/m-lab/ndt-server/blob/master/spec/ndt7-protocol.md.
+///
+/// Throughout this file, we'll use NDT to indicate ndt5 and ndt7 explicitly
+/// to indicate version 7 of the protocol. Please, use ndt7.
+///
 /// \remark As a general rule, what is not documented using Doxygen comments
 /// inside of this file is considered either internal or experimental. We
 /// recommend you to only use documented interfaces.
@@ -195,6 +202,11 @@ constexpr ProtocolFlags protocol_flag_tls = ProtocolFlags{1 << 1};
 /// When this flag is set we use WebSocket. This specifically means that
 /// we use the WebSocket framing to encapsulate NDT messages.
 constexpr ProtocolFlags protocol_flag_websocket = ProtocolFlags{1 << 2};
+
+/// When this flag is set, we use ndt7 rather than ndt5. This specifically
+/// means that a totally different protocol is used. You can read more on ndt7
+/// at https://github.com/m-lab/ndt-server/blob/master/spec/ndt7-protocol.md
+constexpr ProtocolFlags protocol_flag_ndt7 = ProtocolFlags{1 << 3};
 
 // Policy for auto-selecting a NDT server
 // ``````````````````````````````````````
@@ -487,6 +499,14 @@ class Client {
   virtual bool run_download() noexcept;
   virtual bool run_meta() noexcept;
   virtual bool run_upload() noexcept;
+
+  // ndt7 protocol API
+  // `````````````````
+  //
+  // This API allows you to perform ndt7 tests. The plan is to increasingly
+  // use ndt7 code and eventually deprecated and remove NDT.
+
+  bool ndt7_download() noexcept;
 
   // NDT protocol API
   // ````````````````
@@ -1152,6 +1172,25 @@ bool Client::run() noexcept {
   for (auto &fqdn : fqdns) {
     LIBNDT_EMIT_INFO("trying to connect to " << fqdn);
     settings_.hostname = fqdn;
+    // TODO(bassosimone): we will eventually want to refactor the code to
+    // make ndt7 the default and ndt5 the optional case.
+    if ((settings_.protocol_flags & protocol_flag_ndt7) != 0) {
+      LIBNDT_EMIT_INFO("using the ndt7 protocol");
+      if ((settings_.nettest_flags & nettest_flag_download) != 0) {
+        settings_.nettest_flags &= ~nettest_flag_download;
+        // TODO(bassosimone): for now we do not try with more than one host
+        // when using ndt7 and there's a failure. We may want to do that.
+        if (!ndt7_download()) {
+          LIBNDT_EMIT_WARNING("ndt7 download failed");
+          return false;
+        }
+      }
+      if (settings_.nettest_flags != 0) {
+        LIBNDT_EMIT_WARNING("ndt7 does not implement the specified subtests");
+        return false;
+      }
+      return true;
+    }
     if (!connect()) {
       LIBNDT_EMIT_WARNING("cannot connect to remote host; trying another one");
       continue;
@@ -1796,6 +1835,19 @@ bool Client::run_upload() noexcept {
   }
 
   return true;
+}
+
+// ndt7 protocol API
+// `````````````````
+
+bool Client::ndt7_download() noexcept {
+#ifdef LIBNDT_HAVE_OPENSSL
+  LIBNDT_EMIT_WARNING("ndt7 is not yet implemented");
+  return false;
+#else
+  LIBNDT_EMIT_WARNING("the ndt7 protocol requires OpenSSL support");
+  return false;  // for now just pretend we had issues
+#endif  // LIBNDT_HAVE_OPENSSL
 }
 
 // NDT protocol API
