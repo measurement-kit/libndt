@@ -510,7 +510,7 @@ class Client {
   // `````````````````
   //
   // This API allows you to perform ndt7 tests. The plan is to increasingly
-  // use ndt7 code and eventually deprecated and remove NDT.
+  // use ndt7 code and eventually deprecate and remove NDT.
 
   bool ndt7_download() noexcept;
 
