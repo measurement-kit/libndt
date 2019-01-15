@@ -1898,7 +1898,7 @@ bool Client::ndt7_download() noexcept {
     (void)netx_closesocket(sock_);
     sock_ = (Socket)-1;
   }
-  // ndt7 implies WebSocket and TLS
+  // Note: ndt7 implies WebSocket and TLS
   settings_.protocol_flags |= protocol_flag_websocket | protocol_flag_tls;
   Err err = netx_maybews_dial(
       settings_.hostname, port,
@@ -1910,8 +1910,14 @@ bool Client::ndt7_download() noexcept {
   }
   static constexpr Size ndt7_bufsiz = (1 << 17);
   std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
+  auto begin = std::chrono::steady_clock::now();
   for (;;) {
-    // TODO(bassosimone): we should not loop forever here.
+    auto now = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed = now - begin;
+    if (elapsed.count() > settings_.max_runtime) {
+      LIBNDT_EMIT_WARNING("ndt7: download running for too much time");
+      return false;
+    }
     uint8_t opcode = 0;
     Size count = 0;
     err = ws_recvmsg(sock_, &opcode, buff.get(), ndt7_bufsiz, &count);
