@@ -549,9 +549,11 @@ class Client {
   // ws_flags specifies what headers to send and to expect (for more information
   // see the ws_f_xxx constants defined below). @param ws_protocol specifies
   // what protocol to specify as Sec-WebSocket-Protocol in the upgrade request.
-  // @param port is used to construct the Host header.
+  // @param port is used to construct the Host header. @param url_path is the
+  // URL path to use for performing the websocket upgrade.
   virtual Err ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
-                           std::string ws_protocol) noexcept;
+                           std::string ws_protocol,
+                           std::string url_path) noexcept;
 
   // Send @p count bytes from @p base over @p sock as a frame whose first byte
   // @p first_byte should contain the opcode and possibly the FIN flag.
@@ -601,10 +603,11 @@ class Client {
 
   // Connect to @p hostname and @p port possibly using WebSocket,
   // SSL, and SOCKSv5. This depends on the Settings. See the documentation
-  // of ws_handshake() for more info on @p ws_flags and @p ws_protocol.
+  // of ws_handshake() for more info on @p ws_flags, @p ws_protocol, and
+  // @p url_path.
   virtual Err netx_maybews_dial(const std::string &hostname,
                                 const std::string &port, uint64_t ws_flags,
-                                std::string ws_protocol,
+                                std::string ws_protocol, std::string url_path,
                                 Socket *sock) noexcept;
 
   // Connect to @p hostname and @p port possibly using SSL and SOCKSv5. This
@@ -916,6 +919,7 @@ constexpr uint64_t ws_f_upgrade = 1 << 3;
 constexpr const char *ws_proto_control = "ndt";
 constexpr const char *ws_proto_c2s = "c2s";
 constexpr const char *ws_proto_s2c = "s2c";
+constexpr const char *ws_proto_ndt7 = "net.measurementlab.ndt.v7";
 
 // Private constants
 // `````````````````
@@ -1362,7 +1366,7 @@ bool Client::connect() noexcept {
              settings_.hostname, port,
              ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
                  ws_f_sec_ws_protocol,
-             ws_proto_control, &sock_) == Err::none;
+             ws_proto_control, "/ndt_protocol", &sock_) == Err::none;
 }
 
 bool Client::send_login() noexcept {
@@ -1524,7 +1528,7 @@ bool Client::run_download() noexcept {
     Err err = netx_maybews_dial(  //
         settings_.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
-          | ws_f_sec_ws_protocol, ws_proto_s2c,
+          | ws_f_sec_ws_protocol, ws_proto_s2c, "/ndt_protocol",
         &sock);
     if (err != Err::none) {
       break;
@@ -1717,7 +1721,7 @@ bool Client::run_upload() noexcept {
     Err err = netx_maybews_dial(  //
         settings_.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
-          | ws_f_sec_ws_protocol, ws_proto_c2s,
+          | ws_f_sec_ws_protocol, ws_proto_c2s, "/ndt_protocol",
         &sock);
     if (err != Err::none) {
       return false;
@@ -1842,7 +1846,27 @@ bool Client::run_upload() noexcept {
 
 bool Client::ndt7_download() noexcept {
 #ifdef LIBNDT_HAVE_OPENSSL
-  LIBNDT_EMIT_WARNING("ndt7 is not yet implemented");
+  std::string port = "443";
+  if (!settings_.port.empty()) {
+    port = settings_.port;
+  }
+  // Don't leak resources if the socket is already open.
+  if (is_socket_valid(sock_)) {
+    LIBNDT_EMIT_DEBUG("closing socket openned in previous attempt");
+    (void)netx_closesocket(sock_);
+    sock_ = (Socket)-1;
+  }
+  // ndt7 implies WebSocket and TLS
+  settings_.protocol_flags |= protocol_flag_websocket | protocol_flag_tls;
+  Err err = netx_maybews_dial(
+      settings_.hostname, port,
+      ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
+          ws_f_sec_ws_protocol,
+      ws_proto_ndt7, "/ndt/v7/download", &sock_);
+  if (err != Err::none) {
+    return false;
+  }
+  LIBNDT_EMIT_WARNING("the ndt7 protocol is not yet fully implemented");
   return false;
 #else
   LIBNDT_EMIT_WARNING("the ndt7 protocol requires OpenSSL support");
@@ -2195,7 +2219,7 @@ Err Client::ws_recvln(Socket fd, std::string *line, size_t maxlen) noexcept {
 }
 
 Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
-                         std::string ws_proto) noexcept {
+                         std::string ws_proto, std::string url_path) noexcept {
   std::string proto_header;
   {
     proto_header += "Sec-WebSocket-Protocol: ";
@@ -2220,8 +2244,10 @@ Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
         host_header << ":" << port;
       }
     }
+    std::stringstream request_line;
+    request_line << "GET " << url_path << " HTTP/1.1";
     Err err = Err::none;
-    if ((err = ws_sendln(fd, "GET /ndt_protocol HTTP/1.1")) != Err::none ||
+    if ((err = ws_sendln(fd, request_line.str())) != Err::none ||
         (err = ws_sendln(fd, host_header.str())) != Err::none ||
         (err = ws_sendln(fd, "Upgrade: websocket")) != Err::none ||
         (err = ws_sendln(fd, "Connection: Upgrade")) != Err::none ||
@@ -2897,7 +2923,8 @@ again:
 
 Err Client::netx_maybews_dial(const std::string &hostname,
                               const std::string &port, uint64_t ws_flags,
-                              std::string ws_protocol, Socket *sock) noexcept {
+                              std::string ws_protocol, std::string url_path,
+                              Socket *sock) noexcept {
   auto err = netx_maybessl_dial(hostname, port, sock);
   if (err != Err::none) {
     return err;
@@ -2908,7 +2935,7 @@ Err Client::netx_maybews_dial(const std::string &hostname,
     return Err::none;
   }
   LIBNDT_EMIT_DEBUG("netx_maybews_dial: about to start websocket handhsake");
-  err = ws_handshake(*sock, port, ws_flags, ws_protocol);
+  err = ws_handshake(*sock, port, ws_flags, ws_protocol, url_path);
   if (err != Err::none) {
     (void)netx_closesocket(*sock);
     *sock = (Socket)-1;
