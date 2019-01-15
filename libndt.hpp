@@ -1926,7 +1926,8 @@ bool Client::ndt7_download() noexcept {
       }
       return false;
     }
-    // TODO(bassosimone): we should measure the download speed here
+    // TODO(bassosimone): we should measure the application level download
+    // speed here. For now it's OK to just have a basic client.
     if (opcode == ws_opcode_text) {
       std::string sinfo{(const char *)buff.get(), count};
       on_ndt7_server_download_measurement(std::move(sinfo));
