@@ -1191,7 +1191,6 @@ bool Client::run() noexcept {
     if ((settings_.protocol_flags & protocol_flag_ndt7) != 0) {
       LIBNDT_EMIT_INFO("using the ndt7 protocol");
       if ((settings_.nettest_flags & nettest_flag_download) != 0) {
-        settings_.nettest_flags &= ~nettest_flag_download;
         // TODO(bassosimone): for now we do not try with more than one host
         // when using ndt7 and there's a failure. We may want to do that.
         if (!ndt7_download()) {
@@ -1199,10 +1198,8 @@ bool Client::run() noexcept {
           return false;
         }
       }
-      if (settings_.nettest_flags != 0) {
-        LIBNDT_EMIT_WARNING("ndt7 does not implement the specified subtests");
-        return false;
-      }
+      // TODO(bassosimone): here we may want to warn if the user selects
+      // subtests that we actually do not implement.
       return true;
     }
     if (!connect()) {
