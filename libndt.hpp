@@ -463,6 +463,11 @@ class Client {
   /// method could be called from another thread context.
   virtual void on_server_busy(std::string msg);
 
+  /// Called when we receive a download measurement from a ndt7 server. For
+  /// the format of the measurement, please consult the ndt7 specification at
+  /// https://github.com/m-lab/ndt-server/blob/master/spec/ndt7-protocol.md
+  virtual void on_ndt7_server_download_measurement(std::string measurement);
+
   /*
                _        __             _    _ _                _
    ___ _ _  __| |  ___ / _|  _ __ _  _| |__| (_)__   __ _ _ __(_)
@@ -1009,9 +1014,14 @@ static std::string libndt_perror(Err err) noexcept {
 #define LIBNDT_EMIT_LOG_EX(client, level, statements)      \
   do {                                                     \
     if (client->get_verbosity() >= verbosity_##level) {    \
-      std::stringstream ss_log_line;                       \
-      ss_log_line << statements;                           \
-      client->on_##level(ss_log_line.str());               \
+      std::stringstream ss_log_lines;                      \
+      ss_log_lines << statements;                          \
+      std::string log_line;                                \
+      while (std::getline(ss_log_lines, log_line, '\n')) { \
+        if (!log_line.empty()) {                           \
+          client->on_##level(std::move(log_line));         \
+        }                                                  \
+      }                                                    \
     }                                                      \
   } while (0)
 
@@ -1259,8 +1269,8 @@ void Client::on_debug(const std::string &msg) const {
 void Client::on_performance(NettestFlags tid, uint8_t nflows,
                             double measured_bytes, double measured_interval,
                             double elapsed_time, double max_runtime) {
+  if (max_runtime <= 0.0) return;
   auto speed = compute_speed(measured_bytes, measured_interval);
-  // TODO(bassosimone): guard against division by zero in `max_runtime`.
   LIBNDT_EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
                   << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
                   << " elapsed: " << std::fixed << std::setprecision(3)
@@ -1276,6 +1286,38 @@ void Client::on_result(std::string scope, std::string name, std::string value) {
 
 void Client::on_server_busy(std::string msg) {
   LIBNDT_EMIT_WARNING("server is busy: " << msg);
+}
+
+void Client::on_ndt7_server_download_measurement(std::string measurement) {
+  double elapsed = 0.0;
+  double max_bandwidth = 0.0;
+  double min_rtt = 0.0;
+  double smoothed_rtt = 0.0;
+  double rtt_var = 0.0;
+  try {
+    nlohmann::json doc = nlohmann::json::parse(measurement);
+    doc.at("elapsed").get_to(elapsed);
+    if (doc.count("bbr_info") > 0) {
+      doc.at("bbr_info").at("max_bandwidth").get_to(max_bandwidth);
+      doc.at("bbr_info").at("min_rtt").get_to(min_rtt);
+    }
+    if (doc.count("tcp_info") > 0) {
+      doc.at("tcp_info").at("smoothed_rtt").get_to(smoothed_rtt);
+      doc.at("tcp_info").at("rtt_var").get_to(rtt_var);
+    }
+  } catch (const std::exception &exc) {
+    LIBNDT_EMIT_WARNING("ndt7: cannot process JSON: " << exc.what());
+    return;
+  }
+  constexpr double to_mbits = 1000000;
+  LIBNDT_EMIT_INFO("[ndt7 server] " << std::fixed << std::setprecision(3)
+                                    << std::setw(6) << elapsed
+                                    << " s; bottleneck speed: "
+                                    << max_bandwidth / to_mbits
+                                    << std::right << " Mbit/s; RTT: ("
+                                    << std::setprecision(0) << min_rtt
+                                    << "/" << smoothed_rtt << "/"
+                                    << rtt_var << ") ms");
 }
 
 // High-level API
@@ -1880,9 +1922,10 @@ bool Client::ndt7_download() noexcept {
       LIBNDT_EMIT_WARNING("ndt7: error receiving websocket message");
       return false;
     }
+    // TODO(bassosimone): we should measure the download speed here
     if (opcode == ws_opcode_text) {
       std::string sinfo{(const char *)buff.get(), count};
-      LIBNDT_EMIT_INFO("ndt: received textual message: " << sinfo);
+      on_ndt7_server_download_measurement(std::move(sinfo));
     }
   }
   return true;
