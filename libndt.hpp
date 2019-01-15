@@ -22,7 +22,8 @@
 /// \see https://github.com/m-lab/ndt-server/blob/master/spec/ndt7-protocol.md.
 ///
 /// Throughout this file, we'll use NDT to indicate ndt5 and ndt7 explicitly
-/// to indicate version 7 of the protocol. Please, use ndt7.
+/// to indicate version 7 of the protocol. Please, use ndt7 in newer code and
+/// stick to ndt5 only if backwards compatibility is necessary.
 ///
 /// \remark As a general rule, what is not documented using Doxygen comments
 /// inside of this file is considered either internal or experimental. We
