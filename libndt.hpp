@@ -1852,7 +1852,7 @@ bool Client::ndt7_download() noexcept {
   }
   // Don't leak resources if the socket is already open.
   if (is_socket_valid(sock_)) {
-    LIBNDT_EMIT_DEBUG("closing socket openned in previous attempt");
+    LIBNDT_EMIT_DEBUG("ndt7: closing socket openned in previous attempt");
     (void)netx_closesocket(sock_);
     sock_ = (Socket)-1;
   }
@@ -1866,11 +1866,29 @@ bool Client::ndt7_download() noexcept {
   if (err != Err::none) {
     return false;
   }
-  LIBNDT_EMIT_WARNING("the ndt7 protocol is not yet fully implemented");
-  return false;
+  static constexpr Size ndt7_bufsiz = (1 << 17);
+  std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
+  for (;;) {
+    // TODO(bassosimone): we should not loop forever here.
+    uint8_t opcode = 0;
+    Size count = 0;
+    err = ws_recvmsg(sock_, &opcode, buff.get(), ndt7_bufsiz, &count);
+    if (err != Err::none) {
+      if (err == Err::eof) {
+        break;
+      }
+      LIBNDT_EMIT_WARNING("ndt7: error receiving websocket message");
+      return false;
+    }
+    if (opcode == ws_opcode_text) {
+      std::string sinfo{(const char *)buff.get(), count};
+      LIBNDT_EMIT_INFO("ndt: received textual message: " << sinfo);
+    }
+  }
+  return true;
 #else
   LIBNDT_EMIT_WARNING("the ndt7 protocol requires OpenSSL support");
-  return false;  // for now just pretend we had issues
+  return false;
 #endif  // LIBNDT_HAVE_OPENSSL
 }
 
