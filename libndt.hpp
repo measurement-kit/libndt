@@ -1312,12 +1312,13 @@ void Client::on_ndt7_server_download_measurement(std::string measurement) {
   constexpr double to_mbits = 1000000;
   LIBNDT_EMIT_INFO("[ndt7 server] " << std::fixed << std::setprecision(3)
                                     << std::setw(6) << elapsed
-                                    << " s; bottleneck speed: "
+                                    << " s; max BW: "
                                     << max_bandwidth / to_mbits
-                                    << std::right << " Mbit/s; RTT: ("
+                                    << std::right
+                                    << " Mbit/s; RTT min/smoothed/var: "
                                     << std::setprecision(0) << min_rtt
                                     << "/" << smoothed_rtt << "/"
-                                    << rtt_var << ") ms");
+                                    << rtt_var << " ms");
 }
 
 // High-level API
