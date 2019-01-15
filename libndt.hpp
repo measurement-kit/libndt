@@ -1926,7 +1926,6 @@ bool Client::ndt7_download() noexcept {
       if (err == Err::eof) {
         break;
       }
-      LIBNDT_EMIT_WARNING("ndt7: error receiving websocket message");
       return false;
     }
     // TODO(bassosimone): we should measure the download speed here
@@ -2495,6 +2494,8 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
 
 Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
       uint8_t *base, Size total, Size *count) const noexcept {
+  // TODO(bassosimone): in this function we should consider an EOF as an
+  // error, because with WebSocket we have explicit FIN mechanism.
   if (opcode == nullptr || fin == nullptr || count == nullptr) {
     LIBNDT_EMIT_WARNING("ws_recv_any_frame: passed invalid return arguments");
     return Err::invalid_argument;
@@ -2730,7 +2731,10 @@ Err Client::ws_recvmsg(  //
   *count = 0;
   auto err = ws_recv_frame(sock, opcode, &fin, base, total, count);
   if (err != Err::none) {
-    LIBNDT_EMIT_WARNING("ws_recv: ws_recv_frame() failed for first frame");
+    // We don't want to scary the user in case of clean EOF
+    if (err != Err::eof) {
+      LIBNDT_EMIT_WARNING("ws_recv: ws_recv_frame() failed for first frame");
+    }
     return err;
   }
   if (*opcode != ws_opcode_binary && *opcode != ws_opcode_text) {
