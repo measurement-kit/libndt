@@ -1076,6 +1076,23 @@ static double compute_speed(double data, double elapsed) noexcept {
   return (elapsed > 0.0) ? ((data * 8.0) / 1000.0 / elapsed) : 0.0;
 }
 
+static std::string format_speed(double data, double elapsed) noexcept {
+  std::string unit = "kbit/s";
+  auto speed = compute_speed(data, elapsed);
+  if (speed > 1000) {
+    unit = "Mbit/s";
+    speed /= 1000;
+    if (speed > 1000) {
+      unit = "Gbit/s";
+      speed /= 1000;
+    }
+  }
+  std::stringstream ss;
+  ss << std::setprecision(3) << std::setw(6) << std::right
+      << speed << " " << unit;
+  return ss.str();
+}
+
 static std::string represent(std::string message) noexcept {
   bool printable = true;
   for (auto &c : message) {
@@ -1299,15 +1316,17 @@ void Client::on_debug(const std::string &msg) const {
 void Client::on_performance(NettestFlags tid, uint8_t nflows,
                             double measured_bytes, double measured_interval,
                             double elapsed_time, double max_runtime) {
-  if (max_runtime <= 0.0) return;
-  auto speed = compute_speed(measured_bytes, measured_interval);
+  auto percent = 0.0;
+  if (max_runtime > 0.0) {
+    percent = (elapsed_time * 100.0 / max_runtime);
+  }
   LIBNDT_EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
-                  << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
+                  << std::right << percent << "%]"
                   << " elapsed: " << std::fixed << std::setprecision(3)
                   << std::setw(6) << elapsed_time << " s;"
-                  << " test_id: " << (int)tid << " num_flows: " << (int)nflows
-                  << " speed: " << std::setprecision(0) << std::setw(8)
-                  << std::right << speed << " kbit/s");
+                  << " test_id: " << (int)tid << "; num_flows: " << (int)nflows
+                  << "; speed: "
+                  << format_speed(measured_bytes, measured_interval));
 }
 
 void Client::on_result(std::string scope, std::string name, std::string value) {
@@ -1340,15 +1359,15 @@ void Client::on_ndt7_server_download_measurement(std::string measurement) {
     return;
   }
   constexpr double to_mbits = 1000000;
-  LIBNDT_EMIT_INFO("[ndt7 server] " << std::fixed << std::setprecision(3)
-                                    << std::setw(6) << elapsed
-                                    << " s; max BW: "
-                                    << max_bandwidth / to_mbits
-                                    << std::right
-                                    << " Mbit/s; RTT min/smoothed/var: "
-                                    << std::setprecision(0) << min_rtt
-                                    << "/" << smoothed_rtt << "/"
-                                    << rtt_var << " ms");
+  LIBNDT_EMIT_DEBUG("[ndt7 server] " << std::fixed << std::setprecision(3)
+                                     << std::setw(6) << elapsed
+                                     << " s; max BW: "
+                                     << max_bandwidth / to_mbits
+                                     << std::right
+                                     << " Mbit/s; RTT min/smoothed/var: "
+                                     << std::setprecision(0) << min_rtt
+                                     << "/" << smoothed_rtt << "/"
+                                     << rtt_var << " ms");
 }
 
 // High-level API
