@@ -511,13 +511,17 @@ class Client {
   //
   // This API allows you to perform ndt7 tests. The plan is to increasingly
   // use ndt7 code and eventually deprecate and remove NDT.
+  //
+  // Note that we cannot have ndt7 without OpenSSL.
 
+#ifdef LIBNDT_HAVE_OPENSSL
   // ndt7_download performs a ndt7 download. Returns true if the download
   // succeeds and false in case of failure.
   bool ndt7_download() noexcept;
 
   // ndt7_upload is like ndt7_download but performs an upload.
   bool ndt7_upload() noexcept;
+#endif  // LIBNDT_HAVE_OPENSSL
 
   // NDT protocol API
   // ````````````````
@@ -1198,6 +1202,7 @@ bool Client::run() noexcept {
     // TODO(bassosimone): we will eventually want to refactor the code to
     // make ndt7 the default and ndt5 the optional case.
     if ((settings_.protocol_flags & protocol_flag_ndt7) != 0) {
+#ifdef LIBNDT_HAVE_OPENSSL
       LIBNDT_EMIT_INFO("using the ndt7 protocol");
       if ((settings_.nettest_flags & nettest_flag_download) != 0) {
         LIBNDT_EMIT_INFO("ndt7: starting download");
@@ -1222,6 +1227,10 @@ bool Client::run() noexcept {
       // TODO(bassosimone): here we may want to warn if the user selects
       // subtests that we actually do not implement.
       return true;
+#else
+      LIBNDT_EMIT_WARNING("ndt7: OpenSSL support not compiled in");
+      return false;
+#endif
     }
     if (!connect()) {
       LIBNDT_EMIT_WARNING("cannot connect to remote host; trying another one");
@@ -1904,9 +1913,9 @@ bool Client::run_upload() noexcept {
 
 // ndt7 protocol API
 // `````````````````
+#ifdef LIBNDT_HAVE_OPENSSL
 
 bool Client::ndt7_download() noexcept {
-#ifdef LIBNDT_HAVE_OPENSSL
   std::string port = "443";
   if (!settings_.port.empty()) {
     port = settings_.port;
@@ -1957,14 +1966,9 @@ bool Client::ndt7_download() noexcept {
     }
   }
   return true;
-#else
-  LIBNDT_EMIT_WARNING("the ndt7 protocol requires OpenSSL support");
-  return false;
-#endif  // LIBNDT_HAVE_OPENSSL
 }
 
 bool Client::ndt7_upload() noexcept {
-#ifdef LIBNDT_HAVE_OPENSSL
   std::string port = "443";
   if (!settings_.port.empty()) {
     port = settings_.port;
@@ -2014,11 +2018,9 @@ bool Client::ndt7_upload() noexcept {
     // from the server and forward such measurements to the caller.
   }
   return true;
-#else
-  LIBNDT_EMIT_WARNING("the ndt7 protocol requires OpenSSL support");
-  return false;
-#endif  // LIBNDT_HAVE_OPENSSL
 }
+
+#endif  // LIBNDT_HAVE_OPENSSL
 
 // NDT protocol API
 // ````````````````
