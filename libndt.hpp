@@ -521,6 +521,9 @@ class Client {
 
   // ndt7_upload is like ndt7_download but performs an upload.
   bool ndt7_upload() noexcept;
+
+  // ndt7_connect connects to @p url_path.
+  bool ndt7_connect(std::string url_path) noexcept;
 #endif  // LIBNDT_HAVE_OPENSSL
 
   // NDT protocol API
@@ -1916,27 +1919,9 @@ bool Client::run_upload() noexcept {
 #ifdef LIBNDT_HAVE_OPENSSL
 
 bool Client::ndt7_download() noexcept {
-  std::string port = "443";
-  if (!settings_.port.empty()) {
-    port = settings_.port;
-  }
-  // Don't leak resources if the socket is already open.
-  if (is_socket_valid(sock_)) {
-    LIBNDT_EMIT_DEBUG("ndt7: closing socket openned in previous attempt");
-    (void)netx_closesocket(sock_);
-    sock_ = (Socket)-1;
-  }
-  // Note: ndt7 implies WebSocket and TLS
-  settings_.protocol_flags |= protocol_flag_websocket | protocol_flag_tls;
-  Err err = netx_maybews_dial(
-      settings_.hostname, port,
-      ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
-          ws_f_sec_ws_protocol,
-      ws_proto_ndt7, "/ndt/v7/download", &sock_);
-  if (err != Err::none) {
+  if (!ndt7_connect("/ndt/v7/download")) {
     return false;
   }
-  LIBNDT_EMIT_INFO("ndt7: WebSocket connection established");
   // The following value is the maximum amount of bytes that an implementation
   // SHOULD be prepared to handle when receiving ndt7 messages.
   constexpr Size ndt7_bufsiz = (1 << 17);
@@ -1951,7 +1936,7 @@ bool Client::ndt7_download() noexcept {
     }
     uint8_t opcode = 0;
     Size count = 0;
-    err = ws_recvmsg(sock_, &opcode, buff.get(), ndt7_bufsiz, &count);
+    Err err = ws_recvmsg(sock_, &opcode, buff.get(), ndt7_bufsiz, &count);
     if (err != Err::none) {
       if (err == Err::eof) {
         break;
@@ -1969,6 +1954,40 @@ bool Client::ndt7_download() noexcept {
 }
 
 bool Client::ndt7_upload() noexcept {
+  if (!ndt7_connect("/ndt/v7/upload")) {
+    return false;
+  }
+  // Implementation note: we receive larger messages than we send. This value
+  // seems to be a reasonable value for outgoing messages.
+  constexpr Size ndt7_bufsiz = (1 << 13);
+  std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
+  random_printable_fill((char *)buff.get(), ndt7_bufsiz);
+  // The following is the expected ndt7 transfer time for a subtest.
+  constexpr double max_upload_time = 10.0;
+  auto begin = std::chrono::steady_clock::now();
+  for (;;) {
+    auto now = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed = now - begin;
+    if (elapsed.count() > max_upload_time) {
+      LIBNDT_EMIT_DEBUG("ndt7: upload has run for enough time");
+      break;
+    }
+    Err err = ws_send_frame(sock_, ws_opcode_binary | ws_fin_flag,
+                            buff.get(), ndt7_bufsiz);
+    if (err != Err::none) {
+      LIBNDT_EMIT_WARNING("ndt7: cannot send frame");
+      return false;
+    }
+    // TODO(bassosimone): we should measure the upload speed here and
+    // report such speed to the caller to allow for updating the UI
+    //
+    // TODO(bassosimone): here we should additionally receive measurements
+    // from the server and forward such measurements to the caller.
+  }
+  return true;
+}
+
+bool Client::ndt7_connect(std::string url_path) noexcept {
   std::string port = "443";
   if (!settings_.port.empty()) {
     port = settings_.port;
@@ -1985,38 +2004,11 @@ bool Client::ndt7_upload() noexcept {
       settings_.hostname, port,
       ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
           ws_f_sec_ws_protocol,
-      ws_proto_ndt7, "/ndt/v7/upload", &sock_);
+      ws_proto_ndt7, url_path, &sock_);
   if (err != Err::none) {
     return false;
   }
   LIBNDT_EMIT_INFO("ndt7: WebSocket connection established");
-  // Implementation note: we receive larger messages than we send. This value
-  // seems to be a reasonable value for outgoing messages.
-  constexpr Size ndt7_bufsiz = (1 << 13);
-  std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
-  random_printable_fill((char *)buff.get(), ndt7_bufsiz);
-  // The following is the expected ndt7 transfer time for a subtest.
-  constexpr double max_upload_time = 10.0;
-  auto begin = std::chrono::steady_clock::now();
-  for (;;) {
-    auto now = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed = now - begin;
-    if (elapsed.count() > max_upload_time) {
-      LIBNDT_EMIT_DEBUG("ndt7: upload has run for enough time");
-      break;
-    }
-    err = ws_send_frame(sock_, ws_opcode_binary | ws_fin_flag,
-                        buff.get(), ndt7_bufsiz);
-    if (err != Err::none) {
-      LIBNDT_EMIT_WARNING("ndt7: cannot send frame");
-      return false;
-    }
-    // TODO(bassosimone): we should measure the upload speed here and
-    // report such speed to the caller to allow for updating the UI
-    //
-    // TODO(bassosimone): here we should additionally receive measurements
-    // from the server and forward such measurements to the caller.
-  }
   return true;
 }
 
