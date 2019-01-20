@@ -573,6 +573,9 @@ class Client {
                            std::string ws_protocol,
                            std::string url_path) noexcept;
 
+  virtual std::string ws_prepare_frame(uint8_t first_byte, uint8_t *base,
+                                       Size count) const noexcept;
+
   // Send @p count bytes from @p base over @p sock as a frame whose first byte
   // @p first_byte should contain the opcode and possibly the FIN flag.
   virtual Err ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
@@ -1995,6 +1998,8 @@ bool Client::ndt7_upload() noexcept {
   auto begin = std::chrono::steady_clock::now();
   auto latest = begin;
   Size total = 0;
+  std::string frame = ws_prepare_frame(ws_opcode_binary | ws_fin_flag,
+                                       buff.get(), ndt7_bufsiz);
   for (;;) {
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -2012,8 +2017,7 @@ bool Client::ndt7_upload() noexcept {
     }
     // TODO(bassosimone): it may be worth checking whether having a
     // prepared message could speed up the upload.
-    Err err = ws_send_frame(sock_, ws_opcode_binary | ws_fin_flag,
-                            buff.get(), ndt7_bufsiz);
+    Err err = netx_sendn(sock_, frame.data(), frame.size());
     if (err != Err::none) {
       LIBNDT_EMIT_WARNING("ndt7: cannot send frame");
       return false;
@@ -2498,8 +2502,8 @@ Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
   return Err::value_too_large;
 }
 
-Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
-                          Size count) const noexcept {
+std::string Client::ws_prepare_frame(uint8_t first_byte, uint8_t *base,
+                                     Size count) const noexcept {
   // TODO(bassosimone): perhaps move the RNG into Client?
   constexpr Size mask_size = 4;
   uint8_t mask[mask_size] = {};
@@ -2507,23 +2511,23 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
   //  key from the set of allowed 32-bit values." [RFC6455 Sect. 5.3]. Hence
   // we're not compliant (TODO(bassosimone)).
   random_printable_fill((char *)mask, sizeof(mask));
+  std::stringstream ss;
   // Message header
   {
-    std::stringstream ss;
     // First byte
     {
       // TODO(bassosimone): add sanity checks for first byte
       ss << first_byte;
-      LIBNDT_EMIT_DEBUG("ws_send_frame: FIN: " << std::boolalpha
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: FIN: " << std::boolalpha
                                         << ((first_byte & ws_fin_flag) != 0));
       LIBNDT_EMIT_DEBUG(
-          "ws_send_frame: reserved: " << (first_byte & ws_reserved_mask));
-      LIBNDT_EMIT_DEBUG("ws_send_frame: opcode: " << (first_byte & ws_opcode_mask));
+          "ws_prepare_frame: reserved: " << (first_byte & ws_reserved_mask));
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: opcode: " << (first_byte & ws_opcode_mask));
     }
     // Length
     {
-      LIBNDT_EMIT_DEBUG("ws_send_frame: mask flag: " << std::boolalpha << true);
-      LIBNDT_EMIT_DEBUG("ws_send_frame: length: " << count);
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: mask flag: " << std::boolalpha << true);
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: length: " << count);
       // Since this is a client implementation, we always include the MASK flag
       // as part of the second byte that we send on the wire. Also, the spec
       // says that we must emit the length in network byte order, which means
@@ -2533,7 +2537,7 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
       //     <https://tools.ietf.org/html/rfc6455#section-5.2>.
 #define LB(value)                                                        \
   do {                                                                   \
-    LIBNDT_EMIT_DEBUG("ws_send_frame: length byte: " << (unsigned int)(value)); \
+    LIBNDT_EMIT_DEBUG("ws_prepare_frame: length byte: " << (unsigned int)(value)); \
     ss << (value);                                                       \
   } while (0)
       if (count < 126) {
@@ -2558,53 +2562,29 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
     // Mask
     {
       for (Size i = 0; i < mask_size; ++i) {
-        LIBNDT_EMIT_DEBUG("ws_send_frame: mask byte: " << (unsigned int)mask[i]
+        LIBNDT_EMIT_DEBUG("ws_prepare_frame: mask byte: " << (unsigned int)mask[i]
                                                 << " ('" << mask[i] << "')");
         ss << (uint8_t)mask[i];
       }
     }
-    // Send header
-    auto header = ss.str();
-    LIBNDT_EMIT_DEBUG("ws_send_frame: ws header: " << represent(header));
-    auto err = netx_sendn(sock, header.c_str(), header.size());
-    if (err != Err::none) {
-      LIBNDT_EMIT_WARNING("ws_send_frame: netx_sendn() failed when sending header");
-      return err;
-    }
   }
-  LIBNDT_EMIT_DEBUG("ws_send_frame: header sent");
+  // XXX: previous implementation was bailing out in case of invalid
+  // count or base, while here we just ignore that. Ok?
   {
-    if (count <= 0) {
-      LIBNDT_EMIT_DEBUG("ws_send_frame: no body provided");
-      return Err::none;
-    }
-    if (base == nullptr && count > 0) {
-      LIBNDT_EMIT_WARNING("ws_send_frame: passed a null pointer with nonzero length");
-      return Err::invalid_argument;
-    }
-    // Debug messages printing the body are commented out because they're too
-    // much verbose. Still they may be useful for future debugging.
-    /*
-    LIBNDT_EMIT_DEBUG("ws_send_frame: body unmasked: "
-               << represent(std::string{(char *)base, count}));
-    */
-    for (Size i = 0; i < count; ++i) {
+    for (Size i = 0; i < count && base != nullptr; ++i) {
       // Implementation note: judging from a GCC 8 warning, it seems that using
       // `^=` causes -Wconversion warnings, while using `= ... ^` does not.
       base[i] = base[i] ^ mask[i % mask_size];
-    }
-    /*
-    LIBNDT_EMIT_DEBUG("ws_send_frame: body masked: "
-               << represent(std::string{(char *)base, count}));
-    */
-    auto err = netx_sendn(sock, base, count);
-    if (err != Err::none) {
-      LIBNDT_EMIT_WARNING("ws_send_frame: netx_sendn() failed when sending body");
-      return err;
+      ss << base[i];
     }
   }
-  LIBNDT_EMIT_DEBUG("ws_send_frame: body sent");
-  return Err::none;
+  return ss.str();
+}
+
+Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
+                          Size count) const noexcept {
+  std::string prep = ws_prepare_frame(first_byte, base, count);
+  return netx_sendn(sock, prep.c_str(), prep.size());
 }
 
 Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
