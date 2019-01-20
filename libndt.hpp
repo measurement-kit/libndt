@@ -428,8 +428,8 @@ class Client {
 
   /// Called to inform you about the measured speed. The default behavior is
   /// to write the provided information as an info message. @param tid is either
-  /// nettest_download or nettest_upload. @param nflows is the number of flows
-  /// that we're using. @param measured_bytes is the number of bytes received
+  /// nettest_flag_download or nettest_flag_upload. @param nflows is the number
+  /// of used flows. @param measured_bytes is the number of bytes received
   /// or sent since the previous measurement. @param measurement_interval is the
   /// number of seconds elapsed since the previous measurement. @param elapsed
   /// is the number of seconds elapsed since the beginning of the nettest.
@@ -1927,12 +1927,22 @@ bool Client::ndt7_download() noexcept {
   constexpr Size ndt7_bufsiz = (1 << 17);
   std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
   auto begin = std::chrono::steady_clock::now();
+  auto latest = begin;
+  Size total = 0;
   for (;;) {
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
     if (elapsed.count() > settings_.max_runtime) {
       LIBNDT_EMIT_WARNING("ndt7: download running for too much time");
       return false;
+    }
+    constexpr auto measurement_interval = 0.25;
+    std::chrono::duration<double> interval = now - latest;
+    if (interval.count() > measurement_interval) {
+      on_performance(nettest_flag_download, 1, total, interval.count(),
+                     elapsed.count(), settings_.max_runtime);
+      latest = now;
+      total = 0;
     }
     uint8_t opcode = 0;
     Size count = 0;
@@ -1943,12 +1953,11 @@ bool Client::ndt7_download() noexcept {
       }
       return false;
     }
-    // TODO(bassosimone): we should measure the application level download
-    // speed here. For now it's OK to just have a basic client.
     if (opcode == ws_opcode_text) {
       std::string sinfo{(const char *)buff.get(), count};
       on_ndt7_server_download_measurement(std::move(sinfo));
     }
+    total += count;  // Assume we won't overflow
   }
   return true;
 }
@@ -1965,6 +1974,8 @@ bool Client::ndt7_upload() noexcept {
   // The following is the expected ndt7 transfer time for a subtest.
   constexpr double max_upload_time = 10.0;
   auto begin = std::chrono::steady_clock::now();
+  auto latest = begin;
+  Size total = 0;
   for (;;) {
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
@@ -1972,15 +1983,27 @@ bool Client::ndt7_upload() noexcept {
       LIBNDT_EMIT_DEBUG("ndt7: upload has run for enough time");
       break;
     }
+    constexpr auto measurement_interval = 0.25;
+    std::chrono::duration<double> interval = now - latest;
+    if (interval.count() > measurement_interval) {
+      on_performance(nettest_flag_upload, 1, total, interval.count(),
+                     elapsed.count(), max_upload_time);
+      latest = now;
+      total = 0;
+    }
+    // TODO(bassosimone): it may be worth checking whether having a
+    // prepared message could speed up the upload.
     Err err = ws_send_frame(sock_, ws_opcode_binary | ws_fin_flag,
                             buff.get(), ndt7_bufsiz);
     if (err != Err::none) {
       LIBNDT_EMIT_WARNING("ndt7: cannot send frame");
       return false;
     }
-    // TODO(bassosimone): we should measure the upload speed here and
-    // report such speed to the caller to allow for updating the UI
-    //
+    // Assume that we won't overflow. The additional three bytes are
+    // for the opcode and for the length. TODO(bassosimone): we may
+    // want to get more precise numbers from ws_send_frame, but it'll
+    // require us to change its implementation to do so.
+    total += ndt7_bufsiz + 3;
     // TODO(bassosimone): here we should additionally receive measurements
     // from the server and forward such measurements to the caller.
   }
