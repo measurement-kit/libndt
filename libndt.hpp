@@ -1957,10 +1957,9 @@ bool Client::ndt7_download() noexcept {
     constexpr auto measurement_interval = 0.25;
     std::chrono::duration<double> interval = now - latest;
     if (interval.count() > measurement_interval) {
-      on_performance(nettest_flag_download, 1, total, interval.count(),
+      on_performance(nettest_flag_download, 1, total, elapsed.count(),
                      elapsed.count(), settings_.max_runtime);
       latest = now;
-      total = 0;
     }
     uint8_t opcode = 0;
     Size count = 0;
@@ -2006,10 +2005,9 @@ bool Client::ndt7_upload() noexcept {
     constexpr auto measurement_interval = 0.25;
     std::chrono::duration<double> interval = now - latest;
     if (interval.count() > measurement_interval) {
-      on_performance(nettest_flag_upload, 1, total, interval.count(),
+      on_performance(nettest_flag_upload, 1, total, elapsed.count(),
                      elapsed.count(), max_upload_time);
       latest = now;
-      total = 0;
     }
     // TODO(bassosimone): it may be worth checking whether having a
     // prepared message could speed up the upload.
