@@ -1075,13 +1075,12 @@ static void random_printable_fill(char *buffer, size_t length) noexcept {
   }
 }
 
-static double compute_speed(double data, double elapsed) noexcept {
+static double compute_speed_kbits(double data, double elapsed) noexcept {
   return (elapsed > 0.0) ? ((data * 8.0) / 1000.0 / elapsed) : 0.0;
 }
 
-static std::string format_speed(double data, double elapsed) noexcept {
+static std::string format_speed(double speed) noexcept {
   std::string unit = "kbit/s";
-  auto speed = compute_speed(data, elapsed);
   if (speed > 1000) {
     unit = "Mbit/s";
     speed /= 1000;
@@ -1094,6 +1093,10 @@ static std::string format_speed(double data, double elapsed) noexcept {
   ss << std::setprecision(3) << std::setw(6) << std::right
       << speed << " " << unit;
   return ss.str();
+}
+
+static std::string format_speed(double data, double elapsed) noexcept {
+  return format_speed(compute_speed_kbits(data, elapsed));
 }
 
 static std::string represent(std::string message) noexcept {
@@ -1357,16 +1360,14 @@ void Client::on_ndt7_server_download_measurement(std::string measurement) {
     LIBNDT_EMIT_WARNING("ndt7: cannot process JSON: " << exc.what());
     return;
   }
-  constexpr double to_mbits = 1000000;
-  LIBNDT_EMIT_DEBUG("[ndt7 server] " << std::fixed << std::setprecision(3)
-                                     << std::setw(6) << elapsed
-                                     << " s; max BW: "
-                                     << max_bandwidth / to_mbits
-                                     << std::right
-                                     << " Mbit/s; RTT min/smoothed/var: "
-                                     << std::setprecision(0) << min_rtt
-                                     << "/" << smoothed_rtt << "/"
-                                     << rtt_var << " ms");
+  constexpr double to_kbits = 0.001;
+  LIBNDT_EMIT_INFO("[server measurement] "
+                   << std::fixed << std::setprecision(3)
+                   << std::setw(6) << elapsed << " s; max BW: "
+                   << format_speed(max_bandwidth * to_kbits)
+                   << "; RTT min/smoothed/var: "
+                   << std::setprecision(0) << min_rtt << "/"
+                   << smoothed_rtt << "/" << rtt_var << " ms");
 }
 
 // High-level API
@@ -1718,7 +1719,7 @@ bool Client::run_download() noexcept {
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    client_side_speed = compute_speed(  //
+    client_side_speed = compute_speed_kbits(  //
         static_cast<double>(total_data), elapsed.count());
   }
 
@@ -1911,7 +1912,7 @@ bool Client::run_upload() noexcept {
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    client_side_speed = compute_speed(  //
+    client_side_speed = compute_speed_kbits(  //
         static_cast<double>(total_data), elapsed.count());
     LIBNDT_EMIT_DEBUG("run_upload: client computed speed: " << client_side_speed);
   }
