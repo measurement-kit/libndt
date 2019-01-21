@@ -1228,23 +1228,19 @@ bool Client::run() noexcept {
 #ifdef LIBNDT_HAVE_OPENSSL
       LIBNDT_EMIT_INFO("using the ndt7 protocol");
       if ((settings_.nettest_flags & nettest_flag_download) != 0) {
-        LIBNDT_EMIT_INFO("ndt7: starting download");
         // TODO(bassosimone): for now we do not try with more than one host
         // when using ndt7 and there's a failure. We may want to do that.
         if (!ndt7_download()) {
           LIBNDT_EMIT_WARNING("ndt7: download failed");
-          return false;
+          // FALLTHROUGH
         }
-        LIBNDT_EMIT_INFO("ndt7: download complete");
       }
       if ((settings_.nettest_flags & nettest_flag_upload) != 0) {
-        LIBNDT_EMIT_INFO("ndt7: starting upload");
         // TODO(bassosimone): same as above.
         if (!ndt7_upload()) {
           LIBNDT_EMIT_WARNING("ndt7: upload failed");
-          return false;
+          // FALLTHROUGH
         }
-        LIBNDT_EMIT_INFO("ndt7: upload complete");
       }
       LIBNDT_EMIT_INFO("ndt7: test complete");
       // TODO(bassosimone): here we may want to warn if the user selects
