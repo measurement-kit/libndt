@@ -32,6 +32,7 @@ static void usage() {
   std::clog << "  --ca-bundle-path <path> : path to OpenSSL CA bundle\n";
   std::clog << "  --download              : run download test\n";
   std::clog << "  --download-ext          : run multi-stream download test\n";
+  std::clog << "  --help                  : print usage information\n";
   std::clog << "  --insecure              : if --tls is specified, disable any kind of\n";
   std::clog << "                            TLS peer validation. This is insecure, hence\n";
   std::clog << "                            the flag name, but useful for testing.\n";
@@ -49,6 +50,9 @@ static void usage() {
   std::clog << "\n";
   std::clog << "If <hostname> is omitted, we pick a nearby server, unless `--random'\n";
   std::clog << "is specified, in which case we pick a random server.\n";
+  std::clog << "\n";
+  std::clog << "If you don't select a test to run (e.g. `--download`), this\n";
+  std::clog << "command will fail, because there's nothing to do.\n";
   std::clog << std::endl;
   // clang-format on
 }
@@ -72,6 +76,9 @@ int main(int, char **argv) {
       } else if (flag == "download-ext") {
         settings.nettest_flags |= libndt::nettest_flag_download_ext;
         std::clog << "will run the multi-stream download sub-test" << std::endl;
+      } else if (flag == "help") {
+        usage();
+        exit(EXIT_SUCCESS);
       } else if (flag == "insecure") {
         settings.tls_verify_peer = false;
         std::clog << "WILL NOT verify the TLS peer (INSECURE!)" << std::endl;
@@ -133,6 +140,12 @@ int main(int, char **argv) {
     } else {
       std::clog << "will auto-select a suitable server" << std::endl;
     }
+  }
+
+  if (settings.nettest_flags == 0) {
+    std::clog << "FATAL: No test selected" << std::endl;
+    std::clog << "Run `libndt-client --help` for more help" << std::endl;
+    exit(EXIT_FAILURE);
   }
 
   libndt::Client client{settings};
