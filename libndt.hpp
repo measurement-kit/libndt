@@ -17,6 +17,14 @@
 /// NDT over TLS and NDT over websocket. For more information on the NDT
 /// protocol, \see https://github.com/ndt-project/ndt/wiki/NDTProtocol.
 ///
+/// The NDT protocol described above is version 5 (aka ndt5). The code in this
+/// library also implements the ndt7 specification, which is described at
+/// \see https://github.com/m-lab/ndt-server/blob/master/spec/ndt7-protocol.md.
+///
+/// Throughout this file, we'll use NDT to indicate ndt5 and ndt7 explicitly
+/// to indicate version 7 of the protocol. Please, use ndt7 in newer code and
+/// stick to ndt5 only if backwards compatibility is necessary.
+///
 /// \remark As a general rule, what is not documented using Doxygen comments
 /// inside of this file is considered either internal or experimental. We
 /// recommend you to only use documented interfaces.
@@ -195,6 +203,11 @@ constexpr ProtocolFlags protocol_flag_tls = ProtocolFlags{1 << 1};
 /// When this flag is set we use WebSocket. This specifically means that
 /// we use the WebSocket framing to encapsulate NDT messages.
 constexpr ProtocolFlags protocol_flag_websocket = ProtocolFlags{1 << 2};
+
+/// When this flag is set, we use ndt7 rather than ndt5. This specifically
+/// means that a totally different protocol is used. You can read more on ndt7
+/// at https://github.com/m-lab/ndt-server/blob/master/spec/ndt7-protocol.md
+constexpr ProtocolFlags protocol_flag_ndt7 = ProtocolFlags{1 << 3};
 
 // Policy for auto-selecting a NDT server
 // ``````````````````````````````````````
@@ -451,6 +464,11 @@ class Client {
   /// method could be called from another thread context.
   virtual void on_server_busy(std::string msg);
 
+  /// Called when we receive a download measurement from a ndt7 server. For
+  /// the format of the measurement, please consult the ndt7 specification at
+  /// https://github.com/m-lab/ndt-server/blob/master/spec/ndt7-protocol.md
+  virtual void on_ndt7_server_download_measurement(std::string measurement);
+
   /*
                _        __             _    _ _                _
    ___ _ _  __| |  ___ / _|  _ __ _  _| |__| (_)__   __ _ _ __(_)
@@ -487,6 +505,14 @@ class Client {
   virtual bool run_download() noexcept;
   virtual bool run_meta() noexcept;
   virtual bool run_upload() noexcept;
+
+  // ndt7 protocol API
+  // `````````````````
+  //
+  // This API allows you to perform ndt7 tests. The plan is to increasingly
+  // use ndt7 code and eventually deprecate and remove NDT.
+
+  bool ndt7_download() noexcept;
 
   // NDT protocol API
   // ````````````````
@@ -529,9 +555,11 @@ class Client {
   // ws_flags specifies what headers to send and to expect (for more information
   // see the ws_f_xxx constants defined below). @param ws_protocol specifies
   // what protocol to specify as Sec-WebSocket-Protocol in the upgrade request.
-  // @param port is used to construct the Host header.
+  // @param port is used to construct the Host header. @param url_path is the
+  // URL path to use for performing the websocket upgrade.
   virtual Err ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
-                           std::string ws_protocol) noexcept;
+                           std::string ws_protocol,
+                           std::string url_path) noexcept;
 
   // Send @p count bytes from @p base over @p sock as a frame whose first byte
   // @p first_byte should contain the opcode and possibly the FIN flag.
@@ -581,10 +609,11 @@ class Client {
 
   // Connect to @p hostname and @p port possibly using WebSocket,
   // SSL, and SOCKSv5. This depends on the Settings. See the documentation
-  // of ws_handshake() for more info on @p ws_flags and @p ws_protocol.
+  // of ws_handshake() for more info on @p ws_flags, @p ws_protocol, and
+  // @p url_path.
   virtual Err netx_maybews_dial(const std::string &hostname,
                                 const std::string &port, uint64_t ws_flags,
-                                std::string ws_protocol,
+                                std::string ws_protocol, std::string url_path,
                                 Socket *sock) noexcept;
 
   // Connect to @p hostname and @p port possibly using SSL and SOCKSv5. This
@@ -896,6 +925,7 @@ constexpr uint64_t ws_f_upgrade = 1 << 3;
 constexpr const char *ws_proto_control = "ndt";
 constexpr const char *ws_proto_c2s = "c2s";
 constexpr const char *ws_proto_s2c = "s2c";
+constexpr const char *ws_proto_ndt7 = "net.measurementlab.ndt.v7";
 
 // Private constants
 // `````````````````
@@ -985,9 +1015,14 @@ static std::string libndt_perror(Err err) noexcept {
 #define LIBNDT_EMIT_LOG_EX(client, level, statements)      \
   do {                                                     \
     if (client->get_verbosity() >= verbosity_##level) {    \
-      std::stringstream ss_log_line;                       \
-      ss_log_line << statements;                           \
-      client->on_##level(ss_log_line.str());               \
+      std::stringstream ss_log_lines;                      \
+      ss_log_lines << statements;                          \
+      std::string log_line;                                \
+      while (std::getline(ss_log_lines, log_line, '\n')) { \
+        if (!log_line.empty()) {                           \
+          client->on_##level(std::move(log_line));         \
+        }                                                  \
+      }                                                    \
     }                                                      \
   } while (0)
 
@@ -1152,6 +1187,22 @@ bool Client::run() noexcept {
   for (auto &fqdn : fqdns) {
     LIBNDT_EMIT_INFO("trying to connect to " << fqdn);
     settings_.hostname = fqdn;
+    // TODO(bassosimone): we will eventually want to refactor the code to
+    // make ndt7 the default and ndt5 the optional case.
+    if ((settings_.protocol_flags & protocol_flag_ndt7) != 0) {
+      LIBNDT_EMIT_INFO("using the ndt7 protocol");
+      if ((settings_.nettest_flags & nettest_flag_download) != 0) {
+        // TODO(bassosimone): for now we do not try with more than one host
+        // when using ndt7 and there's a failure. We may want to do that.
+        if (!ndt7_download()) {
+          LIBNDT_EMIT_WARNING("ndt7 download failed");
+          return false;
+        }
+      }
+      // TODO(bassosimone): here we may want to warn if the user selects
+      // subtests that we actually do not implement.
+      return true;
+    }
     if (!connect()) {
       LIBNDT_EMIT_WARNING("cannot connect to remote host; trying another one");
       continue;
@@ -1216,8 +1267,8 @@ void Client::on_debug(const std::string &msg) const {
 void Client::on_performance(NettestFlags tid, uint8_t nflows,
                             double measured_bytes, double measured_interval,
                             double elapsed_time, double max_runtime) {
+  if (max_runtime <= 0.0) return;
   auto speed = compute_speed(measured_bytes, measured_interval);
-  // TODO(bassosimone): guard against division by zero in `max_runtime`.
   LIBNDT_EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
                   << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
                   << " elapsed: " << std::fixed << std::setprecision(3)
@@ -1233,6 +1284,39 @@ void Client::on_result(std::string scope, std::string name, std::string value) {
 
 void Client::on_server_busy(std::string msg) {
   LIBNDT_EMIT_WARNING("server is busy: " << msg);
+}
+
+void Client::on_ndt7_server_download_measurement(std::string measurement) {
+  double elapsed = 0.0;
+  double max_bandwidth = 0.0;
+  double min_rtt = 0.0;
+  double smoothed_rtt = 0.0;
+  double rtt_var = 0.0;
+  try {
+    nlohmann::json doc = nlohmann::json::parse(measurement);
+    doc.at("elapsed").get_to(elapsed);
+    if (doc.count("bbr_info") > 0) {
+      doc.at("bbr_info").at("max_bandwidth").get_to(max_bandwidth);
+      doc.at("bbr_info").at("min_rtt").get_to(min_rtt);
+    }
+    if (doc.count("tcp_info") > 0) {
+      doc.at("tcp_info").at("smoothed_rtt").get_to(smoothed_rtt);
+      doc.at("tcp_info").at("rtt_var").get_to(rtt_var);
+    }
+  } catch (const std::exception &exc) {
+    LIBNDT_EMIT_WARNING("ndt7: cannot process JSON: " << exc.what());
+    return;
+  }
+  constexpr double to_mbits = 1000000;
+  LIBNDT_EMIT_INFO("[ndt7 server] " << std::fixed << std::setprecision(3)
+                                    << std::setw(6) << elapsed
+                                    << " s; max BW: "
+                                    << max_bandwidth / to_mbits
+                                    << std::right
+                                    << " Mbit/s; RTT min/smoothed/var: "
+                                    << std::setprecision(0) << min_rtt
+                                    << "/" << smoothed_rtt << "/"
+                                    << rtt_var << " ms");
 }
 
 // High-level API
@@ -1323,7 +1407,7 @@ bool Client::connect() noexcept {
              settings_.hostname, port,
              ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
                  ws_f_sec_ws_protocol,
-             ws_proto_control, &sock_) == Err::none;
+             ws_proto_control, "/ndt_protocol", &sock_) == Err::none;
 }
 
 bool Client::send_login() noexcept {
@@ -1485,7 +1569,7 @@ bool Client::run_download() noexcept {
     Err err = netx_maybews_dial(  //
         settings_.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
-          | ws_f_sec_ws_protocol, ws_proto_s2c,
+          | ws_f_sec_ws_protocol, ws_proto_s2c, "/ndt_protocol",
         &sock);
     if (err != Err::none) {
       break;
@@ -1678,7 +1762,7 @@ bool Client::run_upload() noexcept {
     Err err = netx_maybews_dial(  //
         settings_.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
-          | ws_f_sec_ws_protocol, ws_proto_c2s,
+          | ws_f_sec_ws_protocol, ws_proto_c2s, "/ndt_protocol",
         &sock);
     if (err != Err::none) {
       return false;
@@ -1796,6 +1880,64 @@ bool Client::run_upload() noexcept {
   }
 
   return true;
+}
+
+// ndt7 protocol API
+// `````````````````
+
+bool Client::ndt7_download() noexcept {
+#ifdef LIBNDT_HAVE_OPENSSL
+  std::string port = "443";
+  if (!settings_.port.empty()) {
+    port = settings_.port;
+  }
+  // Don't leak resources if the socket is already open.
+  if (is_socket_valid(sock_)) {
+    LIBNDT_EMIT_DEBUG("ndt7: closing socket openned in previous attempt");
+    (void)netx_closesocket(sock_);
+    sock_ = (Socket)-1;
+  }
+  // Note: ndt7 implies WebSocket and TLS
+  settings_.protocol_flags |= protocol_flag_websocket | protocol_flag_tls;
+  Err err = netx_maybews_dial(
+      settings_.hostname, port,
+      ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
+          ws_f_sec_ws_protocol,
+      ws_proto_ndt7, "/ndt/v7/download", &sock_);
+  if (err != Err::none) {
+    return false;
+  }
+  static constexpr Size ndt7_bufsiz = (1 << 17);
+  std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
+  auto begin = std::chrono::steady_clock::now();
+  for (;;) {
+    auto now = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed = now - begin;
+    if (elapsed.count() > settings_.max_runtime) {
+      LIBNDT_EMIT_WARNING("ndt7: download running for too much time");
+      return false;
+    }
+    uint8_t opcode = 0;
+    Size count = 0;
+    err = ws_recvmsg(sock_, &opcode, buff.get(), ndt7_bufsiz, &count);
+    if (err != Err::none) {
+      if (err == Err::eof) {
+        break;
+      }
+      return false;
+    }
+    // TODO(bassosimone): we should measure the application level download
+    // speed here. For now it's OK to just have a basic client.
+    if (opcode == ws_opcode_text) {
+      std::string sinfo{(const char *)buff.get(), count};
+      on_ndt7_server_download_measurement(std::move(sinfo));
+    }
+  }
+  return true;
+#else
+  LIBNDT_EMIT_WARNING("the ndt7 protocol requires OpenSSL support");
+  return false;
+#endif  // LIBNDT_HAVE_OPENSSL
 }
 
 // NDT protocol API
@@ -2143,7 +2285,7 @@ Err Client::ws_recvln(Socket fd, std::string *line, size_t maxlen) noexcept {
 }
 
 Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
-                         std::string ws_proto) noexcept {
+                         std::string ws_proto, std::string url_path) noexcept {
   std::string proto_header;
   {
     proto_header += "Sec-WebSocket-Protocol: ";
@@ -2168,8 +2310,10 @@ Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
         host_header << ":" << port;
       }
     }
+    std::stringstream request_line;
+    request_line << "GET " << url_path << " HTTP/1.1";
     Err err = Err::none;
-    if ((err = ws_sendln(fd, "GET /ndt_protocol HTTP/1.1")) != Err::none ||
+    if ((err = ws_sendln(fd, request_line.str())) != Err::none ||
         (err = ws_sendln(fd, host_header.str())) != Err::none ||
         (err = ws_sendln(fd, "Upgrade: websocket")) != Err::none ||
         (err = ws_sendln(fd, "Connection: Upgrade")) != Err::none ||
@@ -2349,6 +2493,8 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
 
 Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
       uint8_t *base, Size total, Size *count) const noexcept {
+  // TODO(bassosimone): in this function we should consider an EOF as an
+  // error, because with WebSocket we have explicit FIN mechanism.
   if (opcode == nullptr || fin == nullptr || count == nullptr) {
     LIBNDT_EMIT_WARNING("ws_recv_any_frame: passed invalid return arguments");
     return Err::invalid_argument;
@@ -2584,7 +2730,10 @@ Err Client::ws_recvmsg(  //
   *count = 0;
   auto err = ws_recv_frame(sock, opcode, &fin, base, total, count);
   if (err != Err::none) {
-    LIBNDT_EMIT_WARNING("ws_recv: ws_recv_frame() failed for first frame");
+    // We don't want to scary the user in case of clean EOF
+    if (err != Err::eof) {
+      LIBNDT_EMIT_WARNING("ws_recv: ws_recv_frame() failed for first frame");
+    }
     return err;
   }
   if (*opcode != ws_opcode_binary && *opcode != ws_opcode_text) {
@@ -2845,7 +2994,8 @@ again:
 
 Err Client::netx_maybews_dial(const std::string &hostname,
                               const std::string &port, uint64_t ws_flags,
-                              std::string ws_protocol, Socket *sock) noexcept {
+                              std::string ws_protocol, std::string url_path,
+                              Socket *sock) noexcept {
   auto err = netx_maybessl_dial(hostname, port, sock);
   if (err != Err::none) {
     return err;
@@ -2856,7 +3006,7 @@ Err Client::netx_maybews_dial(const std::string &hostname,
     return Err::none;
   }
   LIBNDT_EMIT_DEBUG("netx_maybews_dial: about to start websocket handhsake");
-  err = ws_handshake(*sock, port, ws_flags, ws_protocol);
+  err = ws_handshake(*sock, port, ws_flags, ws_protocol, url_path);
   if (err != Err::none) {
     (void)netx_closesocket(*sock);
     *sock = (Socket)-1;

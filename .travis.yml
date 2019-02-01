@@ -7,7 +7,6 @@ matrix:
     - env: BUILD_TYPE="asan"
     - env: BUILD_TYPE="clang"
     - env: BUILD_TYPE="coverage"
-    - env: BUILD_TYPE="lsan"
     - env: BUILD_TYPE="ubsan"
     - env: BUILD_TYPE="vanilla"
 script:

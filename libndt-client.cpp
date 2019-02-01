@@ -36,6 +36,7 @@ static void usage() {
   std::clog << "                            TLS peer validation. This is insecure, hence\n";
   std::clog << "                            the flag name, but useful for testing.\n";
   std::clog << "  --json                  : use the JSON protocol\n";
+  std::clog << "  --ndt7                  : use the ndt7 protocol\n";
   std::clog << "  --port <port>           : use the specified port\n";
   std::clog << "  --random                : if hostname is omitted, then use\n";
   std::clog << "                            a random NDT server.\n";
@@ -77,6 +78,9 @@ int main(int, char **argv) {
       } else if (flag == "json") {
         settings.protocol_flags |= libndt::protocol_flag_json;
         std::clog << "will use the JSON-based NDT protocol" << std::endl;
+      } else if (flag == "ndt7") {
+        settings.protocol_flags |= libndt::protocol_flag_ndt7;
+        std::clog << "will use the ndt7 protocol" << std::endl;
       } else if (flag == "random") {
         settings.mlabns_policy = libndt::mlabns_policy_random;
         std::clog << "will auto-select a random server" << std::endl;
