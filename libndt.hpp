@@ -430,8 +430,7 @@ class Client {
   /// to write the provided information as an info message. @param tid is either
   /// nettest_flag_download or nettest_flag_upload. @param nflows is the number
   /// of used flows. @param measured_bytes is the number of bytes received
-  /// or sent since the previous measurement. @param measurement_interval is the
-  /// number of seconds elapsed since the previous measurement. @param elapsed
+  /// or sent since the beginning of the measurement. @param elapsed
   /// is the number of seconds elapsed since the beginning of the nettest.
   /// @param max_runtime is the maximum runtime of this nettest, as copied from
   /// the Settings. @remark By dividing @p elapsed by @p max_runtime, you can
@@ -440,8 +439,7 @@ class Client {
   /// bytes from the server or uploading bytes to the server. \warning This
   /// method could be called from another thread context.
   virtual void on_performance(NettestFlags tid, uint8_t nflows,
-                              double measured_bytes,
-                              double measurement_interval, double elapsed,
+                              double measured_bytes, double elapsed,
                               double max_runtime);
 
   /// Called to provide you with NDT results. The default behavior is
@@ -1320,7 +1318,7 @@ void Client::on_debug(const std::string &msg) const {
 }
 
 void Client::on_performance(NettestFlags tid, uint8_t nflows,
-                            double measured_bytes, double measured_interval,
+                            double measured_bytes,
                             double elapsed_time, double max_runtime) {
   auto percent = 0.0;
   if (max_runtime > 0.0) {
@@ -1332,7 +1330,7 @@ void Client::on_performance(NettestFlags tid, uint8_t nflows,
                   << std::setw(6) << elapsed_time << " s;"
                   << " test_id: " << (int)tid << "; num_flows: " << (int)nflows
                   << "; speed: "
-                  << format_speed_from_kbits(measured_bytes, measured_interval));
+                  << format_speed_from_kbits(measured_bytes, elapsed_time));
 }
 
 void Client::on_result(std::string scope, std::string name, std::string value) {
@@ -1614,7 +1612,6 @@ bool Client::run_download() noexcept {
   {
     std::atomic<uint8_t> active{0};
     auto begin = std::chrono::steady_clock::now();
-    std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = settings_.max_runtime;
     auto ws = (settings_.protocol_flags & protocol_flag_websocket) != 0;
@@ -1628,7 +1625,6 @@ bool Client::run_download() noexcept {
         begin,         // copy for safety
         fd,            // copy for safety
         max_runtime,   // copy for safety
-        &recent_data,  // reference to atomic
         const_this,    // const pointer
         &total_data,   // reference to atomic
         ws             // copy for safety
@@ -1658,7 +1654,6 @@ bool Client::run_download() noexcept {
             }
             break;
           }
-          recent_data += (uint64_t)n;  // atomic
           total_data += (uint64_t)n;   // atomic
           auto now = std::chrono::steady_clock::now();
           std::chrono::duration<double> elapsed = now - begin;
@@ -1679,15 +1674,12 @@ bool Client::run_download() noexcept {
         break;
       }
       auto now = std::chrono::steady_clock::now();
-      std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       on_performance(nettest_flag_download,             //
                      active,                            // atomic
-                     static_cast<double>(recent_data),  // atomic
-                     measurement_interval.count(),      //
+                     static_cast<double>(total_data),   // atomic
                      elapsed.count(),                   //
                      settings_.max_runtime);
-      recent_data = 0;  // atomic
       prev = now;
     }
     auto now = std::chrono::steady_clock::now();
@@ -1802,7 +1794,6 @@ bool Client::run_upload() noexcept {
   {
     std::atomic<uint8_t> active{0};
     auto begin = std::chrono::steady_clock::now();
-    std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = settings_.max_runtime;
     auto ws = (settings_.protocol_flags & protocol_flag_websocket) != 0;
@@ -1816,7 +1807,6 @@ bool Client::run_upload() noexcept {
         begin,         // copy for safety
         fd,            // copy for safety
         max_runtime,   // copy for safety
-        &recent_data,  // reference to atomic
         const_this,    // const pointer
         &total_data,   // reference to atomic
         ws             // copy for safety
@@ -1852,7 +1842,6 @@ bool Client::run_upload() noexcept {
             }
             break;
           }
-          recent_data += (uint64_t)n;  // atomic
           total_data += (uint64_t)n;   // atomic
           auto now = std::chrono::steady_clock::now();
           std::chrono::duration<double> elapsed = now - begin;
@@ -1873,15 +1862,12 @@ bool Client::run_upload() noexcept {
         break;
       }
       auto now = std::chrono::steady_clock::now();
-      std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       on_performance(nettest_flag_upload,               //
                      active,                            // atomic
-                     static_cast<double>(recent_data),  // atomic
-                     measurement_interval.count(),      //
+                     static_cast<double>(total_data),   // atomic
                      elapsed.count(),                   //
                      settings_.max_runtime);
-      recent_data = 0;  // atomic
       prev = now;
     }
     auto now = std::chrono::steady_clock::now();
@@ -1933,7 +1919,7 @@ bool Client::ndt7_download() noexcept {
     std::chrono::duration<double> interval = now - latest;
     if (interval.count() > measurement_interval) {
       on_performance(nettest_flag_download, 1, static_cast<double>(total),
-                     elapsed.count(), elapsed.count(), settings_.max_runtime);
+                     elapsed.count(), settings_.max_runtime);
       latest = now;
     }
     uint8_t opcode = 0;
@@ -1982,7 +1968,7 @@ bool Client::ndt7_upload() noexcept {
     std::chrono::duration<double> interval = now - latest;
     if (interval.count() > measurement_interval) {
       on_performance(nettest_flag_upload, 1, static_cast<double>(total),
-                     elapsed.count(), elapsed.count(), max_upload_time);
+                     elapsed.count(), max_upload_time);
       latest = now;
     }
     Err err = netx_sendn(sock_, frame.data(), frame.size());
