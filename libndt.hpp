@@ -573,6 +573,9 @@ class Client {
                            std::string ws_protocol,
                            std::string url_path) noexcept;
 
+  // Prepare and return a WebSocket frame containing @p first_byte and
+  // the content of @p base and @p count as payload. If @p base is nullptr
+  // then we'll just not include a body in the prepared frame.
   virtual std::string ws_prepare_frame(uint8_t first_byte, uint8_t *base,
                                        Size count) const noexcept;
 
@@ -1859,14 +1862,15 @@ bool Client::run_upload() noexcept {
           LIBNDT_EMIT_DEBUG_EX(const_this,
             "run_upload: time to fill random buffer: " << elapsed.count());
         }
+        std::string frame = const_this->ws_prepare_frame(
+            ws_opcode_binary | ws_fin_flag, (uint8_t *)buf, sizeof (buf));
         for (;;) {
           Size n = 0;
           auto err = Err::none;
           if (ws) {
-            err = const_this->ws_send_frame(fd, ws_opcode_binary | ws_fin_flag,
-                      (uint8_t *)buf, sizeof (buf));
+            err = const_this->netx_sendn(fd, frame.data(), frame.size());
             if (err == Err::none) {
-              n = sizeof (buf);
+              n = frame.size();
             }
           } else {
             err = const_this->netx_send(fd, buf, sizeof(buf), &n);
@@ -2555,8 +2559,8 @@ std::string Client::ws_prepare_frame(uint8_t first_byte, uint8_t *base,
       }
     }
   }
-  // XXX: previous implementation was bailing out in case of invalid
-  // count or base, while here we just ignore that. Ok?
+  // As mentioned in the docs of this method, we will not include any
+  // body in the frame if base is a null pointer.
   {
     for (Size i = 0; i < count && base != nullptr; ++i) {
       // Implementation note: judging from a GCC 8 warning, it seems that using
