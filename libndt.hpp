@@ -1958,8 +1958,9 @@ bool Client::ndt7_upload() noexcept {
   if (!ndt7_connect("/ndt/v7/upload")) {
     return false;
   }
-  // Implementation note: we receive larger messages than we send. This value
-  // seems to be a reasonable value for outgoing messages.
+  // Implementation note: we send messages smaller than the maximum message
+  // size accepted by the protocol. We have chosen this value because it
+  // currently seems to be a reasonable size for outgoing messages.
   constexpr Size ndt7_bufsiz = (1 << 13);
   std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
   random_printable_fill((char *)buff.get(), ndt7_bufsiz);
