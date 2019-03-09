@@ -428,10 +428,9 @@ class Client {
 
   /// Called to inform you about the measured speed. The default behavior is
   /// to write the provided information as an info message. @param tid is either
-  /// nettest_download or nettest_upload. @param nflows is the number of flows
-  /// that we're using. @param measured_bytes is the number of bytes received
-  /// or sent since the previous measurement. @param measurement_interval is the
-  /// number of seconds elapsed since the previous measurement. @param elapsed
+  /// nettest_flag_download or nettest_flag_upload. @param nflows is the number
+  /// of used flows. @param measured_bytes is the number of bytes received
+  /// or sent since the beginning of the measurement. @param elapsed
   /// is the number of seconds elapsed since the beginning of the nettest.
   /// @param max_runtime is the maximum runtime of this nettest, as copied from
   /// the Settings. @remark By dividing @p elapsed by @p max_runtime, you can
@@ -440,17 +439,20 @@ class Client {
   /// bytes from the server or uploading bytes to the server. \warning This
   /// method could be called from another thread context.
   virtual void on_performance(NettestFlags tid, uint8_t nflows,
-                              double measured_bytes,
-                              double measurement_interval, double elapsed,
+                              double measured_bytes, double elapsed,
                               double max_runtime);
 
   /// Called to provide you with NDT results. The default behavior is
   /// to write the provided information as an info message. @param scope is
-  /// either "web100", when we're passing you Web 100 variables, "tcp_info" when
-  /// we're passing you TCP info variables, or "summary" when we're passing you
-  /// summary variables. @param name is the name of the variable. @param value
-  /// is the variable value (variables are typically int, float, or string).
-  /// \warning This method could be called from another thread context.
+  /// "web100", when we're passing you Web 100 variables, "tcp_info" when
+  /// we're passing you TCP info variables, "summary" when we're passing you
+  /// summary variables, or "ndt7" when we're passing you results returned
+  /// by a ndt7 server. @param name is the name of the variable; if @p scope
+  /// is "ndt7", then @p name should be "download". @param value is the
+  /// variable value; variables are typically int, float, or string when
+  /// running ndt5 tests, instead they are serialized JSON returned by the
+  /// server when running a ndt7 test. \warning This method could be called
+  /// from another thread context.
   virtual void on_result(std::string scope, std::string name,
                          std::string value);
 
@@ -463,11 +465,6 @@ class Client {
   /// than once if some of these servers happen to be busy. \warning This
   /// method could be called from another thread context.
   virtual void on_server_busy(std::string msg);
-
-  /// Called when we receive a download measurement from a ndt7 server. For
-  /// the format of the measurement, please consult the ndt7 specification at
-  /// https://github.com/m-lab/ndt-server/blob/master/spec/ndt7-protocol.md
-  virtual void on_ndt7_server_download_measurement(std::string measurement);
 
   /*
                _        __             _    _ _                _
@@ -511,8 +508,20 @@ class Client {
   //
   // This API allows you to perform ndt7 tests. The plan is to increasingly
   // use ndt7 code and eventually deprecate and remove NDT.
+  //
+  // Note that we cannot have ndt7 without OpenSSL.
 
+#ifdef LIBNDT_HAVE_OPENSSL
+  // ndt7_download performs a ndt7 download. Returns true if the download
+  // succeeds and false in case of failure.
   bool ndt7_download() noexcept;
+
+  // ndt7_upload is like ndt7_download but performs an upload.
+  bool ndt7_upload() noexcept;
+
+  // ndt7_connect connects to @p url_path.
+  bool ndt7_connect(std::string url_path) noexcept;
+#endif  // LIBNDT_HAVE_OPENSSL
 
   // NDT protocol API
   // ````````````````
@@ -560,6 +569,12 @@ class Client {
   virtual Err ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
                            std::string ws_protocol,
                            std::string url_path) noexcept;
+
+  // Prepare and return a WebSocket frame containing @p first_byte and
+  // the content of @p base and @p count as payload. If @p base is nullptr
+  // then we'll just not include a body in the prepared frame.
+  virtual std::string ws_prepare_frame(uint8_t first_byte, uint8_t *base,
+                                       Size count) const noexcept;
 
   // Send @p count bytes from @p base over @p sock as a frame whose first byte
   // @p first_byte should contain the opcode and possibly the FIN flag.
@@ -1050,6 +1065,9 @@ static void random_printable_fill(char *buffer, size_t length) noexcept {
       "abcdefghijklmnopqrstuvwxyz"  // lowercase
       "{|}~"                        // final
       ;
+  // TODO(bassosimone): the random device is not actually random in a
+  // mingw environment. Here we should perhaps take advantage of the
+  // OpenSSL dependency, when available, and use OpenSSL.
   std::random_device rd;
   std::mt19937 g(rd());
   for (size_t i = 0; i < length; ++i) {
@@ -1057,8 +1075,30 @@ static void random_printable_fill(char *buffer, size_t length) noexcept {
   }
 }
 
-static double compute_speed(double data, double elapsed) noexcept {
+static double compute_speed_kbits(double data, double elapsed) noexcept {
   return (elapsed > 0.0) ? ((data * 8.0) / 1000.0 / elapsed) : 0.0;
+}
+
+// format_speed_from_kbits format the input speed, which must be in kbit/s, to
+// a string describing the speed with a measurement unit.
+static std::string format_speed_from_kbits(double speed) noexcept {
+  std::string unit = "kbit/s";
+  if (speed > 1000) {
+    unit = "Mbit/s";
+    speed /= 1000;
+    if (speed > 1000) {
+      unit = "Gbit/s";
+      speed /= 1000;
+    }
+  }
+  std::stringstream ss;
+  ss << std::setprecision(3) << std::setw(6) << std::right
+      << speed << " " << unit;
+  return ss.str();
+}
+
+static std::string format_speed_from_kbits(double data, double elapsed) noexcept {
+  return format_speed_from_kbits(compute_speed_kbits(data, elapsed));
 }
 
 static std::string represent(std::string message) noexcept {
@@ -1190,18 +1230,31 @@ bool Client::run() noexcept {
     // TODO(bassosimone): we will eventually want to refactor the code to
     // make ndt7 the default and ndt5 the optional case.
     if ((settings_.protocol_flags & protocol_flag_ndt7) != 0) {
+#ifdef LIBNDT_HAVE_OPENSSL
       LIBNDT_EMIT_INFO("using the ndt7 protocol");
       if ((settings_.nettest_flags & nettest_flag_download) != 0) {
         // TODO(bassosimone): for now we do not try with more than one host
         // when using ndt7 and there's a failure. We may want to do that.
         if (!ndt7_download()) {
-          LIBNDT_EMIT_WARNING("ndt7 download failed");
-          return false;
+          LIBNDT_EMIT_WARNING("ndt7: download failed");
+          // FALLTHROUGH
         }
       }
+      if ((settings_.nettest_flags & nettest_flag_upload) != 0) {
+        // TODO(bassosimone): same as above.
+        if (!ndt7_upload()) {
+          LIBNDT_EMIT_WARNING("ndt7: upload failed");
+          // FALLTHROUGH
+        }
+      }
+      LIBNDT_EMIT_INFO("ndt7: test complete");
       // TODO(bassosimone): here we may want to warn if the user selects
       // subtests that we actually do not implement.
       return true;
+#else
+      LIBNDT_EMIT_WARNING("ndt7: OpenSSL support not compiled in");
+      return false;
+#endif
     }
     if (!connect()) {
       LIBNDT_EMIT_WARNING("cannot connect to remote host; trying another one");
@@ -1265,17 +1318,19 @@ void Client::on_debug(const std::string &msg) const {
 }
 
 void Client::on_performance(NettestFlags tid, uint8_t nflows,
-                            double measured_bytes, double measured_interval,
+                            double measured_bytes,
                             double elapsed_time, double max_runtime) {
-  if (max_runtime <= 0.0) return;
-  auto speed = compute_speed(measured_bytes, measured_interval);
+  auto percent = 0.0;
+  if (max_runtime > 0.0) {
+    percent = (elapsed_time * 100.0 / max_runtime);
+  }
   LIBNDT_EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
-                  << std::right << (elapsed_time * 100.0 / max_runtime) << "%]"
+                  << std::right << percent << "%]"
                   << " elapsed: " << std::fixed << std::setprecision(3)
                   << std::setw(6) << elapsed_time << " s;"
-                  << " test_id: " << (int)tid << " num_flows: " << (int)nflows
-                  << " speed: " << std::setprecision(0) << std::setw(8)
-                  << std::right << speed << " kbit/s");
+                  << " test_id: " << (int)tid << "; num_flows: " << (int)nflows
+                  << "; speed: "
+                  << format_speed_from_kbits(measured_bytes, elapsed_time));
 }
 
 void Client::on_result(std::string scope, std::string name, std::string value) {
@@ -1284,39 +1339,6 @@ void Client::on_result(std::string scope, std::string name, std::string value) {
 
 void Client::on_server_busy(std::string msg) {
   LIBNDT_EMIT_WARNING("server is busy: " << msg);
-}
-
-void Client::on_ndt7_server_download_measurement(std::string measurement) {
-  double elapsed = 0.0;
-  double max_bandwidth = 0.0;
-  double min_rtt = 0.0;
-  double smoothed_rtt = 0.0;
-  double rtt_var = 0.0;
-  try {
-    nlohmann::json doc = nlohmann::json::parse(measurement);
-    doc.at("elapsed").get_to(elapsed);
-    if (doc.count("bbr_info") > 0) {
-      doc.at("bbr_info").at("max_bandwidth").get_to(max_bandwidth);
-      doc.at("bbr_info").at("min_rtt").get_to(min_rtt);
-    }
-    if (doc.count("tcp_info") > 0) {
-      doc.at("tcp_info").at("smoothed_rtt").get_to(smoothed_rtt);
-      doc.at("tcp_info").at("rtt_var").get_to(rtt_var);
-    }
-  } catch (const std::exception &exc) {
-    LIBNDT_EMIT_WARNING("ndt7: cannot process JSON: " << exc.what());
-    return;
-  }
-  constexpr double to_mbits = 1000000;
-  LIBNDT_EMIT_INFO("[ndt7 server] " << std::fixed << std::setprecision(3)
-                                    << std::setw(6) << elapsed
-                                    << " s; max BW: "
-                                    << max_bandwidth / to_mbits
-                                    << std::right
-                                    << " Mbit/s; RTT min/smoothed/var: "
-                                    << std::setprecision(0) << min_rtt
-                                    << "/" << smoothed_rtt << "/"
-                                    << rtt_var << " ms");
 }
 
 // High-level API
@@ -1590,7 +1612,6 @@ bool Client::run_download() noexcept {
   {
     std::atomic<uint8_t> active{0};
     auto begin = std::chrono::steady_clock::now();
-    std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = settings_.max_runtime;
     auto ws = (settings_.protocol_flags & protocol_flag_websocket) != 0;
@@ -1604,7 +1625,6 @@ bool Client::run_download() noexcept {
         begin,         // copy for safety
         fd,            // copy for safety
         max_runtime,   // copy for safety
-        &recent_data,  // reference to atomic
         const_this,    // const pointer
         &total_data,   // reference to atomic
         ws             // copy for safety
@@ -1634,7 +1654,6 @@ bool Client::run_download() noexcept {
             }
             break;
           }
-          recent_data += (uint64_t)n;  // atomic
           total_data += (uint64_t)n;   // atomic
           auto now = std::chrono::steady_clock::now();
           std::chrono::duration<double> elapsed = now - begin;
@@ -1655,20 +1674,17 @@ bool Client::run_download() noexcept {
         break;
       }
       auto now = std::chrono::steady_clock::now();
-      std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       on_performance(nettest_flag_download,             //
                      active,                            // atomic
-                     static_cast<double>(recent_data),  // atomic
-                     measurement_interval.count(),      //
+                     static_cast<double>(total_data),   // atomic
                      elapsed.count(),                   //
                      settings_.max_runtime);
-      recent_data = 0;  // atomic
       prev = now;
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    client_side_speed = compute_speed(  //
+    client_side_speed = compute_speed_kbits(  //
         static_cast<double>(total_data), elapsed.count());
   }
 
@@ -1757,8 +1773,8 @@ bool Client::run_upload() noexcept {
 
   {
     Socket sock = (Socket)-1;
-    // Remark: in case we'll even implement multi-stream here, remember that
-    // websocket requires connections to be serialized. See above.
+    // Remark: in case we'll ever implement multi-stream here, remember that
+    // WebSocket requires connections to be serialized. See above.
     Err err = netx_maybews_dial(  //
         settings_.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
@@ -1778,7 +1794,6 @@ bool Client::run_upload() noexcept {
   {
     std::atomic<uint8_t> active{0};
     auto begin = std::chrono::steady_clock::now();
-    std::atomic<uint64_t> recent_data{0};
     std::atomic<uint64_t> total_data{0};
     auto max_runtime = settings_.max_runtime;
     auto ws = (settings_.protocol_flags & protocol_flag_websocket) != 0;
@@ -1792,7 +1807,6 @@ bool Client::run_upload() noexcept {
         begin,         // copy for safety
         fd,            // copy for safety
         max_runtime,   // copy for safety
-        &recent_data,  // reference to atomic
         const_this,    // const pointer
         &total_data,   // reference to atomic
         ws             // copy for safety
@@ -1808,14 +1822,15 @@ bool Client::run_upload() noexcept {
           LIBNDT_EMIT_DEBUG_EX(const_this,
             "run_upload: time to fill random buffer: " << elapsed.count());
         }
+        std::string frame = const_this->ws_prepare_frame(
+            ws_opcode_binary | ws_fin_flag, (uint8_t *)buf, sizeof (buf));
         for (;;) {
           Size n = 0;
           auto err = Err::none;
           if (ws) {
-            err = const_this->ws_send_frame(fd, ws_opcode_binary | ws_fin_flag,
-                      (uint8_t *)buf, sizeof (buf));
+            err = const_this->netx_sendn(fd, frame.data(), frame.size());
             if (err == Err::none) {
-              n = sizeof (buf);
+              n = frame.size();
             }
           } else {
             err = const_this->netx_send(fd, buf, sizeof(buf), &n);
@@ -1827,7 +1842,6 @@ bool Client::run_upload() noexcept {
             }
             break;
           }
-          recent_data += (uint64_t)n;  // atomic
           total_data += (uint64_t)n;   // atomic
           auto now = std::chrono::steady_clock::now();
           std::chrono::duration<double> elapsed = now - begin;
@@ -1848,20 +1862,17 @@ bool Client::run_upload() noexcept {
         break;
       }
       auto now = std::chrono::steady_clock::now();
-      std::chrono::duration<double> measurement_interval = now - prev;
       std::chrono::duration<double> elapsed = now - begin;
       on_performance(nettest_flag_upload,               //
                      active,                            // atomic
-                     static_cast<double>(recent_data),  // atomic
-                     measurement_interval.count(),      //
+                     static_cast<double>(total_data),   // atomic
                      elapsed.count(),                   //
                      settings_.max_runtime);
-      recent_data = 0;  // atomic
       prev = now;
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    client_side_speed = compute_speed(  //
+    client_side_speed = compute_speed_kbits(  //
         static_cast<double>(total_data), elapsed.count());
     LIBNDT_EMIT_DEBUG("run_upload: client computed speed: " << client_side_speed);
   }
@@ -1884,9 +1895,93 @@ bool Client::run_upload() noexcept {
 
 // ndt7 protocol API
 // `````````````````
+#ifdef LIBNDT_HAVE_OPENSSL
 
 bool Client::ndt7_download() noexcept {
-#ifdef LIBNDT_HAVE_OPENSSL
+  if (!ndt7_connect("/ndt/v7/download")) {
+    return false;
+  }
+  // The following value is the maximum amount of bytes that an implementation
+  // SHOULD be prepared to handle when receiving ndt7 messages.
+  constexpr Size ndt7_bufsiz = (1 << 17);
+  std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
+  auto begin = std::chrono::steady_clock::now();
+  auto latest = begin;
+  Size total = 0;
+  for (;;) {
+    auto now = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed = now - begin;
+    if (elapsed.count() > settings_.max_runtime) {
+      LIBNDT_EMIT_WARNING("ndt7: download running for too much time");
+      return false;
+    }
+    constexpr auto measurement_interval = 0.25;
+    std::chrono::duration<double> interval = now - latest;
+    if (interval.count() > measurement_interval) {
+      on_performance(nettest_flag_download, 1, static_cast<double>(total),
+                     elapsed.count(), settings_.max_runtime);
+      latest = now;
+    }
+    uint8_t opcode = 0;
+    Size count = 0;
+    Err err = ws_recvmsg(sock_, &opcode, buff.get(), ndt7_bufsiz, &count);
+    if (err != Err::none) {
+      if (err == Err::eof) {
+        break;
+      }
+      return false;
+    }
+    if (opcode == ws_opcode_text) {
+      std::string sinfo{(const char *)buff.get(), count};
+      on_result("ndt7", "download", std::move(sinfo));
+    }
+    total += count;  // Assume we won't overflow
+  }
+  return true;
+}
+
+bool Client::ndt7_upload() noexcept {
+  if (!ndt7_connect("/ndt/v7/upload")) {
+    return false;
+  }
+  // Implementation note: we send messages smaller than the maximum message
+  // size accepted by the protocol. We have chosen this value because it
+  // currently seems to be a reasonable size for outgoing messages.
+  constexpr Size ndt7_bufsiz = (1 << 13);
+  std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
+  random_printable_fill((char *)buff.get(), ndt7_bufsiz);
+  // The following is the expected ndt7 transfer time for a subtest.
+  constexpr double max_upload_time = 10.0;
+  auto begin = std::chrono::steady_clock::now();
+  auto latest = begin;
+  Size total = 0;
+  std::string frame = ws_prepare_frame(ws_opcode_binary | ws_fin_flag,
+                                       buff.get(), ndt7_bufsiz);
+  for (;;) {
+    auto now = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed = now - begin;
+    if (elapsed.count() > max_upload_time) {
+      LIBNDT_EMIT_DEBUG("ndt7: upload has run for enough time");
+      break;
+    }
+    constexpr auto measurement_interval = 0.25;
+    std::chrono::duration<double> interval = now - latest;
+    if (interval.count() > measurement_interval) {
+      on_performance(nettest_flag_upload, 1, static_cast<double>(total),
+                     elapsed.count(), max_upload_time);
+      latest = now;
+    }
+    Err err = netx_sendn(sock_, frame.data(), frame.size());
+    if (err != Err::none) {
+      LIBNDT_EMIT_WARNING("ndt7: cannot send frame");
+      return false;
+    }
+    total += ndt7_bufsiz;  // Assume we won't overflow
+  }
+  return true;
+}
+
+bool Client::ndt7_connect(std::string url_path) noexcept {
   std::string port = "443";
   if (!settings_.port.empty()) {
     port = settings_.port;
@@ -1903,42 +1998,15 @@ bool Client::ndt7_download() noexcept {
       settings_.hostname, port,
       ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
           ws_f_sec_ws_protocol,
-      ws_proto_ndt7, "/ndt/v7/download", &sock_);
+      ws_proto_ndt7, url_path, &sock_);
   if (err != Err::none) {
     return false;
   }
-  static constexpr Size ndt7_bufsiz = (1 << 17);
-  std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
-  auto begin = std::chrono::steady_clock::now();
-  for (;;) {
-    auto now = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed = now - begin;
-    if (elapsed.count() > settings_.max_runtime) {
-      LIBNDT_EMIT_WARNING("ndt7: download running for too much time");
-      return false;
-    }
-    uint8_t opcode = 0;
-    Size count = 0;
-    err = ws_recvmsg(sock_, &opcode, buff.get(), ndt7_bufsiz, &count);
-    if (err != Err::none) {
-      if (err == Err::eof) {
-        break;
-      }
-      return false;
-    }
-    // TODO(bassosimone): we should measure the application level download
-    // speed here. For now it's OK to just have a basic client.
-    if (opcode == ws_opcode_text) {
-      std::string sinfo{(const char *)buff.get(), count};
-      on_ndt7_server_download_measurement(std::move(sinfo));
-    }
-  }
+  LIBNDT_EMIT_INFO("ndt7: WebSocket connection established");
   return true;
-#else
-  LIBNDT_EMIT_WARNING("the ndt7 protocol requires OpenSSL support");
-  return false;
-#endif  // LIBNDT_HAVE_OPENSSL
 }
+
+#endif  // LIBNDT_HAVE_OPENSSL
 
 // NDT protocol API
 // ````````````````
@@ -2382,8 +2450,8 @@ Err Client::ws_handshake(Socket fd, std::string port, uint64_t ws_flags,
   return Err::value_too_large;
 }
 
-Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
-                          Size count) const noexcept {
+std::string Client::ws_prepare_frame(uint8_t first_byte, uint8_t *base,
+                                     Size count) const noexcept {
   // TODO(bassosimone): perhaps move the RNG into Client?
   constexpr Size mask_size = 4;
   uint8_t mask[mask_size] = {};
@@ -2391,23 +2459,23 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
   //  key from the set of allowed 32-bit values." [RFC6455 Sect. 5.3]. Hence
   // we're not compliant (TODO(bassosimone)).
   random_printable_fill((char *)mask, sizeof(mask));
+  std::stringstream ss;
   // Message header
   {
-    std::stringstream ss;
     // First byte
     {
       // TODO(bassosimone): add sanity checks for first byte
       ss << first_byte;
-      LIBNDT_EMIT_DEBUG("ws_send_frame: FIN: " << std::boolalpha
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: FIN: " << std::boolalpha
                                         << ((first_byte & ws_fin_flag) != 0));
       LIBNDT_EMIT_DEBUG(
-          "ws_send_frame: reserved: " << (first_byte & ws_reserved_mask));
-      LIBNDT_EMIT_DEBUG("ws_send_frame: opcode: " << (first_byte & ws_opcode_mask));
+          "ws_prepare_frame: reserved: " << (first_byte & ws_reserved_mask));
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: opcode: " << (first_byte & ws_opcode_mask));
     }
     // Length
     {
-      LIBNDT_EMIT_DEBUG("ws_send_frame: mask flag: " << std::boolalpha << true);
-      LIBNDT_EMIT_DEBUG("ws_send_frame: length: " << count);
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: mask flag: " << std::boolalpha << true);
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: length: " << count);
       // Since this is a client implementation, we always include the MASK flag
       // as part of the second byte that we send on the wire. Also, the spec
       // says that we must emit the length in network byte order, which means
@@ -2417,7 +2485,7 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
       //     <https://tools.ietf.org/html/rfc6455#section-5.2>.
 #define LB(value)                                                        \
   do {                                                                   \
-    LIBNDT_EMIT_DEBUG("ws_send_frame: length byte: " << (unsigned int)(value)); \
+    LIBNDT_EMIT_DEBUG("ws_prepare_frame: length byte: " << (unsigned int)(value)); \
     ss << (value);                                                       \
   } while (0)
       if (count < 126) {
@@ -2442,53 +2510,29 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
     // Mask
     {
       for (Size i = 0; i < mask_size; ++i) {
-        LIBNDT_EMIT_DEBUG("ws_send_frame: mask byte: " << (unsigned int)mask[i]
+        LIBNDT_EMIT_DEBUG("ws_prepare_frame: mask byte: " << (unsigned int)mask[i]
                                                 << " ('" << mask[i] << "')");
         ss << (uint8_t)mask[i];
       }
     }
-    // Send header
-    auto header = ss.str();
-    LIBNDT_EMIT_DEBUG("ws_send_frame: ws header: " << represent(header));
-    auto err = netx_sendn(sock, header.c_str(), header.size());
-    if (err != Err::none) {
-      LIBNDT_EMIT_WARNING("ws_send_frame: netx_sendn() failed when sending header");
-      return err;
-    }
   }
-  LIBNDT_EMIT_DEBUG("ws_send_frame: header sent");
+  // As mentioned in the docs of this method, we will not include any
+  // body in the frame if base is a null pointer.
   {
-    if (count <= 0) {
-      LIBNDT_EMIT_DEBUG("ws_send_frame: no body provided");
-      return Err::none;
-    }
-    if (base == nullptr && count > 0) {
-      LIBNDT_EMIT_WARNING("ws_send_frame: passed a null pointer with nonzero length");
-      return Err::invalid_argument;
-    }
-    // Debug messages printing the body are commented out because they're too
-    // much verbose. Still they may be useful for future debugging.
-    /*
-    LIBNDT_EMIT_DEBUG("ws_send_frame: body unmasked: "
-               << represent(std::string{(char *)base, count}));
-    */
-    for (Size i = 0; i < count; ++i) {
+    for (Size i = 0; i < count && base != nullptr; ++i) {
       // Implementation note: judging from a GCC 8 warning, it seems that using
       // `^=` causes -Wconversion warnings, while using `= ... ^` does not.
       base[i] = base[i] ^ mask[i % mask_size];
-    }
-    /*
-    LIBNDT_EMIT_DEBUG("ws_send_frame: body masked: "
-               << represent(std::string{(char *)base, count}));
-    */
-    auto err = netx_sendn(sock, base, count);
-    if (err != Err::none) {
-      LIBNDT_EMIT_WARNING("ws_send_frame: netx_sendn() failed when sending body");
-      return err;
+      ss << base[i];
     }
   }
-  LIBNDT_EMIT_DEBUG("ws_send_frame: body sent");
-  return Err::none;
+  return ss.str();
+}
+
+Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
+                          Size count) const noexcept {
+  std::string prep = ws_prepare_frame(first_byte, base, count);
+  return netx_sendn(sock, prep.c_str(), prep.size());
 }
 
 Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
