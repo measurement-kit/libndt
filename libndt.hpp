@@ -1958,35 +1958,9 @@ bool Client::ndt7_download() noexcept {
     constexpr auto measurement_interval = 0.25;
     std::chrono::duration<double> interval = now - latest;
     if (interval.count() > measurement_interval) {
-      on_performance(nettest_flag_download, 1, total, elapsed.count(),
-                     elapsed.count(), settings_.max_runtime);
+      on_performance(nettest_flag_download, 1, static_cast<double>(total),
+                     elapsed.count(), elapsed.count(), settings_.max_runtime);
       latest = now;
-      // Send periodic feedback to the sender. Take into account the case
-      // in which the server is not reading our feedback messages. In such
-      // case, sending would block. By checking whether the socket can be
-      // written in advance, we make sure we're not blocking.
-      {
-        constexpr Timeout nowait = 0;
-        Err err = netx_wait_writeable(sock_, nowait);
-        if (err != Err::none && err != Err::timed_out) {
-          LIBNDT_EMIT_WARNING("ndt7: cannot wait for writability");
-          return false;
-        }
-        if (err == Err::none) {
-          nlohmann::json msg;
-          msg["app_info"]["num_bytes"] = (double)total;
-          msg["elapsed"] = elapsed.count();
-          // Note that the following dump statement cannot throw because the
-          // message does not contain any possibly non UTF-8 strings.
-          std::string s = msg.dump();
-          err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
-                              (uint8_t *)s.data(), s.size());
-          if (err != Err::none) {
-            LIBNDT_EMIT_WARNING("ndt7: cannot send feedback to the sender");
-            return false;
-          }
-        }
-      }
     }
     uint8_t opcode = 0;
     Size count = 0;
@@ -2032,67 +2006,16 @@ bool Client::ndt7_upload() noexcept {
     constexpr auto measurement_interval = 0.25;
     std::chrono::duration<double> interval = now - latest;
     if (interval.count() > measurement_interval) {
-      on_performance(nettest_flag_upload, 1, total, elapsed.count(),
-                     elapsed.count(), max_upload_time);
+      on_performance(nettest_flag_upload, 1, static_cast<double>(total),
+                     elapsed.count(), elapsed.count(), max_upload_time);
       latest = now;
-      // Receive periodic feedback from the receiver. According to the spec, a
-      // party SHOULD NOT send more than a textual message every 250 msec. We're
-      // robust here and we allow a sender to send more, but we only extract a
-      // few of these messages at a time. If a sender is really sending many of
-      // them, it will eventually block, can we do anything about that?
-      constexpr auto max_feedback_messages = 3;
-      for (auto i = 0; i < max_feedback_messages; ++i) {
-        {
-          constexpr Timeout nowait = 0;
-          Err err = netx_wait_readable(sock_, nowait);
-          if (err != Err::none && err != Err::timed_out) {
-            LIBNDT_EMIT_WARNING("ndt7: cannot wait for readability");
-            return false;
-          }
-          if (err == Err::timed_out) {
-            // No data from the receiver. This is fine. According to the
-            // spec, the receiver MAY send this data.
-            break;
-          }
-        }
-        // Note: `nmax` is the maximum ndt7 message size.
-        constexpr Size nmax = 1 << 17;
-        std::unique_ptr<uint8_t[]> b{new uint8_t[nmax]};
-        uint8_t opcode = 0;
-        Size n = 0;
-        Err err = ws_recvmsg(sock_, &opcode, b.get(), nmax, &n);
-        if (err != Err::none) {
-          LIBNDT_EMIT_WARNING("ndt7: cannot recv receiver's feedback");
-          return false;
-        }
-        if (opcode != ws_opcode_text) {
-          LIBNDT_EMIT_WARNING("ndt7: received unexpected frame type");
-          return false;
-        }
-        std::string s{(char *)b.get(), n};  // Makes a copy
-        try {
-          nlohmann::json doc = nlohmann::json::parse(s);
-        } catch (const std::exception &exc) {
-          LIBNDT_EMIT_WARNING("ndt7: cannot parse message: " << exc.what());
-          return false;
-        }
-        // TODO(bassosimone): here we should actually pass this piece of
-        // information to the user rather than just printing it.
-        LIBNDT_EMIT_INFO("ndt7: got feedback from server: " << s);
-      }
     }
     Err err = netx_sendn(sock_, frame.data(), frame.size());
     if (err != Err::none) {
       LIBNDT_EMIT_WARNING("ndt7: cannot send frame");
       return false;
     }
-    // Assume that we won't overflow. The additional three bytes are
-    // for the opcode and for the length. TODO(bassosimone): we may
-    // want to get more precise numbers from ws_send_frame, but it'll
-    // require us to change its implementation to do so.
-    total += ndt7_bufsiz + 3;
-    // TODO(bassosimone): here we should additionally receive measurements
-    // from the server and forward such measurements to the caller.
+    total += ndt7_bufsiz;  // Assume we won't overflow
   }
   return true;
 }
