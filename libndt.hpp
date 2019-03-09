@@ -1081,9 +1081,9 @@ static double compute_speed_kbits(double data, double elapsed) noexcept {
   return (elapsed > 0.0) ? ((data * 8.0) / 1000.0 / elapsed) : 0.0;
 }
 
-// format_speed_kbits format the input speed, which must be in kbit/s, to
+// format_speed_from_kbits format the input speed, which must be in kbit/s, to
 // a string describing the speed with a measurement unit.
-static std::string format_speed_kbits(double speed) noexcept {
+static std::string format_speed_from_kbits(double speed) noexcept {
   std::string unit = "kbit/s";
   if (speed > 1000) {
     unit = "Mbit/s";
@@ -1099,8 +1099,8 @@ static std::string format_speed_kbits(double speed) noexcept {
   return ss.str();
 }
 
-static std::string format_speed_kbits(double data, double elapsed) noexcept {
-  return format_speed_kbits(compute_speed_kbits(data, elapsed));
+static std::string format_speed_from_kbits(double data, double elapsed) noexcept {
+  return format_speed_from_kbits(compute_speed_kbits(data, elapsed));
 }
 
 static std::string represent(std::string message) noexcept {
@@ -1332,7 +1332,7 @@ void Client::on_performance(NettestFlags tid, uint8_t nflows,
                   << std::setw(6) << elapsed_time << " s;"
                   << " test_id: " << (int)tid << "; num_flows: " << (int)nflows
                   << "; speed: "
-                  << format_speed_kbits(measured_bytes, measured_interval));
+                  << format_speed_from_kbits(measured_bytes, measured_interval));
 }
 
 void Client::on_result(std::string scope, std::string name, std::string value) {
