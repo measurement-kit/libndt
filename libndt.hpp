@@ -446,11 +446,15 @@ class Client {
 
   /// Called to provide you with NDT results. The default behavior is
   /// to write the provided information as an info message. @param scope is
-  /// either "web100", when we're passing you Web 100 variables, "tcp_info" when
-  /// we're passing you TCP info variables, or "summary" when we're passing you
-  /// summary variables. @param name is the name of the variable. @param value
-  /// is the variable value (variables are typically int, float, or string).
-  /// \warning This method could be called from another thread context.
+  /// "web100", when we're passing you Web 100 variables, "tcp_info" when
+  /// we're passing you TCP info variables, "summary" when we're passing you
+  /// summary variables, or "ndt7" when we're passing you results returned
+  /// by a ndt7 server. @param name is the name of the variable; if @p scope
+  /// is "ndt7", then @p name should be "download". @param value is the
+  /// variable value; variables are typically int, float, or string when
+  /// running ndt5 tests, instead they are serialized JSON returned by the
+  /// server when running a ndt7 test. \warning This method could be called
+  /// from another thread context.
   virtual void on_result(std::string scope, std::string name,
                          std::string value);
 
@@ -463,11 +467,6 @@ class Client {
   /// than once if some of these servers happen to be busy. \warning This
   /// method could be called from another thread context.
   virtual void on_server_busy(std::string msg);
-
-  /// Called when we receive a download measurement from a ndt7 server. For
-  /// the format of the measurement, please consult the ndt7 specification at
-  /// https://github.com/m-lab/ndt-server/blob/master/spec/ndt7-protocol.md
-  virtual void on_ndt7_server_download_measurement(std::string measurement);
 
   /*
                _        __             _    _ _                _
@@ -1082,7 +1081,9 @@ static double compute_speed_kbits(double data, double elapsed) noexcept {
   return (elapsed > 0.0) ? ((data * 8.0) / 1000.0 / elapsed) : 0.0;
 }
 
-static std::string format_speed(double speed) noexcept {
+// format_speed_kbits format the input speed, which must be in kbit/s, to
+// a string describing the speed with a measurement unit.
+static std::string format_speed_kbits(double speed) noexcept {
   std::string unit = "kbit/s";
   if (speed > 1000) {
     unit = "Mbit/s";
@@ -1098,8 +1099,8 @@ static std::string format_speed(double speed) noexcept {
   return ss.str();
 }
 
-static std::string format_speed(double data, double elapsed) noexcept {
-  return format_speed(compute_speed_kbits(data, elapsed));
+static std::string format_speed_kbits(double data, double elapsed) noexcept {
+  return format_speed_kbits(compute_speed_kbits(data, elapsed));
 }
 
 static std::string represent(std::string message) noexcept {
@@ -1331,7 +1332,7 @@ void Client::on_performance(NettestFlags tid, uint8_t nflows,
                   << std::setw(6) << elapsed_time << " s;"
                   << " test_id: " << (int)tid << "; num_flows: " << (int)nflows
                   << "; speed: "
-                  << format_speed(measured_bytes, measured_interval));
+                  << format_speed_kbits(measured_bytes, measured_interval));
 }
 
 void Client::on_result(std::string scope, std::string name, std::string value) {
@@ -1340,37 +1341,6 @@ void Client::on_result(std::string scope, std::string name, std::string value) {
 
 void Client::on_server_busy(std::string msg) {
   LIBNDT_EMIT_WARNING("server is busy: " << msg);
-}
-
-void Client::on_ndt7_server_download_measurement(std::string measurement) {
-  double elapsed = 0.0;
-  double max_bandwidth = 0.0;
-  double min_rtt = 0.0;
-  double smoothed_rtt = 0.0;
-  double rtt_var = 0.0;
-  try {
-    nlohmann::json doc = nlohmann::json::parse(measurement);
-    doc.at("elapsed").get_to(elapsed);
-    if (doc.count("bbr_info") > 0) {
-      doc.at("bbr_info").at("max_bandwidth").get_to(max_bandwidth);
-      doc.at("bbr_info").at("min_rtt").get_to(min_rtt);
-    }
-    if (doc.count("tcp_info") > 0) {
-      doc.at("tcp_info").at("smoothed_rtt").get_to(smoothed_rtt);
-      doc.at("tcp_info").at("rtt_var").get_to(rtt_var);
-    }
-  } catch (const std::exception &exc) {
-    LIBNDT_EMIT_WARNING("ndt7: cannot process JSON: " << exc.what());
-    return;
-  }
-  constexpr double to_kbits = 0.001;
-  LIBNDT_EMIT_INFO("[server measurement] "
-                   << std::fixed << std::setprecision(3)
-                   << std::setw(6) << elapsed << " s; max BW: "
-                   << format_speed(max_bandwidth * to_kbits)
-                   << "; RTT min/smoothed/var: "
-                   << std::setprecision(0) << min_rtt << "/"
-                   << smoothed_rtt << "/" << rtt_var << " ms");
 }
 
 // High-level API
@@ -1977,7 +1947,7 @@ bool Client::ndt7_download() noexcept {
     }
     if (opcode == ws_opcode_text) {
       std::string sinfo{(const char *)buff.get(), count};
-      on_ndt7_server_download_measurement(std::move(sinfo));
+      on_result("ndt7", "download", std::move(sinfo));
     }
     total += count;  // Assume we won't overflow
   }
