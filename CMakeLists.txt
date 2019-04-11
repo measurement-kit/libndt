@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1.0)
-project(libndt LANGUAGES CXX)
+project(libndt LANGUAGES C CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
 include(MkUtils)
