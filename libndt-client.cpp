@@ -23,37 +23,55 @@ using namespace measurement_kit;
 
 static void usage() {
   // clang-format off
-  std::clog << "\n";
-  std::clog << "Usage: libndt-client [options] [<hostname>]\n";
-  std::clog << "\n";
-  std::clog << "Options can start with either a single dash (i.e. -option) or\n";
-  std::clog << "a double dash (i.e. --option). Available options:\n";
-  std::clog << "\n";
-  std::clog << "  --ca-bundle-path <path> : path to OpenSSL CA bundle\n";
-  std::clog << "  --download              : run download test\n";
-  std::clog << "  --download-ext          : run multi-stream download test\n";
-  std::clog << "  --help                  : print usage information\n";
-  std::clog << "  --insecure              : if --tls is specified, disable any kind of\n";
-  std::clog << "                            TLS peer validation. This is insecure, hence\n";
-  std::clog << "                            the flag name, but useful for testing.\n";
-  std::clog << "  --json                  : use the JSON protocol\n";
-  std::clog << "  --ndt7                  : use the ndt7 protocol\n";
-  std::clog << "  --port <port>           : use the specified port\n";
-  std::clog << "  --random                : if hostname is omitted, then use\n";
-  std::clog << "                            a random NDT server.\n";
-  std::clog << "  --tls                   : use transport layer security\n";
-  std::clog << "  --socks5h <port>        : use socks5h proxy at 127.0.0.1:<port>\n";
-  std::clog << "  --upload                : run upload test\n";
-  std::clog << "  --verbose               : be verbose\n";
-  std::clog << "  --version               : print the version number and exit.\n";
-  std::clog << "  --websocket             : use the WebSocket protocol\n";
-  std::clog << "\n";
-  std::clog << "If <hostname> is omitted, we pick a nearby server, unless `--random'\n";
-  std::clog << "is specified, in which case we pick a random server.\n";
-  std::clog << "\n";
-  std::clog << "If you don't select a test to run (e.g. `--download`), this\n";
-  std::clog << "command will fail, because there's nothing to do.\n";
-  std::clog << std::endl;
+  std::clog << R"(Usage: libndt-client [options] [<hostname>]
+
+Options can start either with a single dash (i.e. -option) or with
+a double dash (i.e. --option).
+
+If an hostname is not specified, we use M-Lab's name service to
+lookup a suitable M-Lab server to run the test with. Use the `-random`
+flag to use a random server rather than a nearby server.
+
+You MUST specify what subtest to enable. The `-download` flag enables the
+download subtest. The `-upload` flag enables the upload subtest. The
+`-download-ext` flag enables the multi-stream download subtest, which
+is not implemented by M-Lab servers. Hence you need to know the hostname
+of a server implementing this feature to run the test with.
+
+The `-port <port>` flag specifies what port to use. The default is to
+use the correct port depending on the selected NDT protocol (see below).
+
+By default, we use the most ancient NDT protocol. However, adding the
+`-json` flag enables wrapping NDT messages inside of JSON objects. Adding
+the `-tls` flag causes NDT to use a TLS connection rather than a TCP
+connection. When using `-tls`, you may also want to use `-insecure` to
+allow connecting to servers with self-signed or otherwise invalid TLS
+certificate. With `-tls`, you can also use the `-ca-bundle-path <path>`
+to use a specific CA bundle path. Adding the `-websocket` flag will
+cause NDT to wrap its messages (possibly already wrapped by JSON) into
+WebSocket messages. Finally, adding the `-ndt7` flag turns on version
+7 of the NDT protocol, which is not backwards compatible. Since `-ndt7`
+uses TLS, both `-ca-bundle-path <path>` and `-insecure` work also
+in combination with the `-ndt7` flag.
+
+In practice, these are the flags you want to use:
+
+1. none, to use the original NDT protocol;
+
+2. `-tls` to use the original NDT protocol over TLS;
+
+3. `-websocket -tls -json` to run a NDT test using the same protocol
+that is typically used by tests run in the browser;
+
+4. `-ndt7` to use version 7 of the protocol.
+
+When running, this client emits messages. You can use `-verbose` to cause
+it to emit even more messages.
+
+The `-socks5h <port>` flag causes this tool to use the specified SOCKS5h
+proxy to contact mlab-ns and for running the selected subtests.
+
+The `-version` shows the version number and exits.)" << std::endl;
   // clang-format on
 }
 
