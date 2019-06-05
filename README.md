@@ -85,50 +85,9 @@ ctest -a --output-on-failure .
 
 ## Command line client 
 
-Building with CMake also builds a simple command line client
-binary called `libndt-client`.
-
-### Getting help
-
-Get terse help by running:
+Building with CMake also builds a simple command line client. Get usage info
+by running:
 
 ```
 ./libndt-client -help
 ```
-
-### Standard usage
-
-You can run a standard NDT test using:
-
-```
-./libndt-client -download -upload
-```
-
-This selects both the download and the upload subtests. By default, no
-subtest is selected and the client does nothing.
-
-You can use the `-verbose` flag to make the client more verbose.
-
-Also, this usage uses the most ancient NDT protocol. See below for
-ways to enable more modern protocols.
-
-### Selecting a specific server
-
-You can specify a server after the command line flags; e.g.:
-
-```
-./libndt-client -download ndt.iupui.mlab2.tun01.measurement-lab.org
-```
-
-This will bypass [mlab-ns](https://github.com/m-lab/mlab-ns) and use the
-server that you provided on the command line.
-
-### Protocol selection
-
-By default we use the most ancient NDT protocol. Here we describe how
-to enable more advanced protocol features.
-
-### Using TLS
-
-The `-tls` flag turns on NDT over TLS. When using this flag it may be
-use
