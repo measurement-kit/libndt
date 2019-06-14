@@ -730,6 +730,8 @@ class Client {
 
   virtual CURLcode curlx_setopt_timeout(UniqueCurl &, long timeout) noexcept;
 
+  virtual CURLcode curlx_setopt_failonerror(UniqueCurl &) noexcept;
+
   virtual CURLcode curlx_perform(UniqueCurl &) noexcept;
 
   virtual UniqueCurl curlx_easy_init() noexcept;
@@ -4025,6 +4027,10 @@ bool Client::curlx_get(UniqueCurl &handle, const std::string &url, long timeout,
     LIBNDT_EMIT_WARNING("curlx: cannot set timeout");
     return false;
   }
+  if (curlx_setopt_failonerror(handle) != CURLE_OK) {
+    LIBNDT_EMIT_WARNING("curlx: cannot set fail-on-error option");
+    return false;
+  }
   LIBNDT_EMIT_DEBUG("curlx: performing request");
   auto rv = curlx_perform(handle);
   if (rv != CURLE_OK) {
@@ -4059,6 +4065,11 @@ CURLcode Client::curlx_setopt_writedata(UniqueCurl &handle, void *pointer) noexc
 CURLcode Client::curlx_setopt_timeout(UniqueCurl &handle, long timeout) noexcept {
   assert(handle);
   return ::curl_easy_setopt(handle.get(), CURLOPT_TIMEOUT, timeout);
+}
+
+CURLcode Client::curlx_setopt_failonerror(UniqueCurl &handle) noexcept {
+  assert(handle);
+  return ::curl_easy_setopt(handle.get(), CURLOPT_FAILONERROR, 1L);
 }
 
 CURLcode Client::curlx_perform(UniqueCurl &handle) noexcept {
