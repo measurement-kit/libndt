@@ -118,6 +118,22 @@ TEST_CASE("Client::curlx_get() deals with Client::curlx_setopt_timeout() failure
   REQUIRE(client.curlx_get(handle, "http://x.org", 1, &body) == false);
 }
 
+class FailCurlxSetoptFailonerror : public libndt::Client {
+ public:
+  using libndt::Client::Client;
+  virtual CURLcode curlx_setopt_failonerror(
+      libndt::Client::UniqueCurl &) noexcept override {
+    return CURLE_AGAIN;
+  }
+};
+
+TEST_CASE("Client::curlx_get() deals with Client::curlx_setopt_failonerror() failure") {
+  FailCurlxSetoptFailonerror client;
+  libndt::Client::UniqueCurl handle{client.curlx_easy_init()};
+  std::string body;
+  REQUIRE(client.curlx_get(handle, "http://x.org", 1, &body) == false);
+}
+
 class FailCurlxPerform : public libndt::Client {
  public:
   using libndt::Client::Client;
