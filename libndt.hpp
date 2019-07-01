@@ -259,7 +259,7 @@ class Settings {
   /// Base URL to be used to query the mlab-ns service. If you specify an
   /// explicit hostname, mlab-ns won't be used. Note that the URL specified
   /// here MUST NOT end with a final slash.
-  std::string mlabns_base_url = "https://mlab-ns.appspot.com";
+  std::string mlabns_base_url = "https://locate.measurementlab.net";
 
   /// Flags that modify the behavior of mlabn-ns. By default we use the
   /// geo_options policy that is the most robust to random server failures.
@@ -1365,7 +1365,9 @@ bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
     settings_.protocol_flags |= protocol_flag_json;
     mlabns_url += "/neubot";  // only botticelli implements multi stream dload
   } else {
-    if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
+    if ((settings_.protocol_flags & protocol_flag_ndt7) != 0) {
+      mlabns_url += "/ndt7";
+    } else if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
       mlabns_url += "/ndt_ssl";
     } else {
       mlabns_url += "/ndt";
