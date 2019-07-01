@@ -29,8 +29,14 @@ Options can start either with a single dash (i.e. -option) or with
 a double dash (i.e. --option).
 
 If an hostname is not specified, we use M-Lab's name service to
-lookup a suitable M-Lab server to run the test with. Use the `-random`
-flag to use a random server rather than a nearby server.
+lookup a suitable M-Lab server to run the test with. You can use
+the `-lookup-policy <policy>` flag to choose the policy to discover
+M-Lab servers. The available policies are: `closest`, `random`,
+and `geo-options`. The `closest` policy requests the hostname of a
+closest nearby server. The `random` policy requests the hostname
+of a random server. The `geo-options` policy returns a list of
+nearby servers. The default policy is `geo-options`. The deprecated
+`-random` flag is an alias for `-lookup-policy random`.
 
 You MUST specify what subtest to enable. The `-download` flag enables the
 download subtest. The `-upload` flag enables the upload subtest. The
@@ -84,6 +90,7 @@ int main(int, char **argv) {
   {
     argh::parser cmdline;
     cmdline.add_param("ca-bundle-path");
+    cmdline.add_param("lookup-policy");
     cmdline.add_param("port");
     cmdline.add_param("socks5h");
     cmdline.parse(argv);
@@ -107,6 +114,8 @@ int main(int, char **argv) {
         settings.protocol_flags |= libndt::protocol_flag_ndt7;
         std::clog << "will use the ndt7 protocol" << std::endl;
       } else if (flag == "random") {
+        std::clog << "WARNING: the `-random` flag is deprecated" << std::endl;
+        std::clog << "HINT: replace with `-lookup-policy random`" << std::endl;
         settings.mlabns_policy = libndt::mlabns_policy_random;
         std::clog << "will auto-select a random server" << std::endl;
       } else if (flag == "tls") {
@@ -135,6 +144,19 @@ int main(int, char **argv) {
       if (param.first == "ca-bundle-path") {
         settings.ca_bundle_path = param.second;
         std::clog << "will use this CA bundle: " << param.second << std::endl;
+      } else if (param.first == "lookup-policy") {
+        if (param.second == "closest") {
+          settings.mlabns_policy = libndt::mlabns_policy_closest;
+        } else if (param.second == "random") {
+          settings.mlabns_policy = libndt::mlabns_policy_random;
+        } else if (param.second == "geo-options") {
+          settings.mlabns_policy = libndt::mlabns_policy_geo_options;
+        } else {
+          std::clog << "fatal: unrecognized -lookup-policy: " << param.second
+                    << std::endl << std::endl;
+          usage();
+          exit(EXIT_FAILURE);
+        }
       } else if (param.first == "port") {
         settings.port = param.second;
         std::clog << "will use this port: " << param.second << std::endl;
