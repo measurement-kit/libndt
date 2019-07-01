@@ -735,6 +735,9 @@ class Client {
   virtual CURLcode curlx_perform(UniqueCurl &) noexcept;
 
   virtual UniqueCurl curlx_easy_init() noexcept;
+
+  virtual CURLcode curlx_getinfo_response_code(
+    UniqueCurl &handle, long *response_code) noexcept;
 #endif  // LIBNDT_HAVE_CURL
 
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
@@ -4039,6 +4042,19 @@ bool Client::curlx_get(UniqueCurl &handle, const std::string &url, long timeout,
     LIBNDT_EMIT_WARNING("curlx: cURL failed: " << curl_easy_strerror(rv));
     return false;
   }
+  long response_code = 0L;
+  if (curlx_getinfo_response_code(handle, &response_code) != 0) {
+    LIBNDT_EMIT_WARNING("curlx: cannot get the response code");
+    return false;
+  }
+  if (response_code == 204) {
+    LIBNDT_EMIT_WARNING("curlx: mlab-ns is out of capacity");
+    return false;
+  }
+  if (response_code != 200) {
+    LIBNDT_EMIT_WARNING("curlx: unexpected mlab-ns response");
+    return false;
+  }
   LIBNDT_EMIT_DEBUG("curlx: request complete");
   *body = ss.str();
   return true;
@@ -4081,6 +4097,14 @@ CURLcode Client::curlx_perform(UniqueCurl &handle) noexcept {
 
 Client::UniqueCurl Client::curlx_easy_init() noexcept {
   return Client::UniqueCurl{::curl_easy_init()};
+}
+
+CURLcode Client::curlx_getinfo_response_code(
+    UniqueCurl &handle, long *response_code) noexcept {
+  assert(handle);
+  assert(response_code);
+  return ::curl_easy_getinfo(
+      handle.get(), CURLINFO_RESPONSE_CODE, response_code);
 }
 
 #endif  // LIBNDT_HAVE_CURL
