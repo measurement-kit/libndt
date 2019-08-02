@@ -1919,8 +1919,16 @@ bool Client::ndt7_download() noexcept {
       return false;
     }
     if (opcode == ws_opcode_text) {
-      std::string sinfo{(const char *)buff.get(), count};
-      on_result("ndt7", "download", std::move(sinfo));
+      // The following is an issue both on armv7 and on Windows 32 bit: the
+      // definition of size we have chose is such that later conversion to
+      // string is problematic because our size is 64 bit while size_t is 32
+      // bit on the platfrom. That said, it's unlikely that the we'll get a
+      // measurement that big, so the check to make sure the casting is okay
+      // is not going to be a real probem, it's just a theoric issue.
+      if (count <= SIZE_MAX) {
+        std::string sinfo{(const char *)buff.get(), (size_t)count};
+        on_result("ndt7", "download", std::move(sinfo));
+      }
     }
     total += count;  // Assume we won't overflow
   }
@@ -3129,8 +3137,14 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   }
   LIBNDT_EMIT_DEBUG("libndt BIO created");
   // We use BIO_NOCLOSE because it's the socket that owns the BIO and the SSL
-  // via fd_to_ssl rather than the other way around.
-  ::BIO_set_fd(bio, *sock, BIO_NOCLOSE);
+  // via fd_to_ssl rather than the other way around. Note that sockets are
+  // always `int` in OpenSSL notwithstanding their definition on Windows, so
+  // here we're casting unconditionally to silence compiler warnings.
+  //
+  // See <https://www.openssl.org/docs/man1.1.1/man3/BIO_s_socket.html> and
+  //     <https://stackoverflow.com/questions/1953639> for why this is scary
+  //     but fundamentally the right thing to do in this context.
+  ::BIO_set_fd(bio, (int)*sock, BIO_NOCLOSE);
   // For historical reasons, if the two BIOs are equal, the SSL object will
   // increase the refcount of bio just once rather than twice.
   ::SSL_set_bio(ssl, bio, bio);
