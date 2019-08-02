@@ -10,4 +10,4 @@ matrix:
     - env: BUILD_TYPE="ubsan"
     - env: BUILD_TYPE="vanilla"
 script:
-  - ./.ci/common/script/travis $BUILD_TYPE
+  - ./docker.sh $BUILD_TYPE

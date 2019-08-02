@@ -1,0 +1,41 @@
+name: libndt
+
+docker: bassosimone/mk-debian
+docker_tc_disabled: true
+
+function_checks:
+- name: strtonum
+  define: LIBNDT_HAVE_STRTONUM
+
+symbol_checks:
+- name: SO_NOSIGPIPE
+  header: sys/socket.h
+  define: LIBNDT_HAVE_SO_NOSIGPIPE
+- name: MSG_NOSIGNAL
+  header: sys/socket.h
+  define: LIBNDT_HAVE_MSG_NOSIGNAL
+
+dependencies:
+- github.com/adishavit/argh
+- github.com/catchorg/catch2
+- github.com/curl/curl
+- github.com/measurement-kit/generic-assets
+- github.com/nlohmann/json
+- github.com/openssl/openssl
+
+targets:
+  executables:
+    libndt-client:
+      compile: [libndt-client.cpp]
+    tests-curl:
+      compile: [curlx_test.cpp]
+    tests-libndt:
+      compile: [libndt_test.cpp strtonum_test.cpp]
+
+tests:
+  curl_unit_tests:
+    command: tests-curl
+  other_unit_tests:
+    command: tests-libndt
+  ndt_legacy_download_upload:
+    command: libndt-client -download -upload
