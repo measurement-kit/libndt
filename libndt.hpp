@@ -1636,23 +1636,22 @@ bool Client::run_download() noexcept {
         &total_data,   // reference to atomic
         ws             // copy for safety
       ]() noexcept {
-        // TODO(bassosimone): allocate on heap and keep safe using unique_ptr
-        // because with musl libc the stack is 80KB by default.
-        char buf[131072];
+        constexpr size_t ndt_bufsize = 131072;
+        std::unique_ptr<char[]> buf(new char[ndt_bufsize]);
         for (;;) {
           auto err = Err::none;
           Size n = 0;
           if (ws) {
             uint8_t op = 0;
             err = const_this->ws_recvmsg(
-                    fd, &op, (uint8_t *)buf, sizeof (buf), &n);
+                    fd, &op, (uint8_t *)buf.get(), ndt_bufsize, &n);
             if (err == Err::none && op != ws_opcode_binary) {
               LIBNDT_EMIT_WARNING_EX(const_this,
                 "run_download: unexpected opcode: " << (unsigned int)op);
               break;
             }
           } else {
-            err = const_this->netx_recv(fd, buf, sizeof(buf), &n);
+            err = const_this->netx_recv(fd, buf.get(), ndt_bufsize, &n);
           }
           if (err != Err::none) {
             if (err != Err::eof) {
@@ -1818,19 +1817,18 @@ bool Client::run_upload() noexcept {
         &total_data,   // reference to atomic
         ws             // copy for safety
       ]() noexcept {
-        // TODO(bassosimone): allocate on heap and keep safe using unique_ptr
-        // because with musl libc the stack is 80KB by default.
-        char buf[131072];
+        constexpr size_t ndt_bufsize = 131072;
+        std::unique_ptr<char[]> buf(new char[ndt_bufsize]);
         {
           auto start = std::chrono::steady_clock::now();
-          random_printable_fill(buf, sizeof(buf));
+          random_printable_fill(buf.get(), ndt_bufsize);
           auto now = std::chrono::steady_clock::now();
           std::chrono::duration<double> elapsed = now - start;
           LIBNDT_EMIT_DEBUG_EX(const_this,
             "run_upload: time to fill random buffer: " << elapsed.count());
         }
         std::string frame = const_this->ws_prepare_frame(
-            ws_opcode_binary | ws_fin_flag, (uint8_t *)buf, sizeof (buf));
+            ws_opcode_binary | ws_fin_flag, (uint8_t *)buf.get(), ndt_bufsize);
         for (;;) {
           Size n = 0;
           auto err = Err::none;
@@ -1840,7 +1838,7 @@ bool Client::run_upload() noexcept {
               n = frame.size();
             }
           } else {
-            err = const_this->netx_send(fd, buf, sizeof(buf), &n);
+            err = const_this->netx_send(fd, buf.get(), ndt_bufsize, &n);
           }
           if (err != Err::none) {
             if (err != Err::broken_pipe) {
