@@ -37,5 +37,15 @@ tests:
     command: tests-curl
   other_unit_tests:
     command: tests-libndt
-  ndt_legacy_download_upload:
-    command: libndt-client -download -upload
+  simple_test:
+    command: libndt-client -download -upload -verbose
+  json_test:
+    command: libndt-client -verbose -json -download -upload
+  websocket_test:
+    command: libndt-client -verbose -websocket -download -upload
+  tls_test:
+    command: libndt-client -ca-bundle-path .mkbuild/download/ca-bundle.pem
+                           -verbose -download -upload -tls -json
+  modern_test:
+    command: libndt-client -ca-bundle-path .mkbuild/download/ca-bundle.pem
+                           -verbose -download -upload -tls -json -websocket

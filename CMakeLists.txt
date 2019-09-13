@@ -384,11 +384,19 @@ add_test(
 )
 
 #
-# test: ndt_legacy_download_upload
+# test: json_test
 #
 
 add_test(
-  NAME ndt_legacy_download_upload COMMAND libndt-client -download -upload
+  NAME json_test COMMAND libndt-client -verbose -json -download -upload
+)
+
+#
+# test: modern_test
+#
+
+add_test(
+  NAME modern_test COMMAND libndt-client -ca-bundle-path .mkbuild/download/ca-bundle.pem -verbose -download -upload -tls -json -websocket
 )
 
 #
@@ -397,4 +405,28 @@ add_test(
 
 add_test(
   NAME other_unit_tests COMMAND tests-libndt
+)
+
+#
+# test: simple_test
+#
+
+add_test(
+  NAME simple_test COMMAND libndt-client -download -upload -verbose
+)
+
+#
+# test: tls_test
+#
+
+add_test(
+  NAME tls_test COMMAND libndt-client -ca-bundle-path .mkbuild/download/ca-bundle.pem -verbose -download -upload -tls -json
+)
+
+#
+# test: websocket_test
+#
+
+add_test(
+  NAME websocket_test COMMAND libndt-client -verbose -websocket -download -upload
 )
