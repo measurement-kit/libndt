@@ -58,7 +58,8 @@ cause NDT to wrap its messages (possibly already wrapped by JSON) into
 WebSocket messages. Finally, adding the `-ndt7` flag turns on version
 7 of the NDT protocol, which is not backwards compatible. Since `-ndt7`
 uses TLS, both `-ca-bundle-path <path>` and `-insecure` work also
-in combination with the `-ndt7` flag.
+in combination with the `-ndt7` flag. When using `-ndt7`, `-batch` can be
+specified so that the only output on STDOUT will be the JSON test results.
 
 In practice, these are the flags you want to use:
 
@@ -134,6 +135,9 @@ int main(int, char **argv) {
       } else if (flag == "websocket") {
         settings.protocol_flags |= libndt::protocol_flag_websocket;
         std::clog << "will use the NDT-over-WebSocket protocol" << std::endl;
+      } else if (flag == "batch") {
+        settings.batch_mode = true;
+        std::clog << "will run in batch mode" << std::endl;
       } else {
         std::clog << "fatal: unrecognized flag: " << flag << std::endl;
         usage();
