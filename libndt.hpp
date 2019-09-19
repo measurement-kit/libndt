@@ -91,16 +91,12 @@
 #include <utility>
 #include <vector>
 
-#ifdef LIBNDT_HAVE_OPENSSL  // Define this macro to enable OpenSSL support
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-#endif
 
-#ifdef LIBNDT_HAVE_CURL  // Likewise but to enable cURL support
 #include <curl/curl.h>
-#endif
 
 namespace measurement_kit {
 namespace libndt {
@@ -511,7 +507,6 @@ class Client {
   //
   // Note that we cannot have ndt7 without OpenSSL.
 
-#ifdef LIBNDT_HAVE_OPENSSL
   // ndt7_download performs a ndt7 download. Returns true if the download
   // succeeds and false in case of failure.
   bool ndt7_download() noexcept;
@@ -521,7 +516,6 @@ class Client {
 
   // ndt7_connect connects to @p url_path.
   bool ndt7_connect(std::string url_path) noexcept;
-#endif  // LIBNDT_HAVE_OPENSSL
 
   // NDT protocol API
   // ````````````````
@@ -703,7 +697,6 @@ class Client {
   // ```````````````````
   //
   // This section contains functionality used by cURL.
-#ifdef LIBNDT_HAVE_CURL
   class CurlDeleter {
    public:
     void operator()(CURL *handle) noexcept;
@@ -738,7 +731,6 @@ class Client {
 
   virtual CURLcode curlx_getinfo_response_code(
     UniqueCurl &handle, long *response_code) noexcept;
-#endif  // LIBNDT_HAVE_CURL
 
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
@@ -832,9 +824,7 @@ class Client {
   Socket sock_ = (Socket)-1;
   std::vector<NettestFlags> granted_suite_;
   Settings settings_;
-#ifdef LIBNDT_HAVE_OPENSSL
   std::map<Socket, SSL *> fd_to_ssl_;
-#endif
 #ifdef _WIN32
   Winsock winsock_;
 #endif
@@ -964,7 +954,6 @@ constexpr size_t msg_kickoff_size = sizeof(msg_kickoff) - 1;
 // Private utils
 // `````````````
 
-#ifdef LIBNDT_HAVE_OPENSSL
 // Format OpenSSL error as a C++ string.
 static std::string ssl_format_error() noexcept {
   std::stringstream ss;
@@ -977,7 +966,6 @@ static std::string ssl_format_error() noexcept {
   }
   return ss.str();
 }
-#endif  // LIBNDT_HAVE_OPENSSL
 
 // Map an error code to the corresponding string value.
 static std::string libndt_perror(Err err) noexcept {
@@ -1021,12 +1009,10 @@ static std::string libndt_perror(Err err) noexcept {
   }
 #undef LIBNDT_PERROR  // Tidy
   //
-#ifdef LIBNDT_HAVE_OPENSSL
   if (err == Err::ssl_generic) {
     rv += ": ";
     rv += ssl_format_error();
   }
-#endif  // LIBNDT_HAVE_OPENSSL
   //
   return rv;
 }
@@ -1235,7 +1221,6 @@ bool Client::run() noexcept {
     // TODO(bassosimone): we will eventually want to refactor the code to
     // make ndt7 the default and ndt5 the optional case.
     if ((settings_.protocol_flags & protocol_flag_ndt7) != 0) {
-#ifdef LIBNDT_HAVE_OPENSSL
       LIBNDT_EMIT_INFO("using the ndt7 protocol");
       if ((settings_.nettest_flags & nettest_flag_download) != 0) {
         // TODO(bassosimone): for now we do not try with more than one host
@@ -1256,10 +1241,6 @@ bool Client::run() noexcept {
       // TODO(bassosimone): here we may want to warn if the user selects
       // subtests that we actually do not implement.
       return true;
-#else
-      LIBNDT_EMIT_WARNING("ndt7: OpenSSL support not compiled in");
-      return false;
-#endif
     }
     if (!connect()) {
       LIBNDT_EMIT_WARNING("cannot connect to remote host; trying another one");
@@ -1900,7 +1881,6 @@ bool Client::run_upload() noexcept {
 
 // ndt7 protocol API
 // `````````````````
-#ifdef LIBNDT_HAVE_OPENSSL
 
 bool Client::ndt7_download() noexcept {
   if (!ndt7_connect("/ndt/v7/download")) {
@@ -1937,8 +1917,16 @@ bool Client::ndt7_download() noexcept {
       return false;
     }
     if (opcode == ws_opcode_text) {
-      std::string sinfo{(const char *)buff.get(), count};
-      on_result("ndt7", "download", std::move(sinfo));
+      // The following is an issue both on armv7 and on Windows 32 bit: the
+      // definition of size we have chose is such that later conversion to
+      // string is problematic because our size is 64 bit while size_t is 32
+      // bit on the platfrom. That said, it's unlikely that the we'll get a
+      // measurement that big, so the check to make sure the casting is okay
+      // is not going to be a real probem, it's just a theoric issue.
+      if (count <= SIZE_MAX) {
+        std::string sinfo{(const char *)buff.get(), (size_t)count};
+        on_result("ndt7", "download", std::move(sinfo));
+      }
     }
     total += count;  // Assume we won't overflow
   }
@@ -2010,8 +1998,6 @@ bool Client::ndt7_connect(std::string url_path) noexcept {
   LIBNDT_EMIT_INFO("ndt7: WebSocket connection established");
   return true;
 }
-
-#endif  // LIBNDT_HAVE_OPENSSL
 
 // NDT protocol API
 // ````````````````
@@ -2839,8 +2825,6 @@ Err Client::ws_recvmsg(  //
 #define OS_EINVAL EINVAL
 #endif
 
-#ifdef LIBNDT_HAVE_OPENSSL
-
 // - - - BEGIN BIO IMPLEMENTATION - - - {
 //
 // This BIO implementation is based on the implementation of rabbitmq-c
@@ -3039,8 +3023,6 @@ again:
   return err;
 }
 
-#endif  // LIBNDT_HAVE_OPENSSL
-
 Err Client::netx_maybews_dial(const std::string &hostname,
                               const std::string &port, uint64_t ws_flags,
                               std::string ws_protocol, std::string url_path,
@@ -3083,7 +3065,6 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     LIBNDT_EMIT_DEBUG("netx_maybessl_dial: TLS not enabled");
     return Err::none;
   }
-#ifdef LIBNDT_HAVE_OPENSSL
   LIBNDT_EMIT_DEBUG("netx_maybetls_dial: about to start TLS handshake");
   if (settings_.ca_bundle_path.empty() && settings_.tls_verify_peer) {
 #ifndef _WIN32
@@ -3154,8 +3135,14 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   }
   LIBNDT_EMIT_DEBUG("libndt BIO created");
   // We use BIO_NOCLOSE because it's the socket that owns the BIO and the SSL
-  // via fd_to_ssl rather than the other way around.
-  ::BIO_set_fd(bio, *sock, BIO_NOCLOSE);
+  // via fd_to_ssl rather than the other way around. Note that sockets are
+  // always `int` in OpenSSL notwithstanding their definition on Windows, so
+  // here we're casting unconditionally to silence compiler warnings.
+  //
+  // See <https://www.openssl.org/docs/man1.1.1/man3/BIO_s_socket.html> and
+  //     <https://stackoverflow.com/questions/1953639> for why this is scary
+  //     but fundamentally the right thing to do in this context.
+  ::BIO_set_fd(bio, (int)*sock, BIO_NOCLOSE);
   // For historical reasons, if the two BIOs are equal, the SSL object will
   // increase the refcount of bio just once rather than twice.
   ::SSL_set_bio(ssl, bio, bio);
@@ -3190,10 +3177,6 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   }
   LIBNDT_EMIT_DEBUG("SSL handshake complete");
   return Err::none;
-#else
-  LIBNDT_EMIT_WARNING("SSL support not compiled in");
-  return Err::function_not_supported;
-#endif
 }
 
 Err Client::netx_maybesocks5h_dial(const std::string &hostname,
@@ -3613,7 +3596,6 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
     return Err::invalid_argument;
   }
   sys_set_last_error(0);
-#ifdef LIBNDT_HAVE_OPENSSL
   if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (count > INT_MAX) {
       return Err::invalid_argument;
@@ -3631,7 +3613,6 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
     *actual = (Size)ret;
     return Err::none;
   }
-#endif
   auto rv = sys_recv(fd, base, count);
   if (rv < 0) {
     assert(rv == -1);
@@ -3696,7 +3677,6 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
     return Err::invalid_argument;
   }
   sys_set_last_error(0);
-#ifdef LIBNDT_HAVE_OPENSSL
   if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (count > INT_MAX) {
       return Err::invalid_argument;
@@ -3714,7 +3694,6 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
     *actual = (Size)ret;
     return Err::none;
   }
-#endif
   auto rv = sys_send(fd, base, count);
   if (rv < 0) {
     assert(rv == -1);
@@ -3907,7 +3886,6 @@ again:
 }
 
 Err Client::netx_shutdown_both(Socket fd) noexcept {
-#ifdef LIBNDT_HAVE_OPENSSL
   if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (fd_to_ssl_.count(fd) != 1) {
       return Err::invalid_argument;
@@ -3923,7 +3901,6 @@ Err Client::netx_shutdown_both(Socket fd) noexcept {
       return err;
     }
   }
-#endif
   if (sys_shutdown(fd, LIBNDT_OS_SHUT_RDWR) != 0) {
     return netx_map_errno(sys_get_last_error());
   }
@@ -3931,7 +3908,6 @@ Err Client::netx_shutdown_both(Socket fd) noexcept {
 }
 
 Err Client::netx_closesocket(Socket fd) noexcept {
-#if LIBNDT_HAVE_OPENSSL
   if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (fd_to_ssl_.count(fd) != 1) {
       return Err::invalid_argument;
@@ -3939,7 +3915,6 @@ Err Client::netx_closesocket(Socket fd) noexcept {
     ::SSL_free(fd_to_ssl_.at(fd));
     fd_to_ssl_.erase(fd);
   }
-#endif
   if (sys_closesocket(fd) != 0) {
     return netx_map_errno(sys_get_last_error());
   }
@@ -3948,7 +3923,6 @@ Err Client::netx_closesocket(Socket fd) noexcept {
 
 // Dependencies (cURL)
 // ```````````````````
-#ifdef LIBNDT_HAVE_CURL
 }  // namespace libndt
 }  // namespace measurement_kit
 extern "C" {
@@ -4105,17 +4079,9 @@ CURLcode Client::curlx_getinfo_response_code(
       handle.get(), CURLINFO_RESPONSE_CODE, response_code);
 }
 
-#endif  // LIBNDT_HAVE_CURL
-
 bool Client::query_mlabns_curl(const std::string &url, long timeout,
                                std::string *body) noexcept {
-#ifdef LIBNDT_HAVE_CURL
   return curlx_get_maybe_socks5(settings_.socks5h_port, url, timeout, body);
-#else
-  (void)url, (void)timeout, (void)body;
-  LIBNDT_EMIT_WARNING("cURL not compiled in; don't know how to get server");
-  return false;
-#endif
 }
 
 // Other helpers

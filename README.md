@@ -9,6 +9,11 @@ measures the download and upload speed, and complements these measurements
 with kernel-level measurements. NDT is the most popular network performance
 test hosted by [Measurement Lab](https://www.measurementlab.net/).
 
+This library implements all flavours of NDT. The code implementing the
+legacy NDT protocol (i.e., no JSON, no WebSocket, no TLS, no ndt7) is
+the most stable, tested, and peer reviewed code. The JSON, WebSocket, and
+TLS flavoured NDT code is in beta stage. Ndt7 code is in alpha stage.
+
 ## Getting started
 
 Make sure you download [nlohmann/json](https://github.com/nlohmann/json)
@@ -16,6 +21,10 @@ single include header [json.hpp](
 https://github.com/nlohmann/json/blob/develop/single_include/nlohmann/json.hpp)
 before proceeding. The minimum supported version is v3.0.0. Put `json.hpp`
 in the current working directory.
+
+Libndt depends on OpenSSL (for TLS support and in the future for
+WebSocket support) and cURL (to autodiscover servers). CMake will
+fail if such dependencies are not installed.
 
 Then, download [libndt.hpp](
 https://github.com/measurement-kit/libndt/blob/master/libndt.hpp) and
@@ -36,18 +45,6 @@ int main() {
 ```
 
 Compile with `g++ -std=c++11 -Wall -Wextra -I. -o main main.cpp`.
-
-Libndt optionally depends on OpenSSL (for TLS support and in the future for
-WebSocket support) and cURL (to autodiscover servers). You can use the following
-preprocessor macros to tell libndt that such dependencies are available:
-
-- `LIBNDT_HAVE_OPENSSL`: just define this macro to use OpenSSL (it does not
-  matter whether the macro is defined to a true or false value);
-
-- `LIBNDT_HAVE_CURL`: just define to use cURL (likewise).
-
-If these dependencies are not installed in canonical locations, make sure you
-add the pass the compiler the proper flags.
 
 See [codedocs.xyz/measurement-kit/libndt](
 https://codedocs.xyz/measurement-kit/libndt/) for API documentation;
