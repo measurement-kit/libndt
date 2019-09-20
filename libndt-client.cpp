@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <memory>
 
 #ifdef __clang__
 #pragma clang diagnostic push
