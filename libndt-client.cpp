@@ -21,6 +21,25 @@
 
 using namespace measurement_kit;
 
+// BatchClient only prints JSON messages on stdout.
+class BatchClient : public libndt::Client {
+  public:
+    using libndt::Client::Client;
+    void on_result(std::string, std::string, std::string value);
+    void on_performance(libndt::NettestFlags, uint8_t, double, double, double);
+};
+
+// on_result is overridden to only print the JSON value on stdout.
+void BatchClient::on_result(std::string, std::string,  std::string value) {
+  std::cout << value;
+}
+// on_performance is overridded to hide the user-friendly output messages.
+void BatchClient::on_performance(libndt::NettestFlags, uint8_t, double, double,
+                                 double) {
+  /* NOTHING */
+}
+
+
 static void usage() {
   // clang-format off
   std::clog << R"(Usage: libndt-client [options] [<hostname>]
@@ -87,6 +106,7 @@ int main(int, char **argv) {
   settings.verbosity = libndt::verbosity_info;
   // You need to enable tests explicitly by passing command line flags.
   settings.nettest_flags = libndt::NettestFlags{0};
+  bool batch_mode = false;
 
   {
     argh::parser cmdline;
@@ -136,7 +156,7 @@ int main(int, char **argv) {
         settings.protocol_flags |= libndt::protocol_flag_websocket;
         std::clog << "will use the NDT-over-WebSocket protocol" << std::endl;
       } else if (flag == "batch") {
-        settings.batch_mode = true;
+        batch_mode = true;
         std::clog << "will run in batch mode" << std::endl;
       } else {
         std::clog << "fatal: unrecognized flag: " << flag << std::endl;
@@ -192,7 +212,12 @@ int main(int, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  libndt::Client client{settings};
-  bool rv = client.run();
+  std::unique_ptr<libndt::Client>  client;
+  if (batch_mode) {
+    client.reset(new BatchClient{settings});
+  } else {
+    client.reset(new libndt::Client{settings});
+  }
+  bool rv = client->run();
   return (rv) ? EXIT_SUCCESS : EXIT_FAILURE;
 }

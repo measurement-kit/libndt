@@ -316,10 +316,6 @@ class Settings {
   /// may be useful sometimes to disable it for testing purposes. You should
   /// not disable this option in general, since doing that is insecure.
   bool tls_verify_peer = true;
-
-  /// Whether to run in batch mode. If true, no output is printed on stdout
-  /// except for JSON containing the ndt7 test output.
-  bool batch_mode = false;
 };
 
 // Error codes
@@ -1929,11 +1925,7 @@ bool Client::ndt7_download() noexcept {
       // is not going to be a real problem, it's just a theoric issue.
       if (count <= SIZE_MAX) {
         std::string sinfo{(const char *)buff.get(), (size_t)count};
-        if (settings_.batch_mode) {
-          std::cout << sinfo;
-        } else {
-          on_result("ndt7", "download", std::move(sinfo));
-        }
+        on_result("ndt7", "download", std::move(sinfo));
       }
     }
     total += count;  // Assume we won't overflow
