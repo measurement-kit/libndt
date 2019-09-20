@@ -33,7 +33,7 @@ class BatchClient : public libndt::Client {
 
 // on_result is overridden to only print the JSON value on stdout.
 void BatchClient::on_result(std::string, std::string,  std::string value) {
-  std::cout << value;
+  std::cout << value << std::endl;
 }
 // on_performance is overridded to hide the user-friendly output messages.
 void BatchClient::on_performance(libndt::NettestFlags, uint8_t, double, double,
