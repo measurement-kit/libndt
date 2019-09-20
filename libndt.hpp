@@ -1922,7 +1922,11 @@ bool Client::ndt7_download() noexcept {
       // string is problematic because our size is 64 bit while size_t is 32
       // bit on the platfrom. That said, it's unlikely that the we'll get a
       // measurement that big, so the check to make sure the casting is okay
+<<<<<<< HEAD
       // is not going to be a real problem, it's just a theoric issue.
+=======
+      // is not going to be a real probem, it's just a theoric issue.
+>>>>>>> master
       if (count <= SIZE_MAX) {
         std::string sinfo{(const char *)buff.get(), (size_t)count};
         on_result("ndt7", "download", std::move(sinfo));
