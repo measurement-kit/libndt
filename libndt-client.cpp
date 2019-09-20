@@ -25,8 +25,9 @@ using namespace measurement_kit;
 class BatchClient : public libndt::Client {
   public:
     using libndt::Client::Client;
-    void on_result(std::string, std::string, std::string value);
-    void on_performance(libndt::NettestFlags, uint8_t, double, double, double);
+    void on_result(std::string, std::string, std::string value) override;
+    void on_performance(libndt::NettestFlags, uint8_t, double, double,
+                        double) override;
 };
 
 // on_result is overridden to only print the JSON value on stdout.
