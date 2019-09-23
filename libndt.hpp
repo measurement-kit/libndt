@@ -2033,7 +2033,17 @@ bool Client::ndt7_upload() noexcept {
 #endif  // __linux__
       on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
-      on_result("ndt7", "upload", measurement.dump());
+      std::string json = measurement.dump();
+      on_result("ndt7", "upload", json);
+
+      // Send measurement to the server.
+      Err err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
+                              (uint8_t *)json.data(), json.size());
+      if (err != Err::none) {
+        LIBNDT_EMIT_WARNING("ndt7: cannot send measurement");
+        return false;
+      }
+
       latest = now;
     }
     Err err = netx_sendn(sock_, frame.data(), frame.size());
