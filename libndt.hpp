@@ -845,6 +845,9 @@ XX(tcpi_retransmits, TcpiRetransmits) \
 XX(tcpi_probes, TcpiProbes) \
 XX(tcpi_backoff, TcpiBackoff) \
 XX(tcpi_options, TcpiOptions) \
+XX(tcpi_snd_wscale, TcpiSndWscale) \
+XX(tcpi_rcv_wscale, TcpiRcvWscale) \
+XX(tcpi_delivery_rate_app_limited, TcpiDeliveryRateAppLimited) \
 XX(tcpi_rto, TcpiRto) \
 XX(tcpi_ato, TcpiAto) \
 XX(tcpi_snd_mss, TcpiSndMss) \
@@ -2022,7 +2025,7 @@ bool Client::ndt7_upload() noexcept {
                              &soerrlen) == 0) {
         nlohmann::json doc;
         doc["TCPInfo"] = nlohmann::json();
-#define XX(lower_, upper_) doc["TCPInfo"][#upper_] = tcpinfo.lower_;
+#define XX(lower_, upper_) doc["TCPInfo"][#upper_] = (uint64_t) tcpinfo.lower_;
         NDT7_ENUM_TCP_INFO
 #undef XX
         on_result("ndt7", "upload", doc.dump());
