@@ -2020,11 +2020,10 @@ bool Client::ndt7_upload() noexcept {
       socklen_t soerrlen = sizeof(tcpinfo);
       if (sys_getsockopt(sock_, IPPROTO_TCP, TCP_INFO, (void *)&tcpinfo,
                              &soerrlen) == 0) {
-
         nlohmann::json doc;
         doc["TCPInfo"] = nlohmann::json();
 #define XX(lower_, upper_) doc["TCPInfo"][#upper_] = tcpinfo.lower_;
-NDT7_ENUM_TCP_INFO
+        NDT7_ENUM_TCP_INFO
 #undef XX
         on_result("ndt7", "upload", doc.dump());
       }
