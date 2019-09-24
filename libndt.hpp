@@ -2038,8 +2038,8 @@ bool Client::ndt7_upload() noexcept {
 #endif  // __linux__
       on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
-      // This could fail if there are non-utf8 characters. Since there are just
-      // ASCII characters, we do not handle exceptions here.
+      // This could fail if there are non-utf8 characters. This structure just
+      // contains integers and ASCII strings.
       std::string json = measurement.dump();
       on_result("ndt7", "upload", json);
 
