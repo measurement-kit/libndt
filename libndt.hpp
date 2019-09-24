@@ -2028,6 +2028,7 @@ bool Client::ndt7_upload() noexcept {
       if (sys_getsockopt(sock_, IPPROTO_TCP, TCP_INFO, (void *)&tcpinfo,
                          &tcpinfolen) == 0) {
         measurement["TCPInfo"] = nlohmann::json();
+        measurement["TCPInfo"]["ElapsedTime"] = elapsed.count();
 #define XX(lower_, upper_) measurement["TCPInfo"][#upper_] = (uint64_t)tcpinfo.lower_;
         NDT7_ENUM_TCP_INFO
 #undef XX
