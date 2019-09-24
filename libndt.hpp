@@ -2017,22 +2017,35 @@ bool Client::ndt7_upload() noexcept {
     constexpr auto measurement_interval = 0.25;
     std::chrono::duration<double> interval = now - latest;
     if (interval.count() > measurement_interval) {
+      nlohmann::json measurement;
+      measurement["AppInfo"] = nlohmann::json();
+      measurement["AppInfo"]["ElapsedTime"] = elapsed.count();
+      measurement["AppInfo"]["NumBytes"] = total;
 #ifdef __linux__
       // Read tcp_info data for the socket and print it as JSON.
-      struct tcp_info tcpinfo{};
-      socklen_t soerrlen = sizeof(tcpinfo);
+      struct tcp_info tcpinfo {};
+      socklen_t tcpinfolen = sizeof(tcpinfo);
       if (sys_getsockopt(sock_, IPPROTO_TCP, TCP_INFO, (void *)&tcpinfo,
-                             &soerrlen) == 0) {
-        nlohmann::json doc;
-        doc["TCPInfo"] = nlohmann::json();
-#define XX(lower_, upper_) doc["TCPInfo"][#upper_] = (uint64_t) tcpinfo.lower_;
+                         &tcpinfolen) == 0) {
+        measurement["TCPInfo"] = nlohmann::json();
+#define XX(lower_, upper_) measurement["TCPInfo"][#upper_] = (uint64_t)tcpinfo.lower_;
         NDT7_ENUM_TCP_INFO
 #undef XX
-        on_result("ndt7", "upload", doc.dump());
       }
-#endif // __linux__
+#endif  // __linux__
       on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
+      std::string json = measurement.dump();
+      on_result("ndt7", "upload", json);
+
+      // Send measurement to the server.
+      Err err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
+                              (uint8_t *)json.data(), json.size());
+      if (err != Err::none) {
+        LIBNDT_EMIT_WARNING("ndt7: cannot send measurement");
+        return false;
+      }
+
       latest = now;
     }
     Err err = netx_sendn(sock_, frame.data(), frame.size());
