@@ -2023,7 +2023,7 @@ bool Client::ndt7_upload() noexcept {
       measurement["AppInfo"]["NumBytes"] = total;
 #ifdef __linux__
       // Read tcp_info data for the socket and print it as JSON.
-      struct tcp_info tcpinfo {};
+      struct tcp_info tcpinfo{};
       socklen_t tcpinfolen = sizeof(tcpinfo);
       if (sys_getsockopt(sock_, IPPROTO_TCP, TCP_INFO, (void *)&tcpinfo,
                          &tcpinfolen) == 0) {
@@ -2035,6 +2035,8 @@ bool Client::ndt7_upload() noexcept {
 #endif  // __linux__
       on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
+      // This could fail if there are non-utf8 characters. Since there are just
+      // ASCII characters, we do not handle exceptions here.
       std::string json = measurement.dump();
       on_result("ndt7", "upload", json);
 
