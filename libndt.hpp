@@ -52,8 +52,8 @@
 #endif
 
 #ifndef _WIN32
-#include <arpa/inet.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #else
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -668,7 +668,7 @@ class Client {
 
   // Send exactly N bytes to the network.
   virtual Err netx_sendn(
-      Socket fd, const void *base, Size count) const noexcept;
+    Socket fd, const void *base, Size count) const noexcept;
 
   // Resolve hostname into a list of IP addresses.
   virtual Err netx_resolve(const std::string &hostname,
@@ -685,7 +685,7 @@ class Client {
 
   // Main function for dealing with I/O patterned after poll(2).
   virtual Err netx_poll(
-      std::vector<pollfd> *fds, int timeout_msec) const noexcept;
+    std::vector<pollfd> *fds, int timeout_msec) const noexcept;
 
   // Shutdown both ends of a socket.
   virtual Err netx_shutdown_both(Socket fd) noexcept;
@@ -711,13 +711,13 @@ class Client {
                  std::string *body) noexcept;
 
   virtual CURLcode curlx_setopt_url(
-      UniqueCurl &, const std::string &url) noexcept;
+                UniqueCurl &, const std::string &url) noexcept;
 
   virtual CURLcode curlx_setopt_proxy(UniqueCurl &,
-                                      const std::string &url) noexcept;
+                const std::string &url) noexcept;
 
   virtual CURLcode curlx_setopt_writefunction(UniqueCurl &, size_t (*callback)(
-                                                                char *ptr, size_t size, size_t nmemb, void *userdata)) noexcept;
+      char *ptr, size_t size, size_t nmemb, void *userdata)) noexcept;
 
   virtual CURLcode curlx_setopt_writedata(UniqueCurl &, void *pointer) noexcept;
 
@@ -730,7 +730,7 @@ class Client {
   virtual UniqueCurl curlx_easy_init() noexcept;
 
   virtual CURLcode curlx_getinfo_response_code(
-      UniqueCurl &handle, long *response_code) noexcept;
+    UniqueCurl &handle, long *response_code) noexcept;
 
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
@@ -773,7 +773,7 @@ class Client {
 
   // send() wrapper that can be mocked in tests.
   virtual Ssize sys_send(
-      Socket fd, const void *base, Size count) const noexcept;
+    Socket fd, const void *base, Size count) const noexcept;
 
   // shutdown() wrapper that can be mocked in tests.
   virtual int sys_shutdown(Socket fd, int shutdown_how) noexcept;
@@ -838,61 +838,61 @@ class Client {
 
 #ifdef __linux__
 #include <linux/tcp.h>
-#define NDT7_ENUM_TCP_INFO                                       \
-  XX(tcpi_state, TcpiState)                                      \
-  XX(tcpi_ca_state, TcpiCaState)                                 \
-  XX(tcpi_retransmits, TcpiRetransmits)                          \
-  XX(tcpi_probes, TcpiProbes)                                    \
-  XX(tcpi_backoff, TcpiBackoff)                                  \
-  XX(tcpi_options, TcpiOptions)                                  \
-  XX(tcpi_snd_wscale, TcpiSndWscale)                             \
-  XX(tcpi_rcv_wscale, TcpiRcvWscale)                             \
-  XX(tcpi_delivery_rate_app_limited, TcpiDeliveryRateAppLimited) \
-  XX(tcpi_rto, TcpiRto)                                          \
-  XX(tcpi_ato, TcpiAto)                                          \
-  XX(tcpi_snd_mss, TcpiSndMss)                                   \
-  XX(tcpi_rcv_mss, TcpiRcvMss)                                   \
-  XX(tcpi_unacked, TcpiUnacked)                                  \
-  XX(tcpi_sacked, TcpiSacked)                                    \
-  XX(tcpi_lost, TcpiLost)                                        \
-  XX(tcpi_retrans, TcpiRetrans)                                  \
-  XX(tcpi_fackets, TcpiFackets)                                  \
-  XX(tcpi_last_data_sent, TcpiLastDataSent)                      \
-  XX(tcpi_last_ack_sent, TcpiLastAckSent)                        \
-  XX(tcpi_last_data_recv, TcpiLastDataRecv)                      \
-  XX(tcpi_last_ack_recv, TcpiLastAckRecv)                        \
-  XX(tcpi_pmtu, TcpiPmtu)                                        \
-  XX(tcpi_rcv_ssthresh, TcpiRcvSsthresh)                         \
-  XX(tcpi_rtt, TcpiRtt)                                          \
-  XX(tcpi_rttvar, TcpiRttvar)                                    \
-  XX(tcpi_snd_ssthresh, TcpiSndSsthresh)                         \
-  XX(tcpi_snd_cwnd, TcpiSndCwnd)                                 \
-  XX(tcpi_advmss, TcpiAdvmss)                                    \
-  XX(tcpi_reordering, TcpiReordering)                            \
-  XX(tcpi_rcv_rtt, TcpiRcvRtt)                                   \
-  XX(tcpi_rcv_space, TcpiRcvSpace)                               \
-  XX(tcpi_total_retrans, TcpiTotalRetrans)                       \
-  XX(tcpi_pacing_rate, TcpiPacingRate)                           \
-  XX(tcpi_max_pacing_rate, TcpiMaxPacingRate)                    \
-  XX(tcpi_bytes_acked, TcpiBytesAcked)                           \
-  XX(tcpi_bytes_received, TcpiBytesReceived)                     \
-  XX(tcpi_segs_out, TcpiSegsOut)                                 \
-  XX(tcpi_segs_in, TcpiSegsIn)                                   \
-  XX(tcpi_notsent_bytes, TcpiNotsentBytes)                       \
-  XX(tcpi_min_rtt, TcpiMinRtt)                                   \
-  XX(tcpi_data_segs_in, TcpiDataSegsIn)                          \
-  XX(tcpi_data_segs_out, TcpiDataSegsOut)                        \
-  XX(tcpi_delivery_rate, TcpiDeliveryRate)                       \
-  XX(tcpi_busy_time, TcpiBusyTime)                               \
-  XX(tcpi_rwnd_limited, TcpiRwndLimited)                         \
-  XX(tcpi_sndbuf_limited, TcpiSndbufLimited)                     \
-  XX(tcpi_delivered, TcpiDelivered)                              \
-  XX(tcpi_delivered_ce, TcpiDeliveredCe)                         \
-  XX(tcpi_bytes_sent, TcpiBytesSent)                             \
-  XX(tcpi_bytes_retrans, TcpiBytesRetrans)                       \
-  XX(tcpi_dsack_dups, TcpiDsackDups)                             \
-  XX(tcpi_reord_seen, TcpiReordSeen)
-#endif  // __linux__
+#define NDT7_ENUM_TCP_INFO \
+XX(tcpi_state, TcpiState) \
+XX(tcpi_ca_state, TcpiCaState) \
+XX(tcpi_retransmits, TcpiRetransmits) \
+XX(tcpi_probes, TcpiProbes) \
+XX(tcpi_backoff, TcpiBackoff) \
+XX(tcpi_options, TcpiOptions) \
+XX(tcpi_snd_wscale, TcpiSndWscale) \
+XX(tcpi_rcv_wscale, TcpiRcvWscale) \
+XX(tcpi_delivery_rate_app_limited, TcpiDeliveryRateAppLimited) \
+XX(tcpi_rto, TcpiRto) \
+XX(tcpi_ato, TcpiAto) \
+XX(tcpi_snd_mss, TcpiSndMss) \
+XX(tcpi_rcv_mss, TcpiRcvMss) \
+XX(tcpi_unacked, TcpiUnacked) \
+XX(tcpi_sacked, TcpiSacked) \
+XX(tcpi_lost, TcpiLost) \
+XX(tcpi_retrans, TcpiRetrans) \
+XX(tcpi_fackets, TcpiFackets) \
+XX(tcpi_last_data_sent, TcpiLastDataSent) \
+XX(tcpi_last_ack_sent, TcpiLastAckSent) \
+XX(tcpi_last_data_recv, TcpiLastDataRecv) \
+XX(tcpi_last_ack_recv, TcpiLastAckRecv) \
+XX(tcpi_pmtu, TcpiPmtu) \
+XX(tcpi_rcv_ssthresh, TcpiRcvSsthresh) \
+XX(tcpi_rtt, TcpiRtt) \
+XX(tcpi_rttvar, TcpiRttvar) \
+XX(tcpi_snd_ssthresh, TcpiSndSsthresh) \
+XX(tcpi_snd_cwnd, TcpiSndCwnd) \
+XX(tcpi_advmss, TcpiAdvmss) \
+XX(tcpi_reordering, TcpiReordering) \
+XX(tcpi_rcv_rtt, TcpiRcvRtt) \
+XX(tcpi_rcv_space, TcpiRcvSpace) \
+XX(tcpi_total_retrans, TcpiTotalRetrans) \
+XX(tcpi_pacing_rate, TcpiPacingRate) \
+XX(tcpi_max_pacing_rate, TcpiMaxPacingRate) \
+XX(tcpi_bytes_acked, TcpiBytesAcked) \
+XX(tcpi_bytes_received, TcpiBytesReceived) \
+XX(tcpi_segs_out, TcpiSegsOut) \
+XX(tcpi_segs_in, TcpiSegsIn) \
+XX(tcpi_notsent_bytes, TcpiNotsentBytes) \
+XX(tcpi_min_rtt, TcpiMinRtt) \
+XX(tcpi_data_segs_in, TcpiDataSegsIn) \
+XX(tcpi_data_segs_out, TcpiDataSegsOut) \
+XX(tcpi_delivery_rate, TcpiDeliveryRate) \
+XX(tcpi_busy_time, TcpiBusyTime) \
+XX(tcpi_rwnd_limited, TcpiRwndLimited) \
+XX(tcpi_sndbuf_limited, TcpiSndbufLimited) \
+XX(tcpi_delivered, TcpiDelivered) \
+XX(tcpi_delivered_ce, TcpiDeliveredCe) \
+XX(tcpi_bytes_sent, TcpiBytesSent) \
+XX(tcpi_bytes_retrans, TcpiBytesRetrans) \
+XX(tcpi_dsack_dups, TcpiDsackDups) \
+XX(tcpi_reord_seen, TcpiReordSeen)
+#endif // __linux__
 // Strtonum
 // ````````
 #ifndef LIBNDT_HAVE_STRTONUM
@@ -1141,7 +1141,7 @@ static std::string format_speed_from_kbits(double speed) noexcept {
   }
   std::stringstream ss;
   ss << std::setprecision(3) << std::setw(6) << std::right
-     << speed << " " << unit;
+      << speed << " " << unit;
   return ss.str();
 }
 
@@ -1368,12 +1368,12 @@ void Client::on_performance(NettestFlags tid, uint8_t nflows,
     percent = (elapsed_time * 100.0 / max_runtime);
   }
   LIBNDT_EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
-                         << std::right << percent << "%]"
-                         << " elapsed: " << std::fixed << std::setprecision(3)
-                         << std::setw(6) << elapsed_time << " s;"
-                         << " test_id: " << (int)tid << "; num_flows: " << (int)nflows
-                         << "; speed: "
-                         << format_speed_from_kbits(measured_bytes, elapsed_time));
+                  << std::right << percent << "%]"
+                  << " elapsed: " << std::fixed << std::setprecision(3)
+                  << std::setw(6) << elapsed_time << " s;"
+                  << " test_id: " << (int)tid << "; num_flows: " << (int)nflows
+                  << "; speed: "
+                  << format_speed_from_kbits(measured_bytes, elapsed_time));
 }
 
 void Client::on_result(std::string scope, std::string name, std::string value) {
@@ -1538,7 +1538,7 @@ bool Client::recv_tests_ids() noexcept {
     auto tid = (uint8_t)sys_strtonum(cur.data(), 1, 256, &errstr);
     if (errstr != nullptr) {
       LIBNDT_EMIT_WARNING("recv_tests_ids: found invalid test-id: "
-                          << cur.data() << " (error: " << errstr << ")");
+                   << cur.data() << " (error: " << errstr << ")");
       return false;
     }
     granted_suite_.push_back(NettestFlags{tid});
@@ -1635,7 +1635,8 @@ bool Client::run_download() noexcept {
     // address are attempted simultaneously, the client MUST serialize them".
     Err err = netx_maybews_dial(  //
         settings_.hostname, port,
-        ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept | ws_f_sec_ws_protocol, ws_proto_s2c, "/ndt_protocol",
+        ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
+          | ws_f_sec_ws_protocol, ws_proto_s2c, "/ndt_protocol",
         &sock);
     if (err != Err::none) {
       break;
@@ -1665,13 +1666,13 @@ bool Client::run_download() noexcept {
       // as this is more consistent with the fact that thread decrements it
       active += 1;  // atomic
       auto main = [
-        &active,      // reference to atomic
-        begin,        // copy for safety
-        fd,           // copy for safety
-        max_runtime,  // copy for safety
-        const_this,   // const pointer
-        &total_data,  // reference to atomic
-        ws            // copy for safety
+        &active,       // reference to atomic
+        begin,         // copy for safety
+        fd,            // copy for safety
+        max_runtime,   // copy for safety
+        const_this,    // const pointer
+        &total_data,   // reference to atomic
+        ws             // copy for safety
       ]() noexcept {
         constexpr size_t ndt_bufsize = 131072;
         std::unique_ptr<char[]> buf(new char[ndt_bufsize]);
@@ -1681,10 +1682,10 @@ bool Client::run_download() noexcept {
           if (ws) {
             uint8_t op = 0;
             err = const_this->ws_recvmsg(
-                fd, &op, (uint8_t *)buf.get(), ndt_bufsize, &n);
+                    fd, &op, (uint8_t *)buf.get(), ndt_bufsize, &n);
             if (err == Err::none && op != ws_opcode_binary) {
               LIBNDT_EMIT_WARNING_EX(const_this,
-                                     "run_download: unexpected opcode: " << (unsigned int)op);
+                "run_download: unexpected opcode: " << (unsigned int)op);
               break;
             }
           } else {
@@ -1693,11 +1694,11 @@ bool Client::run_download() noexcept {
           if (err != Err::none) {
             if (err != Err::eof) {
               LIBNDT_EMIT_WARNING_EX(const_this,
-                                     "run_download: receiving: " << libndt_perror(err));
+                "run_download: receiving: " << libndt_perror(err));
             }
             break;
           }
-          total_data += (uint64_t)n;  // atomic
+          total_data += (uint64_t)n;   // atomic
           auto now = std::chrono::steady_clock::now();
           std::chrono::duration<double> elapsed = now - begin;
           if (elapsed.count() > max_runtime) {
@@ -1718,10 +1719,10 @@ bool Client::run_download() noexcept {
       }
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> elapsed = now - begin;
-      on_performance(nettest_flag_download,            //
-                     active,                           // atomic
-                     static_cast<double>(total_data),  // atomic
-                     elapsed.count(),                  //
+      on_performance(nettest_flag_download,             //
+                     active,                            // atomic
+                     static_cast<double>(total_data),   // atomic
+                     elapsed.count(),                   //
                      settings_.max_runtime);
       prev = now;
     }
@@ -1820,7 +1821,8 @@ bool Client::run_upload() noexcept {
     // WebSocket requires connections to be serialized. See above.
     Err err = netx_maybews_dial(  //
         settings_.hostname, port,
-        ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept | ws_f_sec_ws_protocol, ws_proto_c2s, "/ndt_protocol",
+        ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
+          | ws_f_sec_ws_protocol, ws_proto_c2s, "/ndt_protocol",
         &sock);
     if (err != Err::none) {
       return false;
@@ -1845,13 +1847,13 @@ bool Client::run_upload() noexcept {
       // as this is more consistent with the fact that thread decrements it
       active += 1;  // atomic
       auto main = [
-        &active,      // reference to atomic
-        begin,        // copy for safety
-        fd,           // copy for safety
-        max_runtime,  // copy for safety
-        const_this,   // const pointer
-        &total_data,  // reference to atomic
-        ws            // copy for safety
+        &active,       // reference to atomic
+        begin,         // copy for safety
+        fd,            // copy for safety
+        max_runtime,   // copy for safety
+        const_this,    // const pointer
+        &total_data,   // reference to atomic
+        ws             // copy for safety
       ]() noexcept {
         constexpr size_t ndt_bufsize = 131072;
         std::unique_ptr<char[]> buf(new char[ndt_bufsize]);
@@ -1861,7 +1863,7 @@ bool Client::run_upload() noexcept {
           auto now = std::chrono::steady_clock::now();
           std::chrono::duration<double> elapsed = now - start;
           LIBNDT_EMIT_DEBUG_EX(const_this,
-                               "run_upload: time to fill random buffer: " << elapsed.count());
+            "run_upload: time to fill random buffer: " << elapsed.count());
         }
         std::string frame = const_this->ws_prepare_frame(
             ws_opcode_binary | ws_fin_flag, (uint8_t *)buf.get(), ndt_bufsize);
@@ -1879,11 +1881,11 @@ bool Client::run_upload() noexcept {
           if (err != Err::none) {
             if (err != Err::broken_pipe) {
               LIBNDT_EMIT_WARNING_EX(const_this,
-                                     "run_upload: sending: " << libndt_perror(err));
+                "run_upload: sending: " << libndt_perror(err));
             }
             break;
           }
-          total_data += (uint64_t)n;  // atomic
+          total_data += (uint64_t)n;   // atomic
           auto now = std::chrono::steady_clock::now();
           std::chrono::duration<double> elapsed = now - begin;
           if (elapsed.count() > max_runtime) {
@@ -1904,10 +1906,10 @@ bool Client::run_upload() noexcept {
       }
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> elapsed = now - begin;
-      on_performance(nettest_flag_upload,              //
-                     active,                           // atomic
-                     static_cast<double>(total_data),  // atomic
-                     elapsed.count(),                  //
+      on_performance(nettest_flag_upload,               //
+                     active,                            // atomic
+                     static_cast<double>(total_data),   // atomic
+                     elapsed.count(),                   //
                      settings_.max_runtime);
       prev = now;
     }
@@ -2015,35 +2017,22 @@ bool Client::ndt7_upload() noexcept {
     constexpr auto measurement_interval = 0.25;
     std::chrono::duration<double> interval = now - latest;
     if (interval.count() > measurement_interval) {
-      nlohmann::json measurement;
-      measurement["AppInfo"] = nlohmann::json();
-      measurement["AppInfo"]["ElapsedTime"] = elapsed.count();
-      measurement["AppInfo"]["NumBytes"] = total;
 #ifdef __linux__
       // Read tcp_info data for the socket and print it as JSON.
-      struct tcp_info tcpinfo {};
-      socklen_t tcpinfolen = sizeof(tcpinfo);
+      struct tcp_info tcpinfo{};
+      socklen_t soerrlen = sizeof(tcpinfo);
       if (sys_getsockopt(sock_, IPPROTO_TCP, TCP_INFO, (void *)&tcpinfo,
-                         &tcpinfolen) == 0) {
-        measurement["TCPInfo"] = nlohmann::json();
-#define XX(lower_, upper_) measurement["TCPInfo"][#upper_] = (uint64_t)tcpinfo.lower_;
+                             &soerrlen) == 0) {
+        nlohmann::json doc;
+        doc["TCPInfo"] = nlohmann::json();
+#define XX(lower_, upper_) doc["TCPInfo"][#upper_] = (uint64_t) tcpinfo.lower_;
         NDT7_ENUM_TCP_INFO
 #undef XX
+        on_result("ndt7", "upload", doc.dump());
       }
-#endif  // __linux__
+#endif // __linux__
       on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
-      std::string json = measurement.dump();
-      on_result("ndt7", "upload", json);
-
-      // Send measurement to the server.
-      Err err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
-                              (uint8_t *)json.data(), json.size());
-      if (err != Err::none) {
-        LIBNDT_EMIT_WARNING("ndt7: cannot send measurement");
-        return false;
-      }
-
       latest = now;
     }
     Err err = netx_sendn(sock_, frame.data(), frame.size());
@@ -2334,7 +2323,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
       }
       if (opcode != ws_opcode_binary) {
         LIBNDT_EMIT_WARNING("msg_ready_legacy: unexpected opcode: "
-                            << (unsigned int)opcode);
+                     << (unsigned int)opcode);
         return false;
       }
       assert(ws_msg_len <= sizeof(buffer));
@@ -2535,71 +2524,71 @@ std::string Client::ws_prepare_frame(uint8_t first_byte, uint8_t *base,
   std::stringstream ss;
   // Message header
   {
-      // First byte
-      {
-          // TODO(bassosimone): add sanity checks for first byte
-          ss << first_byte;
-  LIBNDT_EMIT_DEBUG("ws_prepare_frame: FIN: " << std::boolalpha
-                                              << ((first_byte & ws_fin_flag) != 0));
-  LIBNDT_EMIT_DEBUG(
-      "ws_prepare_frame: reserved: " << (first_byte & ws_reserved_mask));
-  LIBNDT_EMIT_DEBUG("ws_prepare_frame: opcode: " << (first_byte & ws_opcode_mask));
-}
-// Length
-{
-  LIBNDT_EMIT_DEBUG("ws_prepare_frame: mask flag: " << std::boolalpha << true);
-  LIBNDT_EMIT_DEBUG("ws_prepare_frame: length: " << count);
-  // Since this is a client implementation, we always include the MASK flag
-  // as part of the second byte that we send on the wire. Also, the spec
-  // says that we must emit the length in network byte order, which means
-  // in practice that we should use big endian.
-  //
-  // See <https://tools.ietf.org/html/rfc6455#section-5.1>, and
-  //     <https://tools.ietf.org/html/rfc6455#section-5.2>.
-#define LB(value)                                                                  \
-  do {                                                                             \
+    // First byte
+    {
+      // TODO(bassosimone): add sanity checks for first byte
+      ss << first_byte;
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: FIN: " << std::boolalpha
+                                        << ((first_byte & ws_fin_flag) != 0));
+      LIBNDT_EMIT_DEBUG(
+          "ws_prepare_frame: reserved: " << (first_byte & ws_reserved_mask));
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: opcode: " << (first_byte & ws_opcode_mask));
+    }
+    // Length
+    {
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: mask flag: " << std::boolalpha << true);
+      LIBNDT_EMIT_DEBUG("ws_prepare_frame: length: " << count);
+      // Since this is a client implementation, we always include the MASK flag
+      // as part of the second byte that we send on the wire. Also, the spec
+      // says that we must emit the length in network byte order, which means
+      // in practice that we should use big endian.
+      //
+      // See <https://tools.ietf.org/html/rfc6455#section-5.1>, and
+      //     <https://tools.ietf.org/html/rfc6455#section-5.2>.
+#define LB(value)                                                        \
+  do {                                                                   \
     LIBNDT_EMIT_DEBUG("ws_prepare_frame: length byte: " << (unsigned int)(value)); \
-    ss << (value);                                                                 \
+    ss << (value);                                                       \
   } while (0)
-  if (count < 126) {
-    LB((uint8_t)((count & ws_len_mask) | ws_mask_flag));
-  } else if (count < (1 << 16)) {
-    LB((uint8_t)((126 & ws_len_mask) | ws_mask_flag));
-    LB((uint8_t)((count >> 8) & 0xff));
-    LB((uint8_t)(count & 0xff));
-  } else {
-    LB((uint8_t)((127 & ws_len_mask) | ws_mask_flag));
-    LB((uint8_t)((count >> 56) & 0xff));
-    LB((uint8_t)((count >> 48) & 0xff));
-    LB((uint8_t)((count >> 40) & 0xff));
-    LB((uint8_t)((count >> 32) & 0xff));
-    LB((uint8_t)((count >> 24) & 0xff));
-    LB((uint8_t)((count >> 16) & 0xff));
-    LB((uint8_t)((count >> 8) & 0xff));
-    LB((uint8_t)(count & 0xff));
-  }
+      if (count < 126) {
+        LB((uint8_t)((count & ws_len_mask) | ws_mask_flag));
+      } else if (count < (1 << 16)) {
+        LB((uint8_t)((126 & ws_len_mask) | ws_mask_flag));
+        LB((uint8_t)((count >> 8) & 0xff));
+        LB((uint8_t)(count & 0xff));
+      } else {
+        LB((uint8_t)((127 & ws_len_mask) | ws_mask_flag));
+        LB((uint8_t)((count >> 56) & 0xff));
+        LB((uint8_t)((count >> 48) & 0xff));
+        LB((uint8_t)((count >> 40) & 0xff));
+        LB((uint8_t)((count >> 32) & 0xff));
+        LB((uint8_t)((count >> 24) & 0xff));
+        LB((uint8_t)((count >> 16) & 0xff));
+        LB((uint8_t)((count >> 8) & 0xff));
+        LB((uint8_t)(count & 0xff));
+      }
 #undef LB  // Tidy
-}
-// Mask
-{
-  for (Size i = 0; i < mask_size; ++i) {
-    LIBNDT_EMIT_DEBUG("ws_prepare_frame: mask byte: " << (unsigned int)mask[i]
-                                                      << " ('" << mask[i] << "')");
-    ss << (uint8_t)mask[i];
+    }
+    // Mask
+    {
+      for (Size i = 0; i < mask_size; ++i) {
+        LIBNDT_EMIT_DEBUG("ws_prepare_frame: mask byte: " << (unsigned int)mask[i]
+                                                << " ('" << mask[i] << "')");
+        ss << (uint8_t)mask[i];
+      }
+    }
   }
-}
-}
-// As mentioned in the docs of this method, we will not include any
-// body in the frame if base is a null pointer.
-{
-  for (Size i = 0; i < count && base != nullptr; ++i) {
-    // Implementation note: judging from a GCC 8 warning, it seems that using
-    // `^=` causes -Wconversion warnings, while using `= ... ^` does not.
-    base[i] = base[i] ^ mask[i % mask_size];
-    ss << base[i];
+  // As mentioned in the docs of this method, we will not include any
+  // body in the frame if base is a null pointer.
+  {
+    for (Size i = 0; i < count && base != nullptr; ++i) {
+      // Implementation note: judging from a GCC 8 warning, it seems that using
+      // `^=` causes -Wconversion warnings, while using `= ... ^` does not.
+      base[i] = base[i] ^ mask[i % mask_size];
+      ss << base[i];
+    }
   }
-}
-return ss.str();
+  return ss.str();
 }
 
 Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
@@ -2609,7 +2598,7 @@ Err Client::ws_send_frame(Socket sock, uint8_t first_byte, uint8_t *base,
 }
 
 Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
-                              uint8_t *base, Size total, Size *count) const noexcept {
+      uint8_t *base, Size total, Size *count) const noexcept {
   // TODO(bassosimone): in this function we should consider an EOF as an
   // error, because with WebSocket we have explicit FIN mechanism.
   if (opcode == nullptr || fin == nullptr || count == nullptr) {
@@ -2639,7 +2628,7 @@ Err Client::ws_recv_any_frame(Socket sock, uint8_t *opcode, bool *fin,
       return err;
     }
     LIBNDT_EMIT_DEBUG("ws_recv_any_frame: ws header: "
-                      << represent(std::string{(char *)buf, sizeof(buf)}));
+               << represent(std::string{(char *)buf, sizeof(buf)}));
     *fin = (buf[0] & ws_fin_flag) != 0;
     LIBNDT_EMIT_DEBUG("ws_recv_any_frame: FIN: " << std::boolalpha << *fin);
     uint8_t reserved = (uint8_t)(buf[0] & ws_reserved_mask);
@@ -3289,7 +3278,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       return err;
     }
     LIBNDT_EMIT_DEBUG("socks5h: sent this auth request: "
-                      << represent(std::string{auth_request, sizeof(auth_request)}));
+               << represent(std::string{auth_request, sizeof(auth_request)}));
   }
   {
     char auth_response[2] = {
@@ -3318,7 +3307,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       return Err::socks5h;
     }
     LIBNDT_EMIT_DEBUG("socks5h: authenticated with proxy; response: "
-                      << represent(std::string{auth_response, sizeof(auth_response)}));
+               << represent(std::string{auth_response, sizeof(auth_response)}));
   }
   {
     std::string connect_request;
@@ -3378,7 +3367,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       return err;
     }
     LIBNDT_EMIT_DEBUG("socks5h: connect_response_hdr: " << represent(std::string{
-                          connect_response_hdr, sizeof(connect_response_hdr)}));
+                   connect_response_hdr, sizeof(connect_response_hdr)}));
     constexpr uint8_t version = 5;
     if (connect_response_hdr[0] != version) {
       LIBNDT_EMIT_WARNING("socks5h: invalid message version");
@@ -3389,7 +3378,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     if (connect_response_hdr[1] != 0) {
       // TODO(bassosimone): map the socks5 error to a system error
       LIBNDT_EMIT_WARNING("socks5h: connect() failed: "
-                          << (unsigned)(uint8_t)connect_response_hdr[1]);
+                   << (unsigned)(uint8_t)connect_response_hdr[1]);
       netx_closesocket(*sock);
       *sock = (libndt::Socket)-1;
       return Err::io_error;
@@ -3631,7 +3620,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         }
       }
       LIBNDT_EMIT_WARNING("netx_dial: connect() failed: "
-                          << libndt_perror(netx_map_errno(sys_get_last_error())));
+                   << libndt_perror(netx_map_errno(sys_get_last_error())));
       sys_closesocket(*sock);
       *sock = (libndt::Socket)-1;
     }
@@ -3928,7 +3917,7 @@ Err Client::netx_wait_writeable(Socket fd, Timeout timeout) const noexcept {
 }
 
 Err Client::netx_poll(
-    std::vector<pollfd> *pfds, int timeout_msec) const noexcept {
+      std::vector<pollfd> *pfds, int timeout_msec) const noexcept {
   if (pfds == nullptr) {
     LIBNDT_EMIT_WARNING("netx_poll: passed a null vector of descriptors");
     return Err::invalid_argument;
