@@ -2021,7 +2021,7 @@ bool Client::ndt7_upload() noexcept {
     if (interval.count() > measurement_interval) {
       nlohmann::json measurement;
       measurement["AppInfo"] = nlohmann::json();
-      measurement["AppInfo"]["ElapsedTime"] = elapsed_ms.count();
+      measurement["AppInfo"]["ElapsedTime"] = (unsigned int) elapsed_ms.count();
       measurement["AppInfo"]["NumBytes"] = total;
 #ifdef __linux__
       // Read tcp_info data for the socket and print it as JSON.
@@ -2030,7 +2030,7 @@ bool Client::ndt7_upload() noexcept {
       if (sys_getsockopt(sock_, IPPROTO_TCP, TCP_INFO, (void *)&tcpinfo,
                          &tcpinfolen) == 0) {
         measurement["TCPInfo"] = nlohmann::json();
-        measurement["TCPInfo"]["ElapsedTime"] = elapsed_ms.count();
+        measurement["TCPInfo"]["ElapsedTime"] = (unsigned int) elapsed_ms.count();
 #define XX(lower_, upper_) measurement["TCPInfo"][#upper_] = (uint64_t)tcpinfo.lower_;
         NDT7_ENUM_TCP_INFO
 #undef XX
