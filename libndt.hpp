@@ -836,6 +836,63 @@ class Client {
 // the interface and implementation using LIBNDT_NO_INLINE_IMPL.
 #ifndef LIBNDT_NO_INLINE_IMPL
 
+#ifdef __linux__
+#include <linux/tcp.h>
+#define NDT7_ENUM_TCP_INFO \
+  XX(tcpi_state, TcpiState) \
+  XX(tcpi_ca_state, TcpiCaState) \
+  XX(tcpi_retransmits, TcpiRetransmits) \
+  XX(tcpi_probes, TcpiProbes) \
+  XX(tcpi_backoff, TcpiBackoff) \
+  XX(tcpi_options, TcpiOptions) \
+  XX(tcpi_snd_wscale, TcpiSndWscale) \
+  XX(tcpi_rcv_wscale, TcpiRcvWscale) \
+  XX(tcpi_delivery_rate_app_limited, TcpiDeliveryRateAppLimited) \
+  XX(tcpi_rto, TcpiRto) \
+  XX(tcpi_ato, TcpiAto) \
+  XX(tcpi_snd_mss, TcpiSndMss) \
+  XX(tcpi_rcv_mss, TcpiRcvMss) \
+  XX(tcpi_unacked, TcpiUnacked) \
+  XX(tcpi_sacked, TcpiSacked) \
+  XX(tcpi_lost, TcpiLost) \
+  XX(tcpi_retrans, TcpiRetrans) \
+  XX(tcpi_fackets, TcpiFackets) \
+  XX(tcpi_last_data_sent, TcpiLastDataSent) \
+  XX(tcpi_last_ack_sent, TcpiLastAckSent) \
+  XX(tcpi_last_data_recv, TcpiLastDataRecv) \
+  XX(tcpi_last_ack_recv, TcpiLastAckRecv) \
+  XX(tcpi_pmtu, TcpiPmtu) \
+  XX(tcpi_rcv_ssthresh, TcpiRcvSsthresh) \
+  XX(tcpi_rtt, TcpiRtt) \
+  XX(tcpi_rttvar, TcpiRttvar) \
+  XX(tcpi_snd_ssthresh, TcpiSndSsthresh) \
+  XX(tcpi_snd_cwnd, TcpiSndCwnd) \
+  XX(tcpi_advmss, TcpiAdvmss) \
+  XX(tcpi_reordering, TcpiReordering) \
+  XX(tcpi_rcv_rtt, TcpiRcvRtt) \
+  XX(tcpi_rcv_space, TcpiRcvSpace) \
+  XX(tcpi_total_retrans, TcpiTotalRetrans) \
+  XX(tcpi_pacing_rate, TcpiPacingRate) \
+  XX(tcpi_max_pacing_rate, TcpiMaxPacingRate) \
+  XX(tcpi_bytes_acked, TcpiBytesAcked) \
+  XX(tcpi_bytes_received, TcpiBytesReceived) \
+  XX(tcpi_segs_out, TcpiSegsOut) \
+  XX(tcpi_segs_in, TcpiSegsIn) \
+  XX(tcpi_notsent_bytes, TcpiNotsentBytes) \
+  XX(tcpi_min_rtt, TcpiMinRtt) \
+  XX(tcpi_data_segs_in, TcpiDataSegsIn) \
+  XX(tcpi_data_segs_out, TcpiDataSegsOut) \
+  XX(tcpi_delivery_rate, TcpiDeliveryRate) \
+  XX(tcpi_busy_time, TcpiBusyTime) \
+  XX(tcpi_rwnd_limited, TcpiRwndLimited) \
+  XX(tcpi_sndbuf_limited, TcpiSndbufLimited) \
+  XX(tcpi_delivered, TcpiDelivered) \
+  XX(tcpi_delivered_ce, TcpiDeliveredCe) \
+  XX(tcpi_bytes_sent, TcpiBytesSent) \
+  XX(tcpi_bytes_retrans, TcpiBytesRetrans) \
+  XX(tcpi_dsack_dups, TcpiDsackDups) \
+  XX(tcpi_reord_seen, TcpiReordSeen)
+#endif // __linux__
 // Strtonum
 // ````````
 #ifndef LIBNDT_HAVE_STRTONUM
@@ -1953,6 +2010,8 @@ bool Client::ndt7_upload() noexcept {
   for (;;) {
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
+    std::chrono::duration<double, std::micro> elapsed_ms =
+      std::chrono::duration_cast<std::chrono::microseconds>(elapsed);
     if (elapsed.count() > max_upload_time) {
       LIBNDT_EMIT_DEBUG("ndt7: upload has run for enough time");
       break;
@@ -1960,8 +2019,38 @@ bool Client::ndt7_upload() noexcept {
     constexpr auto measurement_interval = 0.25;
     std::chrono::duration<double> interval = now - latest;
     if (interval.count() > measurement_interval) {
+      nlohmann::json measurement;
+      measurement["AppInfo"] = nlohmann::json();
+      measurement["AppInfo"]["ElapsedTime"] = (std::uint64_t) elapsed_ms.count();
+      measurement["AppInfo"]["NumBytes"] = total;
+#ifdef __linux__
+      // Read tcp_info data for the socket and print it as JSON.
+      struct tcp_info tcpinfo{};
+      socklen_t tcpinfolen = sizeof(tcpinfo);
+      if (sys_getsockopt(sock_, IPPROTO_TCP, TCP_INFO, (void *)&tcpinfo,
+                         &tcpinfolen) == 0) {
+        measurement["TCPInfo"] = nlohmann::json();
+        measurement["TCPInfo"]["ElapsedTime"] = (std::uint64_t) elapsed_ms.count();
+#define XX(lower_, upper_) measurement["TCPInfo"][#upper_] = (uint64_t)tcpinfo.lower_;
+        NDT7_ENUM_TCP_INFO
+#undef XX
+      }
+#endif  // __linux__
       on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
+      // This could fail if there are non-utf8 characters. This structure just
+      // contains integers and ASCII strings.
+      std::string json = measurement.dump();
+      on_result("ndt7", "upload", json);
+
+      // Send measurement to the server.
+      Err err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
+                              (uint8_t *)json.data(), json.size());
+      if (err != Err::none) {
+        LIBNDT_EMIT_WARNING("ndt7: cannot send measurement");
+        return false;
+      }
+
       latest = now;
     }
     Err err = netx_sendn(sock_, frame.data(), frame.size());
