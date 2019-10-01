@@ -849,7 +849,7 @@ class Client {
   XX(tcpi_rwnd_limited, TcpiRwndLimited) \
   XX(tcpi_sndbuf_limited, TcpiSndbufLimited) \
   XX(tcpi_bytes_sent, TcpiBytesSent) \
-  XX(tcpi_bytes_retrans, TcpiBytesRetrans) \
+  XX(tcpi_bytes_retrans, TcpiBytesRetrans)
 #endif // __linux__
 // Strtonum
 // ````````
