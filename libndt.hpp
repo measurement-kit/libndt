@@ -2042,7 +2042,6 @@ bool Client::ndt7_upload() noexcept {
       // contains integers and ASCII strings, so we should be good.
       std::string json = measurement.dump();
       on_result("ndt7", "upload", json);
-
       // Send measurement to the server.
       Err err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
                               (uint8_t *)json.data(), json.size());
@@ -2050,7 +2049,6 @@ bool Client::ndt7_upload() noexcept {
         LIBNDT_EMIT_WARNING("ndt7: cannot send measurement");
         return false;
       }
-
       latest = now;
     }
     Err err = netx_sendn(sock_, frame.data(), frame.size());
