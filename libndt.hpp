@@ -1945,7 +1945,7 @@ bool Client::ndt7_download() noexcept {
   }
   // The following value is the maximum amount of bytes that an implementation
   // SHOULD be prepared to handle when receiving ndt7 messages.
-  constexpr Size ndt7_bufsiz = (1 << 17);
+  constexpr Size ndt7_bufsiz = (1 << 24);
   std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
   auto begin = std::chrono::steady_clock::now();
   auto latest = begin;
