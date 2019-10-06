@@ -2010,7 +2010,7 @@ bool Client::ndt7_upload() noexcept {
   for (;;) {
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    std::chrono::duration<double, std::micro> elapsed_ms =
+    std::chrono::duration<double, std::micro> elapsed_usec =
       std::chrono::duration_cast<std::chrono::microseconds>(elapsed);
     if (elapsed.count() > max_upload_time) {
       LIBNDT_EMIT_DEBUG("ndt7: upload has run for enough time");
@@ -2021,7 +2021,7 @@ bool Client::ndt7_upload() noexcept {
     if (interval.count() > measurement_interval) {
       nlohmann::json measurement;
       measurement["AppInfo"] = nlohmann::json();
-      measurement["AppInfo"]["ElapsedTime"] = (std::uint64_t) elapsed_ms.count();
+      measurement["AppInfo"]["ElapsedTime"] = (std::uint64_t) elapsed_usec.count();
       measurement["AppInfo"]["NumBytes"] = total;
 #ifdef __linux__
       // Read tcp_info data for the socket and print it as JSON.
@@ -2030,7 +2030,7 @@ bool Client::ndt7_upload() noexcept {
       if (sys_getsockopt(sock_, IPPROTO_TCP, TCP_INFO, (void *)&tcpinfo,
                          &tcpinfolen) == 0) {
         measurement["TCPInfo"] = nlohmann::json();
-        measurement["TCPInfo"]["ElapsedTime"] = (std::uint64_t) elapsed_ms.count();
+        measurement["TCPInfo"]["ElapsedTime"] = (std::uint64_t) elapsed_usec.count();
 #define XX(lower_, upper_) measurement["TCPInfo"][#upper_] = (uint64_t)tcpinfo.lower_;
         NDT7_ENUM_TCP_INFO
 #undef XX
