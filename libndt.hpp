@@ -1945,7 +1945,7 @@ bool Client::ndt7_download() noexcept {
   }
   // The following value is the maximum amount of bytes that an implementation
   // SHOULD be prepared to handle when receiving ndt7 messages.
-  constexpr Size ndt7_bufsiz = (1 << 17);
+  constexpr Size ndt7_bufsiz = (1 << 24);
   std::unique_ptr<uint8_t[]> buff{new uint8_t[ndt7_bufsiz]};
   auto begin = std::chrono::steady_clock::now();
   auto latest = begin;
@@ -2010,7 +2010,7 @@ bool Client::ndt7_upload() noexcept {
   for (;;) {
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    std::chrono::duration<double, std::micro> elapsed_ms =
+    std::chrono::duration<double, std::micro> elapsed_usec =
       std::chrono::duration_cast<std::chrono::microseconds>(elapsed);
     if (elapsed.count() > max_upload_time) {
       LIBNDT_EMIT_DEBUG("ndt7: upload has run for enough time");
@@ -2021,7 +2021,7 @@ bool Client::ndt7_upload() noexcept {
     if (interval.count() > measurement_interval) {
       nlohmann::json measurement;
       measurement["AppInfo"] = nlohmann::json();
-      measurement["AppInfo"]["ElapsedTime"] = (std::uint64_t) elapsed_ms.count();
+      measurement["AppInfo"]["ElapsedTime"] = (std::uint64_t) elapsed_usec.count();
       measurement["AppInfo"]["NumBytes"] = total;
 #ifdef __linux__
       // Read tcp_info data for the socket and print it as JSON.
@@ -2030,7 +2030,7 @@ bool Client::ndt7_upload() noexcept {
       if (sys_getsockopt(sock_, IPPROTO_TCP, TCP_INFO, (void *)&tcpinfo,
                          &tcpinfolen) == 0) {
         measurement["TCPInfo"] = nlohmann::json();
-        measurement["TCPInfo"]["ElapsedTime"] = (std::uint64_t) elapsed_ms.count();
+        measurement["TCPInfo"]["ElapsedTime"] = (std::uint64_t) elapsed_usec.count();
 #define XX(lower_, upper_) measurement["TCPInfo"][#upper_] = (uint64_t)tcpinfo.lower_;
         NDT7_ENUM_TCP_INFO
 #undef XX
@@ -2039,10 +2039,9 @@ bool Client::ndt7_upload() noexcept {
       on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
       // This could fail if there are non-utf8 characters. This structure just
-      // contains integers and ASCII strings.
+      // contains integers and ASCII strings, so we should be good.
       std::string json = measurement.dump();
       on_result("ndt7", "upload", json);
-
       // Send measurement to the server.
       Err err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
                               (uint8_t *)json.data(), json.size());
@@ -2050,7 +2049,6 @@ bool Client::ndt7_upload() noexcept {
         LIBNDT_EMIT_WARNING("ndt7: cannot send measurement");
         return false;
       }
-
       latest = now;
     }
     Err err = netx_sendn(sock_, frame.data(), frame.size());
