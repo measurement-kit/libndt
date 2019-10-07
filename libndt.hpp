@@ -1544,7 +1544,7 @@ bool Client::recv_results_and_logout() noexcept {
       return false;
     }
     if (code == msg_logout) {
-      this->on_result("summary", "summary", std::move(summary.dump()));
+      this->on_result("summary", "summary", summary.dump());
       return true;
     }
 
@@ -1725,7 +1725,7 @@ bool Client::run_download() noexcept {
       return false;
     }
     if (code == msg_test_finalize) {
-      this->on_result("web100", "web100", std::move(web100.dump()));
+      this->on_result("web100", "web100", web100.dump());
       return true;
     }
     if (!parse_result(this, web100, std::move(message))) {
