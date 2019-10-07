@@ -1144,7 +1144,7 @@ static std::string trim(std::string s) noexcept {
   return s;
 }
 
-static bool emit_result(Client *client, std::string scope,
+static bool parse_result(Client *client, nlohmann::json &summary,
                         std::string message) noexcept {
   std::stringstream ss_line{message};
   std::string line;
@@ -1157,10 +1157,9 @@ static bool emit_result(Client *client, std::string scope,
     }
     if (keyval.size() != 2) {
       LIBNDT_EMIT_WARNING_EX(client, "incorrectly formatted summary message: " << message);
-      return false;
+      continue;
     }
-    client->on_result(scope, trim(std::move(keyval[0])),
-                      trim(std::move(keyval[1])));
+    summary[trim(keyval[0])] = trim(keyval[1]);
   }
   return true;
 }
@@ -1531,6 +1530,9 @@ bool Client::run_tests() noexcept {
 }
 
 bool Client::recv_results_and_logout() noexcept {
+  // Read summary from the server and put it into a JSON object.
+  nlohmann::json summary;
+
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
     MsgType code = MsgType{0};
@@ -1542,13 +1544,15 @@ bool Client::recv_results_and_logout() noexcept {
       return false;
     }
     if (code == msg_logout) {
+      this->on_result("summary", "summary", std::move(summary.dump()));
       return true;
     }
-    if (!emit_result(this, "summary", std::move(message))) {
-      // NOTHING: apparently ndt-cloud returns a free text message in this
-      // case and the warning has already been printed by emit_result(). We
-      // used to fail here but probably it's more robust just to warn.
-    }
+
+    if (!parse_result(this, summary, std::move(message))) {
+        // NOTHING: apparently ndt-cloud returns a free text message in this
+        // case and the warning has already been printed by emit_result(). We
+        // used to fail here but probably it's more robust just to warn.
+      }
   }
   LIBNDT_EMIT_WARNING("recv_results_and_logout: too many msg_results messages");
   return false;  // Too many loops
@@ -1709,6 +1713,7 @@ bool Client::run_download() noexcept {
   }
 
   LIBNDT_EMIT_INFO("reading summary web100 variables");
+  nlohmann::json web100;
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
     MsgType code = MsgType{0};
@@ -1720,9 +1725,10 @@ bool Client::run_download() noexcept {
       return false;
     }
     if (code == msg_test_finalize) {
+      this->on_result("web100", "web100", std::move(web100.dump()));
       return true;
     }
-    if (!emit_result(this, "web100", std::move(message))) {
+    if (!parse_result(this, web100, std::move(message))) {
       // NOTHING: warning already printed by emit_result() and failing the whole
       // test - rather than warning - because of an incorrect data format is
       // probably being too strict in this context. So just keep going.
