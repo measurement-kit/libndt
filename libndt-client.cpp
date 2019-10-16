@@ -36,9 +36,16 @@ void BatchClient::on_result(std::string, std::string,  std::string value) {
   std::cout << value << std::endl;
 }
 // on_performance is overridded to hide the user-friendly output messages.
-void BatchClient::on_performance(libndt::NettestFlags, uint8_t, double, double,
-                                 double) {
-  /* NOTHING */
+void BatchClient::on_performance(libndt::NettestFlags tid, uint8_t nflows,
+                            double measured_bytes,
+                            double elapsed_time, double) {
+  nlohmann::json performance;
+  performance["ElapsedTime"] = elapsed_time;
+  performance["NumFlows"] = nflows;
+  performance["TestId"] = (int)tid;
+  performance["Speed"] = libndt::format_speed_from_kbits(measured_bytes,
+                                                         elapsed_time);
+  std::cout << performance.dump() << std::endl;
 }
 
 
