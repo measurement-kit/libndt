@@ -33,14 +33,18 @@ targets:
   executables:
     libndt-client:
       compile: [libndt-client.cpp]
+    sys_test:
+      compile: [sys_test.cpp]
     tests-curl:
       compile: [curlx_test.cpp]
     tests-libndt:
-      compile: [libndt_test.cpp strtonum_test.cpp]
+      compile: [libndt_test.cpp]
 
 tests:
   curl_unit_tests:
     command: tests-curl
+  sys_unit_tests:
+    command: sys_test
   other_unit_tests:
     command: tests-libndt
   simple_test:

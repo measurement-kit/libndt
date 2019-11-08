@@ -359,6 +359,19 @@ target_link_libraries(
 )
 
 #
+# sys_test
+#
+
+add_executable(
+  sys_test
+  sys_test.cpp
+)
+target_link_libraries(
+  sys_test
+  ${CMAKE_REQUIRED_LIBRARIES}
+)
+
+#
 # tests-curl
 #
 
@@ -377,7 +390,7 @@ target_link_libraries(
 
 add_executable(
   tests-libndt
-  libndt_test.cpp strtonum_test.cpp
+  libndt_test.cpp
 )
 target_link_libraries(
   tests-libndt
@@ -414,4 +427,12 @@ add_test(
 
 add_test(
   NAME simple_test COMMAND libndt-client -download -upload -verbose
+)
+
+#
+# test: sys_unit_tests
+#
+
+add_test(
+  NAME sys_unit_tests COMMAND sys_test
 )
