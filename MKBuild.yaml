@@ -3,6 +3,11 @@ name: libndt
 docker: bassosimone/mk-debian
 docker_tc_disabled: true
 
+amalgamate:
+  libndt.hpp:
+  - libndt/api.hpp
+  - libndt/impl.hpp
+
 function_checks:
 - name: strtonum
   define: LIBNDT_HAVE_STRTONUM
