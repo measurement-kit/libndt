@@ -3,6 +3,12 @@ name: libndt
 docker: bassosimone/mk-debian
 docker_tc_disabled: true
 
+amalgamate:
+  libndt.hpp:
+  - libndt/sys.hpp
+  - libndt/api.hpp
+  - libndt/impl.hpp
+
 function_checks:
 - name: strtonum
   define: LIBNDT_HAVE_STRTONUM
@@ -39,13 +45,6 @@ tests:
     command: tests-libndt
   simple_test:
     command: libndt-client -download -upload -verbose
-  json_test:
-    command: libndt-client -verbose -json -download -upload
-  websocket_test:
-    command: libndt-client -verbose -websocket -download -upload
-  tls_test:
-    command: libndt-client -ca-bundle-path .mkbuild/download/ca-bundle.pem
-                           -verbose -download -upload -tls -json
   modern_test:
     command: libndt-client -ca-bundle-path .mkbuild/download/ca-bundle.pem
                            -verbose -download -upload -tls -json -websocket
