@@ -393,14 +393,6 @@ add_test(
 )
 
 #
-# test: json_test
-#
-
-add_test(
-  NAME json_test COMMAND libndt-client -verbose -json -download -upload
-)
-
-#
 # test: modern_test
 #
 
@@ -422,20 +414,4 @@ add_test(
 
 add_test(
   NAME simple_test COMMAND libndt-client -download -upload -verbose
-)
-
-#
-# test: tls_test
-#
-
-add_test(
-  NAME tls_test COMMAND libndt-client -ca-bundle-path .mkbuild/download/ca-bundle.pem -verbose -download -upload -tls -json
-)
-
-#
-# test: websocket_test
-#
-
-add_test(
-  NAME websocket_test COMMAND libndt-client -verbose -websocket -download -upload
 )
