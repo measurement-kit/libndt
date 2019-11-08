@@ -5,9 +5,9 @@ docker_tc_disabled: true
 
 amalgamate:
   libndt.hpp:
+  - libndt/sys.hpp
   - libndt/api.hpp
   - libndt/impl.hpp
-  - libndt/sys.hpp
 
 function_checks:
 - name: strtonum

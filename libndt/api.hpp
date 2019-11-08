@@ -51,6 +51,9 @@
 #error "Libndt requires nlohmann/json >= 3"
 #endif
 
+// TODO(bassosimone): these headers should be in impl.hpp and here we
+// need to include the bare minimum required by the API
+
 #ifndef _WIN32
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -158,29 +161,6 @@ constexpr Verbosity verbosity_info = Verbosity{2};
 
 /// Emit all log messages.
 constexpr Verbosity verbosity_debug = Verbosity{3};
-
-// Portable types
-// ``````````````
-
-using Size = uint64_t;
-
-constexpr Size SizeMax = UINT64_MAX;
-
-using Ssize = int64_t;
-
-#ifdef _WIN32
-using Socket = SOCKET;
-#else
-using Socket = int;
-#endif
-
-constexpr bool is_socket_valid(Socket s) noexcept {
-#ifdef _WIN32
-  return s != INVALID_SOCKET;
-#else
-  return s >= 0;
-#endif
-}
 
 // Flags for selecting what NDT protocol features to use
 // `````````````````````````````````````````````````````
@@ -368,6 +348,9 @@ enum class Err {
 
 // Client
 // ``````
+
+// Sys contains system dependent routines
+class Sys;
 
 /// NDT client. In the typical usage, you just need to construct a Client,
 /// optionally providing settings, and to call the run() method. More advanced
@@ -739,76 +722,8 @@ class Client {
 
   Verbosity get_verbosity() const noexcept;
 
-  // Dependencies (system)
-  // `````````````````````
-  //
-  // This section contains wrappers for system calls used in regress tests.
-
-  // Access the value of errno in a portable way.
-  virtual int sys_get_last_error() const noexcept;
-
-  // Set the value of errno in a portable way.
-  virtual void sys_set_last_error(int err) const noexcept;
-
-  // getaddrinfo() wrapper that can be mocked in tests.
-  virtual int sys_getaddrinfo(const char *domain, const char *port,
-                              const addrinfo *hints, addrinfo **res) noexcept;
-
-  // getnameinfo() wrapper that can be mocked in tests.
-  virtual int sys_getnameinfo(const sockaddr *sa, socklen_t salen, char *host,
-                              socklen_t hostlen, char *serv, socklen_t servlen,
-                              int flags) noexcept;
-
-  // freeaddrinfo() wrapper that can be mocked in tests.
-  virtual void sys_freeaddrinfo(addrinfo *aip) noexcept;
-
-  // socket() wrapper that can be mocked in tests.
-  virtual Socket sys_socket(int domain, int type, int protocol) noexcept;
-
-  // connect() wrapper that can be mocked in tests.
-  virtual int sys_connect(Socket fd, const sockaddr *sa, socklen_t n) noexcept;
-
-  // recv() wrapper that can be mocked in tests.
-  virtual Ssize sys_recv(Socket fd, void *base, Size count) const noexcept;
-
-  // send() wrapper that can be mocked in tests.
-  virtual Ssize sys_send(
-    Socket fd, const void *base, Size count) const noexcept;
-
-  // shutdown() wrapper that can be mocked in tests.
-  virtual int sys_shutdown(Socket fd, int shutdown_how) noexcept;
-
-  // Portable wrapper for closing a socket descriptor.
-  virtual int sys_closesocket(Socket fd) noexcept;
-
-  // poll() wrapper that can be mocked in tests.
-#ifdef _WIN32
-  virtual int sys_poll(LPWSAPOLLFD fds, ULONG nfds, INT timeout) const noexcept;
-#else
-  virtual int sys_poll(pollfd *fds, nfds_t nfds, int timeout) const noexcept;
-#endif
-
-  // If strtonum() is available, wrapper that can be mocked in tests, else
-  // implementation of strtonum() borrowed from OpenBSD.
-  virtual long long sys_strtonum(const char *s, long long minval,
-                                 long long maxval, const char **err) noexcept;
-
-#ifdef _WIN32
-  // ioctlsocket() wrapper that can be mocked in tests.
-  virtual int sys_ioctlsocket(Socket s, long cmd, u_long *argp) noexcept;
-#else
-  // Wrapper for fcntl() taking just two arguments. Good for getting the
-  // currently value of the socket flags.
-  virtual int sys_fcntl(Socket s, int cmd) noexcept;
-
-  // Wrapper for fcntl() taking three arguments with the third argument
-  // being an integer value. Good for setting O_NONBLOCK on a socket.
-  virtual int sys_fcntl(Socket s, int cmd, int arg) noexcept;
-#endif
-
-  // getsockopt() wrapper that can be mocked in tests.
-  virtual int sys_getsockopt(Socket socket, int level, int name, void *value,
-                             socklen_t *len) noexcept;
+  // Reference to overridable system dependencies
+  std::unique_ptr<Sys> sys{new Sys{}};
 
  private:
   class Winsock {
