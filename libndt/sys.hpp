@@ -18,6 +18,7 @@
 #endif
 
 #include <limits.h>
+#include <stdlib.h>
 
 namespace measurement_kit {
 namespace libndt {
