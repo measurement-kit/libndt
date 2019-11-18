@@ -3,7 +3,6 @@
 // and LICENSE for more information on the copying conditions.
 
 #include "json.hpp"
-#define LIBNDT_NO_INLINE_IMPL  // Impl included in strtonum_test.cpp
 #include "libndt.hpp"
 
 #ifndef _WIN32
@@ -23,6 +22,7 @@
 #include <deque>
 #include <vector>
 
+#define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 #include "json.hpp"
 
