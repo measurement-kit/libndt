@@ -3,7 +3,8 @@
 // and LICENSE for more information on the copying conditions.
 
 #include "json.hpp"
-#include "libndt.hpp"
+
+#include "impl.hpp" // not standalone
 
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
