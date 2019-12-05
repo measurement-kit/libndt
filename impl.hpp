@@ -1,6 +1,12 @@
 #ifndef MEASUREMENT_KIT_LIBNDT_IMPL_HPP
 #define MEASUREMENT_KIT_LIBNDT_IMPL_HPP
 
+#ifndef LIBNDT_STANDALONE
+#include "sys.hpp"
+#include "api.hpp"
+#include "json.hpp"
+#endif
+
 // Implementation section
 // ``````````````````````
 // This is a single header library. In some use cases you may want to split
@@ -381,7 +387,7 @@ bool Client::run() noexcept {
     return false;
   }
   for (auto &fqdn : fqdns) {
-    LIBNDT_EMIT_INFO("trying to connect to " << fqdn);
+    LIBNDT_EMIT_DEBUG("trying to connect to " << fqdn);
     settings_.hostname = fqdn;
     // TODO(bassosimone): we will eventually want to refactor the code to
     // make ndt7 the default and ndt5 the optional case.
@@ -411,12 +417,12 @@ bool Client::run() noexcept {
       LIBNDT_EMIT_WARNING("cannot connect to remote host; trying another one");
       continue;
     }
-    LIBNDT_EMIT_INFO("connected to remote host");
+    LIBNDT_EMIT_DEBUG("connected to remote host");
     if (!send_login()) {
       LIBNDT_EMIT_WARNING("cannot send login; trying another host");
       continue;
     }
-    LIBNDT_EMIT_INFO("sent login message");
+    LIBNDT_EMIT_DEBUG("sent login message");
     if (!recv_kickoff()) {
       LIBNDT_EMIT_WARNING("failed to receive kickoff; trying another host");
       continue;
@@ -425,7 +431,7 @@ bool Client::run() noexcept {
       LIBNDT_EMIT_WARNING("failed to wait in queue; trying another host");
       continue;
     }
-    LIBNDT_EMIT_INFO("authorized to run test");
+    LIBNDT_EMIT_DEBUG("authorized to run test");
     // From this point on we fail the test in case of error rather than
     // trying with another host. The rationale of trying with another host
     // above is that sometimes NDT servers are busy and we would like to
@@ -433,15 +439,15 @@ bool Client::run() noexcept {
     if (!recv_version()) {
       return false;
     }
-    LIBNDT_EMIT_INFO("received server version");
+    LIBNDT_EMIT_DEBUG("received server version");
     if (!recv_tests_ids()) {
       return false;
     }
-    LIBNDT_EMIT_INFO("received tests ids");
+    LIBNDT_EMIT_DEBUG("received tests ids");
     if (!run_tests()) {
       return false;
     }
-    LIBNDT_EMIT_INFO("finished running tests; now reading summary data:");
+    LIBNDT_EMIT_DEBUG("finished running tests; now reading summary data:");
     if (!recv_results_and_logout()) {
       return false;
     }
@@ -555,7 +561,7 @@ bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
       LIBNDT_EMIT_WARNING("cannot access FQDN field: " << exc.what());
       return false;
     }
-    LIBNDT_EMIT_INFO("discovered host: " << fqdn);
+    LIBNDT_EMIT_DEBUG("discovered host: " << fqdn);
     fqdns->push_back(std::move(fqdn));
   }
   return true;
@@ -604,7 +610,7 @@ bool Client::recv_kickoff() noexcept {
     LIBNDT_EMIT_WARNING("recv_kickoff: invalid kickoff message");
     return false;
   }
-  LIBNDT_EMIT_INFO("received kickoff message");
+  LIBNDT_EMIT_DEBUG("received kickoff message");
   return true;
 }
 
