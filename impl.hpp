@@ -301,22 +301,30 @@ static std::string trim(std::string s) noexcept {
   return s;
 }
 
-static bool parse_result(Client *client, nlohmann::json &summary,
+static bool jsonify_web100(Client *client, nlohmann::json &json,
                         std::string message) noexcept {
   std::stringstream ss_line{message};
   std::string line;
+
   while ((std::getline(ss_line, line, '\n'))) {
     std::vector<std::string> keyval;
+
+    // Split for ":" and use the first part as key and all the
+    // subsequent ones as values.
+    size_t pos = 0;
     std::string token;
-    std::stringstream ss_token{line};
-    while ((std::getline(ss_token, token, ':'))) {
-      keyval.push_back(token);
-    }
-    if (keyval.size() != 2) {
-      LIBNDT_EMIT_WARNING_EX(client, "incorrectly formatted summary message: " << message);
+
+    pos = line.find(":");
+    // Fail if there isn't any ":" or the delimiter is at the end of the str.
+    if (pos == std::string::npos || pos == line.length() - 1) {
+      LIBNDT_EMIT_WARNING_EX(client, "incorrectly formatted message: " << message);
       continue;
     }
-    summary[trim(keyval[0])] = trim(keyval[1]);
+
+    keyval.push_back(line.substr(0, pos));
+    keyval.push_back(line.substr(pos + 1));
+
+    json[trim(keyval[0])] = trim(keyval[1]);
   }
   return true;
 }
@@ -451,11 +459,11 @@ bool Client::run() noexcept {
     if (!recv_results_and_logout()) {
       return false;
     }
-    LIBNDT_EMIT_INFO("received logout message");
+    LIBNDT_EMIT_DEBUG("received logout message");
     if (!wait_close()) {
       return false;
     }
-    LIBNDT_EMIT_INFO("connection closed");
+    LIBNDT_EMIT_DEBUG("connection closed");
     return true;
   }
   LIBNDT_EMIT_WARNING("no more hosts to try; failing the test");
@@ -704,15 +712,10 @@ bool Client::recv_results_and_logout() noexcept {
       return false;
     }
     if (code == msg_logout) {
-      this->on_result("summary", "summary", summary.dump());
       return true;
     }
 
-    if (!parse_result(this, summary, std::move(message))) {
-        // NOTHING: apparently ndt-cloud returns a free text message in this
-        // case and the warning has already been printed by emit_result(). We
-        // used to fail here but probably it's more robust just to warn.
-      }
+    LIBNDT_EMIT_INFO("[summary] " + message);
   }
   LIBNDT_EMIT_WARNING("recv_results_and_logout: too many msg_results messages");
   return false;  // Too many loops
@@ -872,7 +875,7 @@ bool Client::run_download() noexcept {
     return false;
   }
 
-  LIBNDT_EMIT_INFO("reading summary web100 variables");
+  LIBNDT_EMIT_DEBUG("reading summary web100 variables");
   nlohmann::json web100;
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
@@ -885,10 +888,12 @@ bool Client::run_download() noexcept {
       return false;
     }
     if (code == msg_test_finalize) {
-      this->on_result("web100", "web100", web100.dump());
+      if (this->get_verbosity() == verbosity_debug) {
+        this->on_result("web100", "web100", web100.dump());
+      }
       return true;
     }
-    if (!parse_result(this, web100, std::move(message))) {
+    if (!jsonify_web100(this, web100, std::move(message))) {
       // NOTHING: warning already printed by emit_result() and failing the whole
       // test - rather than warning - because of an incorrect data format is
       // probably being too strict in this context. So just keep going.
