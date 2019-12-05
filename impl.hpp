@@ -309,8 +309,8 @@ static bool jsonify_web100(Client *client, nlohmann::json &json,
   while ((std::getline(ss_line, line, '\n'))) {
     std::vector<std::string> keyval;
 
-    // Split for ":" and use the first part as key and all the
-    // subsequent ones as values.
+    // Split for ":" and use the first part as key and the rest of the string
+    // as value.
     size_t pos = 0;
     std::string token;
 
