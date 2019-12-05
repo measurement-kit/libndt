@@ -482,12 +482,15 @@ void Client::on_performance(NettestFlags tid, uint8_t nflows,
     percent = (elapsed_time * 100.0 / max_runtime);
   }
   LIBNDT_EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
+                  << std::right << percent << "%] speed: "
+                  << format_speed_from_kbits(measured_bytes, elapsed_time));
+
+  LIBNDT_EMIT_DEBUG("  [" << std::fixed << std::setprecision(0) << std::setw(2)
                   << std::right << percent << "%]"
                   << " elapsed: " << std::fixed << std::setprecision(3)
                   << std::setw(6) << elapsed_time << " s;"
                   << " test_id: " << (int)tid << "; num_flows: " << (int)nflows
-                  << "; speed: "
-                  << format_speed_from_kbits(measured_bytes, elapsed_time));
+                  << "; measured_bytes: " << measured_bytes);
 }
 
 void Client::on_result(std::string scope, std::string name, std::string value) {
