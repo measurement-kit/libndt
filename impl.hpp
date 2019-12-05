@@ -1,6 +1,11 @@
 #ifndef MEASUREMENT_KIT_LIBNDT_IMPL_HPP
 #define MEASUREMENT_KIT_LIBNDT_IMPL_HPP
 
+#ifndef LIBNDT_STANDALONE
+#include "sys.hpp"
+#include "api.hpp"
+#endif // !LIBNDT_STANDALONE
+
 // Implementation section
 // ``````````````````````
 // This is a single header library. In some use cases you may want to split

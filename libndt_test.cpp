@@ -3,7 +3,8 @@
 // and LICENSE for more information on the copying conditions.
 
 #include "json.hpp"
-#include "libndt.hpp"
+
+#include "impl.hpp" // not standalone
 
 #ifndef _WIN32
 #include <arpa/inet.h>

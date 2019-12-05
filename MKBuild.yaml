@@ -5,6 +5,7 @@ docker_tc_disabled: true
 
 amalgamate:
   libndt.hpp:
+  - preamble.hpp
   - sys.hpp
   - api.hpp
   - impl.hpp
@@ -32,13 +33,15 @@ dependencies:
 targets:
   executables:
     libndt-client:
-      compile: [libndt-client.cpp]
+      compile: [libndt-client.cpp api.hpp impl.hpp sys.hpp]
+    libndt-standalone-builds:
+      compile: [libndt-standalone-builds.cpp libndt.hpp]
     sys_test:
-      compile: [sys_test.cpp]
+      compile: [sys_test.cpp api.hpp impl.hpp sys.hpp]
     tests-curl:
-      compile: [curlx_test.cpp]
+      compile: [curlx_test.cpp api.hpp impl.hpp sys.hpp]
     tests-libndt:
-      compile: [libndt_test.cpp]
+      compile: [libndt_test.cpp api.hpp impl.hpp sys.hpp]
 
 tests:
   curl_unit_tests:
