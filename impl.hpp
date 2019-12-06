@@ -300,22 +300,30 @@ static std::string trim(std::string s) noexcept {
   return s;
 }
 
-static bool parse_result(Client *client, nlohmann::json &summary,
+static bool jsonify_web100(Client *client, nlohmann::json &json,
                         std::string message) noexcept {
   std::stringstream ss_line{message};
   std::string line;
+
   while ((std::getline(ss_line, line, '\n'))) {
     std::vector<std::string> keyval;
+
+    // Split for ":" and use the first part as key and the rest of the string
+    // as value.
+    size_t pos = 0;
     std::string token;
-    std::stringstream ss_token{line};
-    while ((std::getline(ss_token, token, ':'))) {
-      keyval.push_back(token);
-    }
-    if (keyval.size() != 2) {
-      LIBNDT_EMIT_WARNING_EX(client, "incorrectly formatted summary message: " << message);
+
+    pos = line.find(":");
+    // Fail if there isn't any ":" or the delimiter is at the end of the str.
+    if (pos == std::string::npos || pos == line.length() - 1) {
+      LIBNDT_EMIT_WARNING_EX(client, "incorrectly formatted message: " << message);
       continue;
     }
-    summary[trim(keyval[0])] = trim(keyval[1]);
+
+    keyval.push_back(line.substr(0, pos));
+    keyval.push_back(line.substr(pos + 1));
+
+    json[trim(keyval[0])] = trim(keyval[1]);
   }
   return true;
 }
@@ -386,7 +394,7 @@ bool Client::run() noexcept {
     return false;
   }
   for (auto &fqdn : fqdns) {
-    LIBNDT_EMIT_INFO("trying to connect to " << fqdn);
+    LIBNDT_EMIT_DEBUG("trying to connect to " << fqdn);
     settings_.hostname = fqdn;
     // TODO(bassosimone): we will eventually want to refactor the code to
     // make ndt7 the default and ndt5 the optional case.
@@ -416,12 +424,12 @@ bool Client::run() noexcept {
       LIBNDT_EMIT_WARNING("cannot connect to remote host; trying another one");
       continue;
     }
-    LIBNDT_EMIT_INFO("connected to remote host");
+    LIBNDT_EMIT_DEBUG("connected to remote host");
     if (!send_login()) {
       LIBNDT_EMIT_WARNING("cannot send login; trying another host");
       continue;
     }
-    LIBNDT_EMIT_INFO("sent login message");
+    LIBNDT_EMIT_DEBUG("sent login message");
     if (!recv_kickoff()) {
       LIBNDT_EMIT_WARNING("failed to receive kickoff; trying another host");
       continue;
@@ -430,7 +438,7 @@ bool Client::run() noexcept {
       LIBNDT_EMIT_WARNING("failed to wait in queue; trying another host");
       continue;
     }
-    LIBNDT_EMIT_INFO("authorized to run test");
+    LIBNDT_EMIT_DEBUG("authorized to run test");
     // From this point on we fail the test in case of error rather than
     // trying with another host. The rationale of trying with another host
     // above is that sometimes NDT servers are busy and we would like to
@@ -438,23 +446,23 @@ bool Client::run() noexcept {
     if (!recv_version()) {
       return false;
     }
-    LIBNDT_EMIT_INFO("received server version");
+    LIBNDT_EMIT_DEBUG("received server version");
     if (!recv_tests_ids()) {
       return false;
     }
-    LIBNDT_EMIT_INFO("received tests ids");
+    LIBNDT_EMIT_DEBUG("received tests ids");
     if (!run_tests()) {
       return false;
     }
-    LIBNDT_EMIT_INFO("finished running tests; now reading summary data:");
+    LIBNDT_EMIT_DEBUG("finished running tests; now reading summary data:");
     if (!recv_results_and_logout()) {
       return false;
     }
-    LIBNDT_EMIT_INFO("received logout message");
+    LIBNDT_EMIT_DEBUG("received logout message");
     if (!wait_close()) {
       return false;
     }
-    LIBNDT_EMIT_INFO("connection closed");
+    LIBNDT_EMIT_DEBUG("connection closed");
     return true;
   }
   LIBNDT_EMIT_WARNING("no more hosts to try; failing the test");
@@ -481,12 +489,15 @@ void Client::on_performance(NettestFlags tid, uint8_t nflows,
     percent = (elapsed_time * 100.0 / max_runtime);
   }
   LIBNDT_EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
+                  << std::right << percent << "%] speed: "
+                  << format_speed_from_kbits(measured_bytes, elapsed_time));
+
+  LIBNDT_EMIT_DEBUG("  [" << std::fixed << std::setprecision(0) << std::setw(2)
                   << std::right << percent << "%]"
                   << " elapsed: " << std::fixed << std::setprecision(3)
                   << std::setw(6) << elapsed_time << " s;"
                   << " test_id: " << (int)tid << "; num_flows: " << (int)nflows
-                  << "; speed: "
-                  << format_speed_from_kbits(measured_bytes, elapsed_time));
+                  << "; measured_bytes: " << measured_bytes);
 }
 
 void Client::on_result(std::string scope, std::string name, std::string value) {
@@ -560,7 +571,7 @@ bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
       LIBNDT_EMIT_WARNING("cannot access FQDN field: " << exc.what());
       return false;
     }
-    LIBNDT_EMIT_INFO("discovered host: " << fqdn);
+    LIBNDT_EMIT_DEBUG("discovered host: " << fqdn);
     fqdns->push_back(std::move(fqdn));
   }
   return true;
@@ -609,7 +620,7 @@ bool Client::recv_kickoff() noexcept {
     LIBNDT_EMIT_WARNING("recv_kickoff: invalid kickoff message");
     return false;
   }
-  LIBNDT_EMIT_INFO("received kickoff message");
+  LIBNDT_EMIT_DEBUG("received kickoff message");
   return true;
 }
 
@@ -700,15 +711,10 @@ bool Client::recv_results_and_logout() noexcept {
       return false;
     }
     if (code == msg_logout) {
-      this->on_result("summary", "summary", summary.dump());
       return true;
     }
 
-    if (!parse_result(this, summary, std::move(message))) {
-        // NOTHING: apparently ndt-cloud returns a free text message in this
-        // case and the warning has already been printed by emit_result(). We
-        // used to fail here but probably it's more robust just to warn.
-      }
+    LIBNDT_EMIT_INFO("[summary] " + message);
   }
   LIBNDT_EMIT_WARNING("recv_results_and_logout: too many msg_results messages");
   return false;  // Too many loops
@@ -868,7 +874,7 @@ bool Client::run_download() noexcept {
     return false;
   }
 
-  LIBNDT_EMIT_INFO("reading summary web100 variables");
+  LIBNDT_EMIT_DEBUG("reading summary web100 variables");
   nlohmann::json web100;
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
@@ -881,10 +887,12 @@ bool Client::run_download() noexcept {
       return false;
     }
     if (code == msg_test_finalize) {
-      this->on_result("web100", "web100", web100.dump());
+      if (this->get_verbosity() == verbosity_debug) {
+        this->on_result("web100", "web100", web100.dump());
+      }
       return true;
     }
-    if (!parse_result(this, web100, std::move(message))) {
+    if (!jsonify_web100(this, web100, std::move(message))) {
       // NOTHING: warning already printed by emit_result() and failing the whole
       // test - rather than warning - because of an incorrect data format is
       // probably being too strict in this context. So just keep going.
@@ -2785,7 +2793,7 @@ again:
   if (err == Err::none) {
     goto again;
   }
-  LIBNDT_EMIT_WARNING(
+  LIBNDT_EMIT_DEBUG(
       "netx_recv: netx_recv_nonblocking() failed: " << libndt_perror(err));
   return err;
 }
@@ -2866,7 +2874,7 @@ again:
   if (err == Err::none) {
     goto again;
   }
-  LIBNDT_EMIT_WARNING(
+  LIBNDT_EMIT_DEBUG(
       "netx_send: netx_send_nonblocking() failed: " << libndt_perror(err));
   return err;
 }
