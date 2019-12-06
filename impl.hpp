@@ -511,6 +511,18 @@ void Client::on_server_busy(std::string msg) {
 // High-level API
 // ``````````````
 
+void Client::summary() noexcept {
+  if (download_speed_ != 0.0) {
+    LIBNDT_EMIT_INFO("Download speed: " << std::setw(8) << download_speed_);
+  }
+  if (upload_speed_ != 0.0) {
+    LIBNDT_EMIT_INFO("Upload speed: " << std::setw(8) << upload_speed_);
+  }
+  if (web100_ != nullptr) {
+    LIBNDT_EMIT_DEBUG(web100_.dump());
+  }
+}
+
 bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
   assert(fqdns != nullptr);
   if (!settings_.hostname.empty()) {
@@ -713,8 +725,6 @@ bool Client::recv_results_and_logout() noexcept {
     if (code == msg_logout) {
       return true;
     }
-
-    LIBNDT_EMIT_INFO("[summary] " + message);
   }
   LIBNDT_EMIT_WARNING("recv_results_and_logout: too many msg_results messages");
   return false;  // Too many loops
@@ -777,7 +787,7 @@ bool Client::run_download() noexcept {
   }
   LIBNDT_EMIT_DEBUG("run_download: got the test_start message");
 
-  double client_side_speed = 0.0;
+  double download_speed_ = 0.0;
   {
     std::atomic<uint8_t> active{0};
     auto begin = std::chrono::steady_clock::now();
@@ -852,7 +862,7 @@ bool Client::run_download() noexcept {
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    client_side_speed = compute_speed_kbits(  //
+    download_speed_ = compute_speed_kbits(  //
         static_cast<double>(total_data), elapsed.count());
   }
 
@@ -870,12 +880,11 @@ bool Client::run_download() noexcept {
     LIBNDT_EMIT_DEBUG("run_download: server computed speed: " << message);
   }
 
-  if (!msg_write(msg_test_msg, std::to_string(client_side_speed))) {
+  if (!msg_write(msg_test_msg, std::to_string(download_speed_))) {
     return false;
   }
 
   LIBNDT_EMIT_DEBUG("reading summary web100 variables");
-  nlohmann::json web100;
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
     MsgType code = MsgType{0};
@@ -888,11 +897,11 @@ bool Client::run_download() noexcept {
     }
     if (code == msg_test_finalize) {
       if (this->get_verbosity() == verbosity_debug) {
-        this->on_result("web100", "web100", web100.dump());
+        this->on_result("web100", "web100", web100_.dump());
       }
       return true;
     }
-    if (!jsonify_web100(this, web100, std::move(message))) {
+    if (!jsonify_web100(this, web100_, std::move(message))) {
       // NOTHING: warning already printed by emit_result() and failing the whole
       // test - rather than warning - because of an incorrect data format is
       // probably being too strict in this context. So just keep going.
@@ -1048,13 +1057,18 @@ bool Client::run_upload() noexcept {
     LIBNDT_EMIT_DEBUG("run_upload: client computed speed: " << client_side_speed);
   }
 
+  upload_speed_ = 0.0;
   {
     std::string message;
     if (!msg_expect(msg_test_msg, &message)) {
       return false;
     }
-    // TODO(bassosimone): emit this information
-    LIBNDT_EMIT_DEBUG("run_upload: server computed speed: " << message);
+    try {
+      upload_speed_ = std::stod(message);
+      LIBNDT_EMIT_DEBUG("run_upload: server computed speed: " << upload_speed_);
+    } catch(std::exception& e) {
+      LIBNDT_EMIT_WARNING("run_upload: cannot convert server-computed speed:" << e.what());
+    }
   }
 
   if (!msg_expect_empty(msg_test_finalize)) {

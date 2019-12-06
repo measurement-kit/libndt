@@ -229,5 +229,8 @@ int main(int, char **argv) {
     client.reset(new libndt::Client{settings});
   }
   bool rv = client->run();
+  if (rv) {
+    client->summary();
+  }
   return (rv) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
