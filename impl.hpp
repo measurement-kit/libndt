@@ -2874,7 +2874,7 @@ again:
   if (err == Err::none) {
     goto again;
   }
-  LIBNDT_EMIT_WARNING(
+  LIBNDT_EMIT_DEBUG(
       "netx_send: netx_send_nonblocking() failed: " << libndt_perror(err));
   return err;
 }
