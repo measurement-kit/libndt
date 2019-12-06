@@ -2793,7 +2793,7 @@ again:
   if (err == Err::none) {
     goto again;
   }
-  LIBNDT_EMIT_WARNING(
+  LIBNDT_EMIT_DEBUG(
       "netx_recv: netx_recv_nonblocking() failed: " << libndt_perror(err));
   return err;
 }
