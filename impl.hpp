@@ -399,7 +399,7 @@ bool Client::run() noexcept {
     // TODO(bassosimone): we will eventually want to refactor the code to
     // make ndt7 the default and ndt5 the optional case.
     if ((settings_.protocol_flags & protocol_flag_ndt7) != 0) {
-      LIBNDT_EMIT_INFO("using the ndt7 protocol");
+      LIBNDT_EMIT_DEBUG("using the ndt7 protocol");
       if ((settings_.nettest_flags & nettest_flag_download) != 0) {
         // TODO(bassosimone): for now we do not try with more than one host
         // when using ndt7 and there's a failure. We may want to do that.
@@ -1102,6 +1102,7 @@ bool Client::run_upload() noexcept {
 // `````````````````
 
 bool Client::ndt7_download() noexcept {
+  LIBNDT_EMIT_INFO("starting ndt7 download test");
   if (!ndt7_connect("/ndt/v7/download")) {
     return false;
   }
@@ -1164,7 +1165,9 @@ bool Client::ndt7_download() noexcept {
           LIBNDT_EMIT_WARNING("Unable to parse message as JSON: " << sinfo);
         }
 
-        on_result("ndt7", "download", std::move(sinfo));
+        if (get_verbosity() == verbosity_debug) {
+          on_result("ndt7", "download", std::move(sinfo));
+        }
       }
     }
     total += count;  // Assume we won't overflow
@@ -1174,6 +1177,7 @@ bool Client::ndt7_download() noexcept {
 }
 
 bool Client::ndt7_upload() noexcept {
+  LIBNDT_EMIT_INFO("starting ndt7 upload test");
   if (!ndt7_connect("/ndt/v7/upload")) {
     return false;
   }
@@ -1236,7 +1240,9 @@ bool Client::ndt7_upload() noexcept {
       // This could fail if there are non-utf8 characters. This structure just
       // contains integers and ASCII strings, so we should be good.
       std::string json = measurement.dump();
-      on_result("ndt7", "upload", json);
+      if (get_verbosity() == verbosity_debug) {
+        on_result("ndt7", "upload", json);
+      }
       // Send measurement to the server.
       Err err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
                               (uint8_t *)json.data(), json.size());
@@ -1278,7 +1284,7 @@ bool Client::ndt7_connect(std::string url_path) noexcept {
   if (err != Err::none) {
     return false;
   }
-  LIBNDT_EMIT_INFO("ndt7: WebSocket connection established");
+  LIBNDT_EMIT_DEBUG("ndt7: WebSocket connection established");
   return true;
 }
 
