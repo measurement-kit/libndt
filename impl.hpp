@@ -512,14 +512,20 @@ void Client::on_server_busy(std::string msg) {
 // ``````````````
 
 void Client::summary() noexcept {
+  LIBNDT_EMIT_INFO("Test results:");
   if (download_speed_ != 0.0) {
-    LIBNDT_EMIT_INFO("Download speed: " << std::setw(8) << download_speed_);
+    LIBNDT_EMIT_INFO("Download speed: " << std::setw(8) << std::right << format_speed_from_kbits(download_speed_));
   }
   if (upload_speed_ != 0.0) {
-    LIBNDT_EMIT_INFO("Upload speed: " << std::setw(8) << upload_speed_);
+    LIBNDT_EMIT_INFO("Upload speed: " << std::setw(8) << std::right << format_speed_from_kbits(upload_speed_));
   }
   if (web100_ != nullptr) {
     LIBNDT_EMIT_DEBUG(web100_.dump());
+
+    if (retransmission_rate_ != 0.0) {
+      LIBNDT_EMIT_INFO("Retransmission rate: " 
+        << (retransmission_rate_ * 100) << "%");
+    }
   }
 }
 
@@ -787,7 +793,7 @@ bool Client::run_download() noexcept {
   }
   LIBNDT_EMIT_DEBUG("run_download: got the test_start message");
 
-  double download_speed_ = 0.0;
+  download_speed_ = 0.0;
   {
     std::atomic<uint8_t> active{0};
     auto begin = std::chrono::steady_clock::now();
@@ -862,7 +868,7 @@ bool Client::run_download() noexcept {
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    download_speed_ = compute_speed_kbits(  //
+    this->download_speed_ = compute_speed_kbits(  //
         static_cast<double>(total_data), elapsed.count());
   }
 
@@ -901,10 +907,16 @@ bool Client::run_download() noexcept {
       }
       return true;
     }
-    if (!jsonify_web100(this, web100_, std::move(message))) {
-      // NOTHING: warning already printed by emit_result() and failing the whole
-      // test - rather than warning - because of an incorrect data format is
-      // probably being too strict in this context. So just keep going.
+    if (jsonify_web100(this, web100_, std::move(message))) {
+      // Calculate retransmission rate (BytesRetrans / BytesSent).
+      try {
+        double bytes_retrans = std::stod(web100_["TCPInfo.BytesRetrans"].get<std::string>());
+        double bytes_sent = std::stod(web100_["TCPInfo.BytesSent"].get<std::string>());
+        retransmission_rate_ = bytes_retrans / bytes_sent;
+      } catch(std::exception& e) {
+        LIBNDT_EMIT_DEBUG("TCPInfo.BytesRetrans and TCPInfo.BytesSent \
+        not available, cannot calculate retransmission rate.");
+      }   
     }
   }
 

@@ -744,6 +744,7 @@ class Client {
   nlohmann::json web100_;
   double download_speed_;
   double upload_speed_;
+  double retransmission_rate_;
 
   std::map<Socket, SSL *> fd_to_ssl_;
 #ifdef _WIN32
