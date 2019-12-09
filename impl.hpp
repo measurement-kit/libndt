@@ -512,20 +512,27 @@ void Client::on_server_busy(std::string msg) {
 // ``````````````
 
 void Client::summary() noexcept {
-  LIBNDT_EMIT_INFO("Test results:");
+  LIBNDT_EMIT_INFO("[Test results]");
   if (download_speed_ != 0.0) {
-    LIBNDT_EMIT_INFO("Download speed: " << std::setw(8) << std::right << format_speed_from_kbits(download_speed_));
+    LIBNDT_EMIT_INFO("Download speed: " << std::setw(8) << std::right
+      << format_speed_from_kbits(download_speed_));
   }
   if (upload_speed_ != 0.0) {
-    LIBNDT_EMIT_INFO("Upload speed: " << std::setw(8) << std::right << format_speed_from_kbits(upload_speed_));
+    LIBNDT_EMIT_INFO("Upload speed: " << std::setw(8) << std::right
+      << format_speed_from_kbits(upload_speed_));
+  }
+  if (download_retrans_ != 0.0) {
+      LIBNDT_EMIT_INFO("Download retransmission: "
+        << std::fixed << std::setprecision(2)
+        << (download_retrans_ * 100) << "%");
+  }
+  if (upload_retrans_ != 0.0) {
+      LIBNDT_EMIT_INFO("Upload retransmission: "
+        << std::fixed << std::setprecision(2)
+        << (upload_retrans_ * 100) << "%");
   }
   if (web100_ != nullptr) {
-    LIBNDT_EMIT_DEBUG(web100_.dump());
-
-    if (retransmission_rate_ != 0.0) {
-      LIBNDT_EMIT_INFO("Retransmission rate: " 
-        << (retransmission_rate_ * 100) << "%");
-    }
+    LIBNDT_EMIT_DEBUG("web100: " << web100_.dump());
   }
 }
 
@@ -794,6 +801,7 @@ bool Client::run_download() noexcept {
   LIBNDT_EMIT_DEBUG("run_download: got the test_start message");
 
   download_speed_ = 0.0;
+  download_retrans_ = 0.0;
   {
     std::atomic<uint8_t> active{0};
     auto begin = std::chrono::steady_clock::now();
@@ -912,7 +920,7 @@ bool Client::run_download() noexcept {
       try {
         double bytes_retrans = std::stod(web100_["TCPInfo.BytesRetrans"].get<std::string>());
         double bytes_sent = std::stod(web100_["TCPInfo.BytesSent"].get<std::string>());
-        retransmission_rate_ = bytes_retrans / bytes_sent;
+        download_retrans_ = bytes_retrans / bytes_sent;
       } catch(std::exception& e) {
         LIBNDT_EMIT_DEBUG("TCPInfo.BytesRetrans and TCPInfo.BytesSent \
         not available, cannot calculate retransmission rate.");
@@ -1104,9 +1112,12 @@ bool Client::ndt7_download() noexcept {
   auto begin = std::chrono::steady_clock::now();
   auto latest = begin;
   Size total = 0;
+  std::chrono::duration<double> elapsed;
+  download_speed_ = 0.0;
+  download_retrans_ = 0.0;
   for (;;) {
     auto now = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed = now - begin;
+    elapsed = now - begin;
     if (elapsed.count() > settings_.max_runtime) {
       LIBNDT_EMIT_WARNING("ndt7: download running for too much time");
       return false;
@@ -1136,11 +1147,29 @@ bool Client::ndt7_download() noexcept {
       // is not going to be a real problem, it's just a theoric issue.
       if (count <= SIZE_MAX) {
         std::string sinfo{(const char *)buff.get(), (size_t)count};
+        // Try parsing the received message as JSON.
+        try {
+          nlohmann::json appinfo = nlohmann::json::parse(sinfo);
+
+          // Calculate retransmission rate (BytesRetrans / BytesSent).
+          try {
+            nlohmann::json tcpinfo_json = appinfo["TCPInfo"];
+            double bytes_retrans = (double) tcpinfo_json["BytesRetrans"].get<int64_t>();
+            double bytes_sent = (double) tcpinfo_json["BytesSent"].get<int64_t>();
+            download_retrans_ = bytes_retrans / bytes_sent;
+          } catch(std::exception& e) {
+            LIBNDT_EMIT_WARNING("TCPInfo not available, cannot calculate retransmission rate: " << e.what());
+          }
+        } catch (nlohmann::json::parse_error& e) {
+          LIBNDT_EMIT_WARNING("Unable to parse message as JSON: " << sinfo);
+        }
+
         on_result("ndt7", "download", std::move(sinfo));
       }
     }
     total += count;  // Assume we won't overflow
   }
+  download_speed_ = compute_speed_kbits(static_cast<double>(total), elapsed.count());
   return true;
 }
 
@@ -1158,12 +1187,14 @@ bool Client::ndt7_upload() noexcept {
   constexpr double max_upload_time = 10.0;
   auto begin = std::chrono::steady_clock::now();
   auto latest = begin;
+  std::chrono::duration<double> elapsed;
   Size total = 0;
+  upload_speed_ = 0.0;
   std::string frame = ws_prepare_frame(ws_opcode_binary | ws_fin_flag,
                                        buff.get(), ndt7_bufsiz);
   for (;;) {
     auto now = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed = now - begin;
+    elapsed = now - begin;
     std::chrono::duration<double, std::micro> elapsed_usec =
       std::chrono::duration_cast<std::chrono::microseconds>(elapsed);
     if (elapsed.count() > max_upload_time) {
@@ -1189,6 +1220,16 @@ bool Client::ndt7_upload() noexcept {
         NDT7_ENUM_TCP_INFO
 #undef XX
       }
+
+      // Calculate retransmission rate.
+      try {
+        nlohmann::json tcpinfo_json = measurement["TCPInfo"];
+        double bytes_retrans = (double) tcpinfo_json["TcpiBytesRetrans"].get<int64_t>();
+        double bytes_sent = (double) tcpinfo_json["TcpiBytesSent"].get<int64_t>();
+        upload_retrans_ = bytes_retrans / bytes_sent;
+      } catch (std::exception& e) {
+        LIBNDT_EMIT_WARNING("Cannot calculate retransmission rate: " << e.what());
+      }
 #endif  // __linux__
       on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
@@ -1212,6 +1253,7 @@ bool Client::ndt7_upload() noexcept {
     }
     total += ndt7_bufsiz;  // Assume we won't overflow
   }
+  upload_speed_ = compute_speed_kbits(static_cast<double>(total), elapsed.count());
   return true;
 }
 

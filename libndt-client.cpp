@@ -230,6 +230,7 @@ int main(int, char **argv) {
   }
   bool rv = client->run();
   if (rv) {
+    std::cout << std::endl;
     client->summary();
   }
   return (rv) ? EXIT_SUCCESS : EXIT_FAILURE;
