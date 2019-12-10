@@ -924,7 +924,7 @@ bool Client::run_download() noexcept {
         double bytes_retrans = std::stod(web100["TCPInfo.BytesRetrans"].get<std::string>());
         double bytes_sent = std::stod(web100["TCPInfo.BytesSent"].get<std::string>());
         summary_.download_retrans = bytes_retrans / bytes_sent;
-      } catch(std::exception& e) {
+      } catch(const std::exception& e) {
         LIBNDT_EMIT_DEBUG("TCPInfo.BytesRetrans and TCPInfo.BytesSent \
         not available, cannot calculate retransmission rate.");
       }
@@ -932,7 +932,7 @@ bool Client::run_download() noexcept {
       // Use MinRTT as "latency".
       try {
         summary_.min_rtt = (uint32_t) std::stoul(web100["TCPInfo.MinRTT"].get<std::string>());
-      } catch(std::exception& e) {
+      } catch(const std::exception& e) {
         LIBNDT_EMIT_WARNING("Unable to read TCPInfo.MinRTT: " << e.what());
       }
 
@@ -1102,7 +1102,7 @@ bool Client::run_upload() noexcept {
     try {
       summary_.upload_speed = std::stod(message);
       LIBNDT_EMIT_DEBUG("run_upload: server computed speed: " << summary_.upload_speed);
-    } catch(std::exception& e) {
+    } catch(const std::exception& e) {
       LIBNDT_EMIT_WARNING("run_upload: cannot convert server-computed speed:" << e.what());
     }
   }
@@ -1176,7 +1176,7 @@ bool Client::ndt7_download() noexcept {
             double bytes_sent = (double) tcpinfo_json["BytesSent"].get<int64_t>();
             summary_.download_retrans = bytes_retrans / bytes_sent;
             summary_.min_rtt = tcpinfo_json["MinRTT"].get<uint32_t>();
-          } catch(std::exception& e) {
+          } catch(const std::exception& e) {
             LIBNDT_EMIT_WARNING("TCPInfo not available, cannot get \
               retransmission rate and latency: " << e.what());
           }
@@ -1250,7 +1250,7 @@ bool Client::ndt7_upload() noexcept {
         double bytes_retrans = (double) tcpinfo_json["TcpiBytesRetrans"].get<int64_t>();
         double bytes_sent = (double) tcpinfo_json["TcpiBytesSent"].get<int64_t>();
         summary_.upload_retrans = bytes_retrans / bytes_sent;
-      } catch (std::exception& e) {
+      } catch (const std::exception& e) {
         LIBNDT_EMIT_WARNING("Cannot calculate retransmission rate: " << e.what());
       }
 #endif  // __linux__
