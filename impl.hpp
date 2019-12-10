@@ -514,12 +514,16 @@ void Client::on_server_busy(std::string msg) {
 void Client::summary() noexcept {
   LIBNDT_EMIT_INFO("[Test results]");
   if (summary_.download_speed != 0.0) {
-    LIBNDT_EMIT_INFO("Download speed: " << std::setw(8) << std::right
+    LIBNDT_EMIT_INFO("Download speed: "
       << format_speed_from_kbits(summary_.download_speed));
   }
   if (summary_.upload_speed != 0.0) {
-    LIBNDT_EMIT_INFO("Upload speed: " << std::setw(8) << std::right
+    LIBNDT_EMIT_INFO("Upload speed: "
       << format_speed_from_kbits(summary_.upload_speed));
+  }
+  if (summary_.min_rtt != 0) {
+    LIBNDT_EMIT_INFO("Latency: " << std::fixed << std::setprecision(2)
+      << (summary_.min_rtt / 1000.0) << " ms");
   }
   if (summary_.download_retrans != 0.0) {
       LIBNDT_EMIT_INFO("Download retransmission: "
@@ -802,6 +806,7 @@ bool Client::run_download() noexcept {
 
   summary_.download_speed = 0.0;
   summary_.download_retrans = 0.0;
+  summary_.min_rtt = 0;
   {
     std::atomic<uint8_t> active{0};
     auto begin = std::chrono::steady_clock::now();
@@ -913,9 +918,7 @@ bool Client::run_download() noexcept {
       if (this->get_verbosity() == verbosity_debug) {
         this->on_result("web100", "web100", web100.dump());
       }
-      return true;
-    }
-    if (jsonify_web100(this, web100, std::move(message))) {
+
       // Calculate retransmission rate (BytesRetrans / BytesSent).
       try {
         double bytes_retrans = std::stod(web100["TCPInfo.BytesRetrans"].get<std::string>());
@@ -924,7 +927,20 @@ bool Client::run_download() noexcept {
       } catch(std::exception& e) {
         LIBNDT_EMIT_DEBUG("TCPInfo.BytesRetrans and TCPInfo.BytesSent \
         not available, cannot calculate retransmission rate.");
-      }   
+      }
+
+      // Use MinRTT as "latency".
+      try {
+        summary_.min_rtt = (uint32_t) std::stoul(web100["TCPInfo.MinRTT"].get<std::string>());
+      } catch(std::exception& e) {
+        LIBNDT_EMIT_WARNING("Unable to read TCPInfo.MinRTT: " << e.what());
+      }
+
+      return true;
+    }
+    if (!jsonify_web100(this, web100, std::move(message))) {
+      // NOTHING - jsonify_web100 warns the user already if it cannot parse
+      // the message.
     }
   }
 

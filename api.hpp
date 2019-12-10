@@ -747,6 +747,7 @@ class Client {
     double upload_speed;
     double download_retrans;
     double upload_retrans;
+    uint32_t min_rtt;
   };
   Summary summary_;
 
