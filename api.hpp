@@ -742,14 +742,14 @@ class Client {
   Settings settings_;
 
   nlohmann::json web100;
-  struct Summary {  
+  struct summary_data {  
     double download_speed;
     double upload_speed;
     double download_retrans;
     double upload_retrans;
     uint32_t min_rtt;
   };
-  Summary summary_;
+  summary_data summary_;
 
   std::map<Socket, SSL *> fd_to_ssl_;
 #ifdef _WIN32
