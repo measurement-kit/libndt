@@ -741,11 +741,14 @@ class Client {
   std::vector<NettestFlags> granted_suite_;
   Settings settings_;
 
-  nlohmann::json web100_;
-  double download_speed_;
-  double upload_speed_;
-  double download_retrans_;
-  double upload_retrans_;
+  struct Summary {
+    nlohmann::json web100;
+    double download_speed;
+    double upload_speed;
+    double download_retrans;
+    double upload_retrans;
+  };
+  Summary summary_;
 
   std::map<Socket, SSL *> fd_to_ssl_;
 #ifdef _WIN32
