@@ -881,7 +881,7 @@ bool Client::run_download() noexcept {
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    summary_.download_speed = compute_speed_kbits(  //
+    summary_.download_speed = compute_speed_kbits(
         static_cast<double>(total_data), elapsed.count());
   }
 
