@@ -1132,6 +1132,7 @@ bool Client::ndt7_download() noexcept {
   std::chrono::duration<double> elapsed;
   summary_.download_speed = 0.0;
   summary_.download_retrans = 0.0;
+  summary_.min_rtt = 0;
   for (;;) {
     auto now = std::chrono::steady_clock::now();
     elapsed = now - begin;
@@ -1174,8 +1175,10 @@ bool Client::ndt7_download() noexcept {
             double bytes_retrans = (double) tcpinfo_json["BytesRetrans"].get<int64_t>();
             double bytes_sent = (double) tcpinfo_json["BytesSent"].get<int64_t>();
             summary_.download_retrans = bytes_retrans / bytes_sent;
+            summary_.min_rtt = tcpinfo_json["MinRTT"].get<uint32_t>();
           } catch(std::exception& e) {
-            LIBNDT_EMIT_WARNING("TCPInfo not available, cannot calculate retransmission rate: " << e.what());
+            LIBNDT_EMIT_WARNING("TCPInfo not available, cannot get \
+              retransmission rate and latency: " << e.what());
           }
         } catch (nlohmann::json::parse_error& e) {
           LIBNDT_EMIT_WARNING("Unable to parse message as JSON: " << sinfo);
