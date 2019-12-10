@@ -531,8 +531,8 @@ void Client::summary() noexcept {
         << std::fixed << std::setprecision(2)
         << (summary_.upload_retrans * 100) << "%");
   }
-  if (summary_.web100 != nullptr) {
-    LIBNDT_EMIT_DEBUG("web100: " << summary_.web100.dump());
+  if (web100 != nullptr) {
+    LIBNDT_EMIT_DEBUG("web100: " << web100.dump());
   }
 }
 
@@ -911,15 +911,15 @@ bool Client::run_download() noexcept {
     }
     if (code == msg_test_finalize) {
       if (this->get_verbosity() == verbosity_debug) {
-        this->on_result("web100", "web100", summary_.web100.dump());
+        this->on_result("web100", "web100", web100.dump());
       }
       return true;
     }
-    if (jsonify_web100(this, summary_.web100, std::move(message))) {
+    if (jsonify_web100(this, web100, std::move(message))) {
       // Calculate retransmission rate (BytesRetrans / BytesSent).
       try {
-        double bytes_retrans = std::stod(summary_.web100["TCPInfo.BytesRetrans"].get<std::string>());
-        double bytes_sent = std::stod(summary_.web100["TCPInfo.BytesSent"].get<std::string>());
+        double bytes_retrans = std::stod(web100["TCPInfo.BytesRetrans"].get<std::string>());
+        double bytes_sent = std::stod(web100["TCPInfo.BytesSent"].get<std::string>());
         summary_.download_retrans = bytes_retrans / bytes_sent;
       } catch(std::exception& e) {
         LIBNDT_EMIT_DEBUG("TCPInfo.BytesRetrans and TCPInfo.BytesSent \

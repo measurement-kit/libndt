@@ -741,8 +741,8 @@ class Client {
   std::vector<NettestFlags> granted_suite_;
   Settings settings_;
 
-  struct Summary {
-    nlohmann::json web100;
+  nlohmann::json web100;
+  struct Summary {  
     double download_speed;
     double upload_speed;
     double download_retrans;
