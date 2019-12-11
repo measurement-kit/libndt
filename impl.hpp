@@ -399,7 +399,7 @@ bool Client::run() noexcept {
     // TODO(bassosimone): we will eventually want to refactor the code to
     // make ndt7 the default and ndt5 the optional case.
     if ((settings_.protocol_flags & protocol_flag_ndt7) != 0) {
-      LIBNDT_EMIT_INFO("using the ndt7 protocol");
+      LIBNDT_EMIT_DEBUG("using the ndt7 protocol");
       if ((settings_.nettest_flags & nettest_flag_download) != 0) {
         // TODO(bassosimone): for now we do not try with more than one host
         // when using ndt7 and there's a failure. We may want to do that.
@@ -510,6 +510,35 @@ void Client::on_server_busy(std::string msg) {
 
 // High-level API
 // ``````````````
+
+void Client::summary() noexcept {
+  LIBNDT_EMIT_INFO(std::endl << "[Test results]");
+  if (summary_.download_speed != 0.0) {
+    LIBNDT_EMIT_INFO("Download speed: "
+      << format_speed_from_kbits(summary_.download_speed));
+  }
+  if (summary_.upload_speed != 0.0) {
+    LIBNDT_EMIT_INFO("Upload speed: "
+      << format_speed_from_kbits(summary_.upload_speed));
+  }
+  if (summary_.min_rtt != 0) {
+    LIBNDT_EMIT_INFO("Latency: " << std::fixed << std::setprecision(2)
+      << (summary_.min_rtt / 1000.0) << " ms");
+  }
+  if (summary_.download_retrans != 0.0) {
+      LIBNDT_EMIT_INFO("Download retransmission: "
+        << std::fixed << std::setprecision(2)
+        << (summary_.download_retrans * 100) << "%");
+  }
+  if (summary_.upload_retrans != 0.0) {
+      LIBNDT_EMIT_INFO("Upload retransmission: "
+        << std::fixed << std::setprecision(2)
+        << (summary_.upload_retrans * 100) << "%");
+  }
+  if (web100 != nullptr) {
+    LIBNDT_EMIT_DEBUG("web100: " << web100.dump());
+  }
+}
 
 bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
   assert(fqdns != nullptr);
@@ -713,8 +742,6 @@ bool Client::recv_results_and_logout() noexcept {
     if (code == msg_logout) {
       return true;
     }
-
-    LIBNDT_EMIT_INFO("[summary] " + message);
   }
   LIBNDT_EMIT_WARNING("recv_results_and_logout: too many msg_results messages");
   return false;  // Too many loops
@@ -777,7 +804,9 @@ bool Client::run_download() noexcept {
   }
   LIBNDT_EMIT_DEBUG("run_download: got the test_start message");
 
-  double client_side_speed = 0.0;
+  summary_.download_speed = 0.0;
+  summary_.download_retrans = 0.0;
+  summary_.min_rtt = 0;
   {
     std::atomic<uint8_t> active{0};
     auto begin = std::chrono::steady_clock::now();
@@ -852,7 +881,7 @@ bool Client::run_download() noexcept {
     }
     auto now = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = now - begin;
-    client_side_speed = compute_speed_kbits(  //
+    summary_.download_speed = compute_speed_kbits(
         static_cast<double>(total_data), elapsed.count());
   }
 
@@ -870,12 +899,11 @@ bool Client::run_download() noexcept {
     LIBNDT_EMIT_DEBUG("run_download: server computed speed: " << message);
   }
 
-  if (!msg_write(msg_test_msg, std::to_string(client_side_speed))) {
+  if (!msg_write(msg_test_msg, std::to_string(summary_.download_speed))) {
     return false;
   }
 
   LIBNDT_EMIT_DEBUG("reading summary web100 variables");
-  nlohmann::json web100;
   for (auto i = 0; i < max_loops; ++i) {  // don't loop forever
     std::string message;
     MsgType code = MsgType{0};
@@ -890,12 +918,29 @@ bool Client::run_download() noexcept {
       if (this->get_verbosity() == verbosity_debug) {
         this->on_result("web100", "web100", web100.dump());
       }
+
+      // Calculate retransmission rate (BytesRetrans / BytesSent).
+      try {
+        double bytes_retrans = std::stod(web100["TCPInfo.BytesRetrans"].get<std::string>());
+        double bytes_sent = std::stod(web100["TCPInfo.BytesSent"].get<std::string>());
+        summary_.download_retrans = (bytes_sent != 0.0) ? bytes_retrans / bytes_sent : 0.0;
+      } catch(const std::exception& e) {
+        LIBNDT_EMIT_DEBUG("TCPInfo.BytesRetrans and TCPInfo.BytesSent \
+        not available, cannot calculate retransmission rate.");
+      }
+
+      // Use MinRTT as "latency".
+      try {
+        summary_.min_rtt = (uint32_t) std::stoul(web100["TCPInfo.MinRTT"].get<std::string>());
+      } catch(const std::exception& e) {
+        LIBNDT_EMIT_WARNING("Unable to read TCPInfo.MinRTT: " << e.what());
+      }
+
       return true;
     }
     if (!jsonify_web100(this, web100, std::move(message))) {
-      // NOTHING: warning already printed by emit_result() and failing the whole
-      // test - rather than warning - because of an incorrect data format is
-      // probably being too strict in this context. So just keep going.
+      // NOTHING - jsonify_web100 warns the user already if it cannot parse
+      // the message.
     }
   }
 
@@ -1048,13 +1093,18 @@ bool Client::run_upload() noexcept {
     LIBNDT_EMIT_DEBUG("run_upload: client computed speed: " << client_side_speed);
   }
 
+  summary_.upload_speed = 0.0;
   {
     std::string message;
     if (!msg_expect(msg_test_msg, &message)) {
       return false;
     }
-    // TODO(bassosimone): emit this information
-    LIBNDT_EMIT_DEBUG("run_upload: server computed speed: " << message);
+    try {
+      summary_.upload_speed = std::stod(message);
+      LIBNDT_EMIT_DEBUG("run_upload: server computed speed: " << summary_.upload_speed);
+    } catch(const std::exception& e) {
+      LIBNDT_EMIT_WARNING("run_upload: cannot convert server-computed speed:" << e.what());
+    }
   }
 
   if (!msg_expect_empty(msg_test_finalize)) {
@@ -1068,6 +1118,7 @@ bool Client::run_upload() noexcept {
 // `````````````````
 
 bool Client::ndt7_download() noexcept {
+  LIBNDT_EMIT_INFO("starting ndt7 download test");
   if (!ndt7_connect("/ndt/v7/download")) {
     return false;
   }
@@ -1078,9 +1129,13 @@ bool Client::ndt7_download() noexcept {
   auto begin = std::chrono::steady_clock::now();
   auto latest = begin;
   Size total = 0;
+  std::chrono::duration<double> elapsed;
+  summary_.download_speed = 0.0;
+  summary_.download_retrans = 0.0;
+  summary_.min_rtt = 0;
   for (;;) {
     auto now = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed = now - begin;
+    elapsed = now - begin;
     if (elapsed.count() > settings_.max_runtime) {
       LIBNDT_EMIT_WARNING("ndt7: download running for too much time");
       return false;
@@ -1110,15 +1165,38 @@ bool Client::ndt7_download() noexcept {
       // is not going to be a real problem, it's just a theoric issue.
       if (count <= SIZE_MAX) {
         std::string sinfo{(const char *)buff.get(), (size_t)count};
-        on_result("ndt7", "download", std::move(sinfo));
+        // Try parsing the received message as JSON.
+        try {
+          nlohmann::json appinfo = nlohmann::json::parse(sinfo);
+
+          // Calculate retransmission rate (BytesRetrans / BytesSent).
+          try {
+            nlohmann::json tcpinfo_json = appinfo["TCPInfo"];
+            double bytes_retrans = (double) tcpinfo_json["BytesRetrans"].get<int64_t>();
+            double bytes_sent = (double) tcpinfo_json["BytesSent"].get<int64_t>();
+            summary_.download_retrans = (bytes_sent != 0.0) ? bytes_retrans / bytes_sent : 0.0;
+            summary_.min_rtt = tcpinfo_json["MinRTT"].get<uint32_t>();
+          } catch(const std::exception& e) {
+            LIBNDT_EMIT_WARNING("TCPInfo not available, cannot get \
+              retransmission rate and latency: " << e.what());
+          }
+        } catch (nlohmann::json::parse_error& e) {
+          LIBNDT_EMIT_WARNING("Unable to parse message as JSON: " << sinfo);
+        }
+
+        if (get_verbosity() == verbosity_debug) {
+          on_result("ndt7", "download", std::move(sinfo));
+        }
       }
     }
     total += count;  // Assume we won't overflow
   }
+  summary_.download_speed = compute_speed_kbits(static_cast<double>(total), elapsed.count());
   return true;
 }
 
 bool Client::ndt7_upload() noexcept {
+  LIBNDT_EMIT_INFO("starting ndt7 upload test");
   if (!ndt7_connect("/ndt/v7/upload")) {
     return false;
   }
@@ -1132,12 +1210,14 @@ bool Client::ndt7_upload() noexcept {
   constexpr double max_upload_time = 10.0;
   auto begin = std::chrono::steady_clock::now();
   auto latest = begin;
+  std::chrono::duration<double> elapsed;
   Size total = 0;
+  summary_.upload_speed = 0.0;
   std::string frame = ws_prepare_frame(ws_opcode_binary | ws_fin_flag,
                                        buff.get(), ndt7_bufsiz);
   for (;;) {
     auto now = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed = now - begin;
+    elapsed = now - begin;
     std::chrono::duration<double, std::micro> elapsed_usec =
       std::chrono::duration_cast<std::chrono::microseconds>(elapsed);
     if (elapsed.count() > max_upload_time) {
@@ -1163,13 +1243,25 @@ bool Client::ndt7_upload() noexcept {
         NDT7_ENUM_TCP_INFO
 #undef XX
       }
+
+      // Calculate retransmission rate.
+      try {
+        nlohmann::json tcpinfo_json = measurement["TCPInfo"];
+        double bytes_retrans = (double) tcpinfo_json["TcpiBytesRetrans"].get<int64_t>();
+        double bytes_sent = (double) tcpinfo_json["TcpiBytesSent"].get<int64_t>();
+        summary_.upload_retrans = (bytes_sent != 0.0) ? bytes_retrans / bytes_sent : 0.0;
+      } catch (const std::exception& e) {
+        LIBNDT_EMIT_WARNING("Cannot calculate retransmission rate: " << e.what());
+      }
 #endif  // __linux__
       on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
       // This could fail if there are non-utf8 characters. This structure just
       // contains integers and ASCII strings, so we should be good.
       std::string json = measurement.dump();
-      on_result("ndt7", "upload", json);
+      if (get_verbosity() == verbosity_debug) {
+        on_result("ndt7", "upload", json);
+      }
       // Send measurement to the server.
       Err err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
                               (uint8_t *)json.data(), json.size());
@@ -1186,6 +1278,7 @@ bool Client::ndt7_upload() noexcept {
     }
     total += ndt7_bufsiz;  // Assume we won't overflow
   }
+  summary_.upload_speed = compute_speed_kbits(static_cast<double>(total), elapsed.count());
   return true;
 }
 
@@ -1210,7 +1303,7 @@ bool Client::ndt7_connect(std::string url_path) noexcept {
   if (err != Err::none) {
     return false;
   }
-  LIBNDT_EMIT_INFO("ndt7: WebSocket connection established");
+  LIBNDT_EMIT_DEBUG("ndt7: WebSocket connection established");
   return true;
 }
 

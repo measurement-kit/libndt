@@ -30,6 +30,7 @@ class BatchClient : public libndt::Client {
     void on_result(std::string, std::string, std::string value) override;
     void on_performance(libndt::NettestFlags, uint8_t, double, double,
                         double) override;
+    void summary() noexcept override;
 };
 
 // on_result is overridden to only print the JSON value on stdout.
@@ -49,6 +50,10 @@ void BatchClient::on_performance(libndt::NettestFlags tid, uint8_t nflows,
   std::cout << performance.dump() << std::endl;
 }
 
+// summary is overridden to not print any summary.
+void BatchClient::summary() noexcept {
+  // NOTHING
+}
 
 static void usage() {
   // clang-format off
@@ -229,5 +234,8 @@ int main(int, char **argv) {
     client.reset(new libndt::Client{settings});
   }
   bool rv = client->run();
+  if (rv ) {
+    client->summary();
+  }
   return (rv) ? EXIT_SUCCESS : EXIT_FAILURE;
 }

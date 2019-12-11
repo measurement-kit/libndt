@@ -466,6 +466,7 @@ class Client {
 #endif
 
   // High-level API
+  virtual void summary() noexcept;
   virtual bool query_mlabns(std::vector<std::string> *) noexcept;
   virtual bool connect() noexcept;
   virtual bool send_login() noexcept;
@@ -739,6 +740,17 @@ class Client {
   Socket sock_ = (Socket)-1;
   std::vector<NettestFlags> granted_suite_;
   Settings settings_;
+
+  nlohmann::json web100;
+  struct summary_data {  
+    double download_speed;
+    double upload_speed;
+    double download_retrans;
+    double upload_retrans;
+    uint32_t min_rtt;
+  };
+  summary_data summary_;
+
   std::map<Socket, SSL *> fd_to_ssl_;
 #ifdef _WIN32
   Winsock winsock_;
