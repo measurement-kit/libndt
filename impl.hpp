@@ -512,7 +512,7 @@ void Client::on_server_busy(std::string msg) {
 // ``````````````
 
 void Client::summary() noexcept {
-  LIBNDT_EMIT_INFO("[Test results]");
+  LIBNDT_EMIT_INFO(std::endl << "[Test results]");
   if (summary_.download_speed != 0.0) {
     LIBNDT_EMIT_INFO("Download speed: "
       << format_speed_from_kbits(summary_.download_speed));
