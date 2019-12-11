@@ -923,9 +923,7 @@ bool Client::run_download() noexcept {
       try {
         double bytes_retrans = std::stod(web100["TCPInfo.BytesRetrans"].get<std::string>());
         double bytes_sent = std::stod(web100["TCPInfo.BytesSent"].get<std::string>());
-        if (bytes_sent != 0) {
-          summary_.download_retrans = bytes_retrans / bytes_sent;
-        }
+        summary_.download_retrans = (bytes_sent != 0.0) ? bytes_retrans / bytes_sent : 0.0;
       } catch(const std::exception& e) {
         LIBNDT_EMIT_DEBUG("TCPInfo.BytesRetrans and TCPInfo.BytesSent \
         not available, cannot calculate retransmission rate.");
@@ -1176,9 +1174,7 @@ bool Client::ndt7_download() noexcept {
             nlohmann::json tcpinfo_json = appinfo["TCPInfo"];
             double bytes_retrans = (double) tcpinfo_json["BytesRetrans"].get<int64_t>();
             double bytes_sent = (double) tcpinfo_json["BytesSent"].get<int64_t>();
-            if (bytes_sent != 0) {
-              summary_.download_retrans = bytes_retrans / bytes_sent;
-            }
+            summary_.download_retrans = (bytes_sent != 0.0) ? bytes_retrans / bytes_sent : 0.0;
             summary_.min_rtt = tcpinfo_json["MinRTT"].get<uint32_t>();
           } catch(const std::exception& e) {
             LIBNDT_EMIT_WARNING("TCPInfo not available, cannot get \
@@ -1253,9 +1249,7 @@ bool Client::ndt7_upload() noexcept {
         nlohmann::json tcpinfo_json = measurement["TCPInfo"];
         double bytes_retrans = (double) tcpinfo_json["TcpiBytesRetrans"].get<int64_t>();
         double bytes_sent = (double) tcpinfo_json["TcpiBytesSent"].get<int64_t>();
-        if (bytes_sent != 0) {
-          summary_.upload_retrans = bytes_retrans / bytes_sent;
-        }
+        summary_.upload_retrans = (bytes_sent != 0.0) ? bytes_retrans / bytes_sent : 0.0;
       } catch (const std::exception& e) {
         LIBNDT_EMIT_WARNING("Cannot calculate retransmission rate: " << e.what());
       }
