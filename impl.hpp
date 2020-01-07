@@ -872,11 +872,13 @@ bool Client::run_download() noexcept {
       }
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> elapsed = now - begin;
-      on_performance(nettest_flag_download,             //
+      if (!settings_.summary_only) {
+        on_performance(nettest_flag_download,             //
                      active,                            // atomic
                      static_cast<double>(total_data),   // atomic
                      elapsed.count(),                   //
                      settings_.max_runtime);
+      }
       prev = now;
     }
     auto now = std::chrono::steady_clock::now();
@@ -1079,11 +1081,13 @@ bool Client::run_upload() noexcept {
       }
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> elapsed = now - begin;
-      on_performance(nettest_flag_upload,               //
+      if (!settings_.summary_only) {
+        on_performance(nettest_flag_upload,               //
                      active,                            // atomic
                      static_cast<double>(total_data),   // atomic
                      elapsed.count(),                   //
                      settings_.max_runtime);
+      }
       prev = now;
     }
     auto now = std::chrono::steady_clock::now();
@@ -1143,8 +1147,10 @@ bool Client::ndt7_download() noexcept {
     constexpr auto measurement_interval = 0.25;
     std::chrono::duration<double> interval = now - latest;
     if (interval.count() > measurement_interval) {
-      on_performance(nettest_flag_download, 1, static_cast<double>(total),
+      if (!settings_.summary_only) {
+        on_performance(nettest_flag_download, 1, static_cast<double>(total),
                      elapsed.count(), settings_.max_runtime);
+      }
       latest = now;
     }
     uint8_t opcode = 0;
@@ -1254,8 +1260,10 @@ bool Client::ndt7_upload() noexcept {
         LIBNDT_EMIT_WARNING("Cannot calculate retransmission rate: " << e.what());
       }
 #endif  // __linux__
-      on_performance(nettest_flag_upload, 1, static_cast<double>(total),
+      if (!settings_.summary_only) {
+        on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
+      }
       // This could fail if there are non-utf8 characters. This structure just
       // contains integers and ASCII strings, so we should be good.
       std::string json = measurement.dump();
