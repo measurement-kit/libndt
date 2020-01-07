@@ -50,9 +50,22 @@ void BatchClient::on_performance(libndt::NettestFlags tid, uint8_t nflows,
   std::cout << performance.dump() << std::endl;
 }
 
-// summary is overridden to not print any summary.
+// summary is overridden to print a JSON summary.
 void BatchClient::summary() noexcept {
-  // NOTHING
+  nlohmann::json download;
+  nlohmann::json upload;
+  nlohmann::json summary;
+  download["Speed"] = summary_.download_speed;
+  download["Retransmission"] = summary_.download_retrans;
+  download["Web100"] = web100;
+
+  upload["Speed"] = summary_.upload_speed;
+  upload["Retransmission"] = summary_.upload_retrans;
+
+  summary["Download"] = download;
+  summary["Upload"] = upload;
+  summary["Latency"] = summary_.min_rtt;
+  std::cout << summary.dump() << std::endl;
 }
 
 static void usage() {
@@ -122,6 +135,7 @@ int main(int, char **argv) {
   // You need to enable tests explicitly by passing command line flags.
   settings.nettest_flags = libndt::NettestFlags{0};
   bool batch_mode = false;
+  bool summary = false;
 
   {
     argh::parser cmdline;
@@ -173,6 +187,9 @@ int main(int, char **argv) {
       } else if (flag == "batch") {
         batch_mode = true;
         std::clog << "will run in batch mode" << std::endl;
+      } else if (flag == "summary") {
+        summary = true;
+        std::clog << "will only display summary" << std::endl;
       } else {
         std::clog << "fatal: unrecognized flag: " << flag << std::endl;
         usage();
@@ -227,6 +244,7 @@ int main(int, char **argv) {
     exit(EXIT_FAILURE);
   }
 
+  settings.summary_only = summary;
   std::unique_ptr<libndt::Client>  client;
   if (batch_mode) {
     client.reset(new BatchClient{settings});
