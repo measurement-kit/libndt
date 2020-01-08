@@ -107,6 +107,9 @@ WebSocket messages. Finally, adding the `-ndt7` flag turns on version
 uses TLS, both `-ca-bundle-path <path>` and `-insecure` work also
 in combination with the `-ndt7` flag. When using `-ndt7`, `-batch` can be
 specified so that the only output on STDOUT will be the JSON test results.
+To further reduce the amount of output, you can use the `-summary` flag,
+which only prints a summary at the end of the tests. If used with `-batch`,
+the generated summary will be JSON.
 
 In practice, these are the flags you want to use:
 

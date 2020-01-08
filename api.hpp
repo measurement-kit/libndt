@@ -297,6 +297,8 @@ class Settings {
   /// not disable this option in general, since doing that is insecure.
   bool tls_verify_peer = true;
 
+  /// Run in "summary only" mode. If this flag is enabled, most log messages are
+  /// hidden and the only output on stdout is the test summary.
   bool summary_only = false;
 };
 
@@ -729,14 +731,21 @@ class Client {
   std::unique_ptr<Sys> sys{new Sys{}};
 
  protected:
-  struct summary_data {
+  // SummaryData contains the fields that are needed to generate the summary
+  // at the end of the tests.
+  struct SummaryData {
+      // download speed in kbit/s.
       double download_speed;
+      // upload speed in kbit/s.
       double upload_speed;
+      // download retransmission rate (bytes_retrans / bytes_sent).
       double download_retrans;
+      // upload retransmission rate (bytes_retrans / bytes_sent).
       double upload_retrans;
+      // TCPInfo's MinRTT (milliseconds).
       uint32_t min_rtt;
   };
-  summary_data summary_;
+  SummaryData summary_;
   nlohmann::json web100;
 
  private:
