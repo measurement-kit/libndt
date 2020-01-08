@@ -746,7 +746,7 @@ class Client {
       // upload retransmission rate (bytes_retrans / bytes_sent).
       double upload_retrans;
 
-      // TCPInfo's MinRTT (milliseconds).
+      // TCPInfo's MinRTT (microseconds).
       uint32_t min_rtt;
   };
 
