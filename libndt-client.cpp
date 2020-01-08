@@ -50,9 +50,27 @@ void BatchClient::on_performance(libndt::NettestFlags tid, uint8_t nflows,
   std::cout << performance.dump() << std::endl;
 }
 
-// summary is overridden to not print any summary.
+// summary is overridden to print a JSON summary.
 void BatchClient::summary() noexcept {
-  // NOTHING
+  nlohmann::json summary;
+  
+  if (summary_.download_speed != 0.0) {
+    nlohmann::json download;
+    download["Speed"] = summary_.download_speed;
+    download["Retransmission"] = summary_.download_retrans;
+    download["Web100"] = web100;
+    summary["Download"] = download;
+    summary["Latency"] = summary_.min_rtt;
+  }
+  
+  if (summary_.upload_speed != 0.0) {
+    nlohmann::json upload;
+    upload["Speed"] = summary_.upload_speed;
+    upload["Retransmission"] = summary_.upload_retrans;
+    summary["Upload"] = upload;
+  }
+
+  std::cout << summary.dump() << std::endl;
 }
 
 static void usage() {
@@ -94,6 +112,9 @@ WebSocket messages. Finally, adding the `-ndt7` flag turns on version
 uses TLS, both `-ca-bundle-path <path>` and `-insecure` work also
 in combination with the `-ndt7` flag. When using `-ndt7`, `-batch` can be
 specified so that the only output on STDOUT will be the JSON test results.
+To further reduce the amount of output, you can use the `-summary` flag,
+which only prints a summary at the end of the tests. If used with `-batch`,
+the generated summary will be JSON.
 
 In practice, these are the flags you want to use:
 
@@ -122,6 +143,7 @@ int main(int, char **argv) {
   // You need to enable tests explicitly by passing command line flags.
   settings.nettest_flags = libndt::NettestFlags{0};
   bool batch_mode = false;
+  bool summary = false;
 
   {
     argh::parser cmdline;
@@ -173,6 +195,9 @@ int main(int, char **argv) {
       } else if (flag == "batch") {
         batch_mode = true;
         std::clog << "will run in batch mode" << std::endl;
+      } else if (flag == "summary") {
+        summary = true;
+        std::clog << "will only display summary" << std::endl;
       } else {
         std::clog << "fatal: unrecognized flag: " << flag << std::endl;
         usage();
@@ -227,6 +252,7 @@ int main(int, char **argv) {
     exit(EXIT_FAILURE);
   }
 
+  settings.summary_only = summary;
   std::unique_ptr<libndt::Client>  client;
   if (batch_mode) {
     client.reset(new BatchClient{settings});

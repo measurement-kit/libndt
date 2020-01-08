@@ -296,6 +296,10 @@ class Settings {
   /// may be useful sometimes to disable it for testing purposes. You should
   /// not disable this option in general, since doing that is insecure.
   bool tls_verify_peer = true;
+
+  /// Run in "summary only" mode. If this flag is enabled, most log messages are
+  /// hidden and the only output on stdout is the test summary.
+  bool summary_only = false;
 };
 
 // Error codes
@@ -726,6 +730,29 @@ class Client {
   // Reference to overridable system dependencies
   std::unique_ptr<Sys> sys{new Sys{}};
 
+ protected:
+  // SummaryData contains the fields that are needed to generate the summary
+  // at the end of the tests.
+  struct SummaryData {
+      // download speed in kbit/s.
+      double download_speed;
+
+      // upload speed in kbit/s.
+      double upload_speed;
+
+      // download retransmission rate (bytes_retrans / bytes_sent).
+      double download_retrans;
+
+      // upload retransmission rate (bytes_retrans / bytes_sent).
+      double upload_retrans;
+
+      // TCPInfo's MinRTT (microseconds).
+      uint32_t min_rtt;
+  };
+
+  SummaryData summary_;
+  nlohmann::json web100;
+
  private:
   class Winsock {
    public:
@@ -740,16 +767,6 @@ class Client {
   Socket sock_ = (Socket)-1;
   std::vector<NettestFlags> granted_suite_;
   Settings settings_;
-
-  nlohmann::json web100;
-  struct summary_data {  
-    double download_speed;
-    double upload_speed;
-    double download_retrans;
-    double upload_retrans;
-    uint32_t min_rtt;
-  };
-  summary_data summary_;
 
   std::map<Socket, SSL *> fd_to_ssl_;
 #ifdef _WIN32
