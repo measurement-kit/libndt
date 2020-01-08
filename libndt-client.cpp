@@ -52,19 +52,24 @@ void BatchClient::on_performance(libndt::NettestFlags tid, uint8_t nflows,
 
 // summary is overridden to print a JSON summary.
 void BatchClient::summary() noexcept {
-  nlohmann::json download;
-  nlohmann::json upload;
   nlohmann::json summary;
-  download["Speed"] = summary_.download_speed;
-  download["Retransmission"] = summary_.download_retrans;
-  download["Web100"] = web100;
+  
+  if (summary_.download_speed != 0.0) {
+    nlohmann::json download;
+    download["Speed"] = summary_.download_speed;
+    download["Retransmission"] = summary_.download_retrans;
+    download["Web100"] = web100;
+    summary["Download"] = download;
+    summary["Latency"] = summary_.min_rtt;
+  }
+  
+  if (summary_.upload_speed != 0.0) {
+    nlohmann::json upload;
+    upload["Speed"] = summary_.upload_speed;
+    upload["Retransmission"] = summary_.upload_retrans;
+    summary["Upload"] = upload;
+  }
 
-  upload["Speed"] = summary_.upload_speed;
-  upload["Retransmission"] = summary_.upload_retrans;
-
-  summary["Download"] = download;
-  summary["Upload"] = upload;
-  summary["Latency"] = summary_.min_rtt;
   std::cout << summary.dump() << std::endl;
 }
 
