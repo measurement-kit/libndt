@@ -736,15 +736,20 @@ class Client {
   struct SummaryData {
       // download speed in kbit/s.
       double download_speed;
+
       // upload speed in kbit/s.
       double upload_speed;
+
       // download retransmission rate (bytes_retrans / bytes_sent).
       double download_retrans;
+
       // upload retransmission rate (bytes_retrans / bytes_sent).
       double upload_retrans;
+
       // TCPInfo's MinRTT (milliseconds).
       uint32_t min_rtt;
   };
+
   SummaryData summary_;
   nlohmann::json web100;
 
