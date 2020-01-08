@@ -873,7 +873,7 @@ bool Client::run_download() noexcept {
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> elapsed = now - begin;
       if (!settings_.summary_only) {
-        on_performance(nettest_flag_download,             //
+        on_performance(nettest_flag_download,           //
                      active,                            // atomic
                      static_cast<double>(total_data),   // atomic
                      elapsed.count(),                   //
@@ -1082,7 +1082,7 @@ bool Client::run_upload() noexcept {
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> elapsed = now - begin;
       if (!settings_.summary_only) {
-        on_performance(nettest_flag_upload,               //
+        on_performance(nettest_flag_upload,             //
                      active,                            // atomic
                      static_cast<double>(total_data),   // atomic
                      elapsed.count(),                   //
