@@ -23,56 +23,6 @@
 
 using namespace measurement_kit;
 
-// BatchClient only prints JSON messages on stdout.
-class BatchClient : public libndt::Client {
-  public:
-    using libndt::Client::Client;
-    void on_result(std::string, std::string, std::string value) override;
-    void on_performance(libndt::NettestFlags, uint8_t, double, double,
-                        double) override;
-    void summary() noexcept override;
-};
-
-// on_result is overridden to only print the JSON value on stdout.
-void BatchClient::on_result(std::string, std::string,  std::string value) {
-  std::cout << value << std::endl;
-}
-// on_performance is overridded to hide the user-friendly output messages.
-void BatchClient::on_performance(libndt::NettestFlags tid, uint8_t nflows,
-                            double measured_bytes,
-                            double elapsed_time, double) {
-  nlohmann::json performance;
-  performance["ElapsedTime"] = elapsed_time;
-  performance["NumFlows"] = nflows;
-  performance["TestId"] = (int)tid;
-  performance["Speed"] = libndt::format_speed_from_kbits(measured_bytes,
-                                                         elapsed_time);
-  std::cout << performance.dump() << std::endl;
-}
-
-// summary is overridden to print a JSON summary.
-void BatchClient::summary() noexcept {
-  nlohmann::json summary;
-  
-  if (summary_.download_speed != 0.0) {
-    nlohmann::json download;
-    download["Speed"] = summary_.download_speed;
-    download["Retransmission"] = summary_.download_retrans;
-    download["Web100"] = web100;
-    summary["Download"] = download;
-    summary["Latency"] = summary_.min_rtt;
-  }
-  
-  if (summary_.upload_speed != 0.0) {
-    nlohmann::json upload;
-    upload["Speed"] = summary_.upload_speed;
-    upload["Retransmission"] = summary_.upload_retrans;
-    summary["Upload"] = upload;
-  }
-
-  std::cout << summary.dump() << std::endl;
-}
-
 static void usage() {
   // clang-format off
   std::clog << R"(Usage: libndt-client [options] [<hostname>]
@@ -137,9 +87,75 @@ The `-version` shows the version number and exits.)" << std::endl;
   // clang-format on
 }
 
+// void Client::summary() noexcept {
+//   LIBNDT_EMIT_INFO(std::endl << "[Test results]");
+//   if (summary_.download_speed != 0.0) {
+//     LIBNDT_EMIT_INFO("Download speed: "
+//       << format_speed_from_kbits(summary_.download_speed));
+//   }
+//   if (summary_.upload_speed != 0.0) {
+//     LIBNDT_EMIT_INFO("Upload speed: "
+//       << format_speed_from_kbits(summary_.upload_speed));
+//   }
+//   if (summary_.min_rtt != 0) {
+//     LIBNDT_EMIT_INFO("Latency: " << std::fixed << std::setprecision(2)
+//       << (summary_.min_rtt / 1000.0) << " ms");
+//   }
+//   if (summary_.download_retrans != 0.0) {
+//       LIBNDT_EMIT_INFO("Download retransmission: "
+//         << std::fixed << std::setprecision(2)
+//         << (summary_.download_retrans * 100) << "%");
+//   }
+//   if (summary_.upload_retrans != 0.0) {
+//       LIBNDT_EMIT_INFO("Upload retransmission: "
+//         << std::fixed << std::setprecision(2)
+//         << (summary_.upload_retrans * 100) << "%");
+//   }
+//   if (summary_.web100 != nullptr) {
+//     LIBNDT_EMIT_DEBUG("web100: " << summary_.web100.dump());
+//   }
+// }
+
+static void batch_result(std::string, std::string,  std::string value) {
+  std::cout << value << std::endl;
+}
+
+static void batch_performance(libndt::NettestFlags tid, uint8_t nflows,
+                              double measured_bytes,
+                              double elapsed_time, double) {
+  nlohmann::json performance;
+  performance["ElapsedTime"] = elapsed_time;
+  performance["NumFlows"] = nflows;
+  performance["TestId"] = (int)tid;
+  performance["Speed"] = libndt::format_speed_from_kbits(measured_bytes,
+                                                  elapsed_time);
+  std::cout << performance.dump() << std::endl;
+}
+
+static void batch_summary(const libndt::SummaryData &summary_) {
+  nlohmann::json summary;
+
+  if (summary_.download_speed != 0.0) {
+    nlohmann::json download;
+    download["Speed"] = summary_.download_speed;
+    download["Retransmission"] = summary_.download_retrans;
+    download["Web100"] = summary_.web100;
+    summary["Download"] = download;
+    summary["Latency"] = summary_.min_rtt;
+  }
+
+  if (summary_.upload_speed != 0.0) {
+    nlohmann::json upload;
+    upload["Speed"] = summary_.upload_speed;
+    upload["Retransmission"] = summary_.upload_retrans;
+    summary["Upload"] = upload;
+  }
+
+  std::cout << summary.dump() << std::endl;
+}
+
 int main(int, char **argv) {
   libndt::Settings settings;
-  settings.verbosity = libndt::verbosity_info;
   // You need to enable tests explicitly by passing command line flags.
   settings.nettest_flags = libndt::NettestFlags{0};
   bool batch_mode = false;
@@ -183,7 +199,9 @@ int main(int, char **argv) {
         settings.nettest_flags |= libndt::nettest_flag_upload;
         std::clog << "will run the upload sub-test" << std::endl;
       } else if (flag == "verbose") {
-        settings.verbosity = libndt::verbosity_debug;
+        settings.logger.on_debug = [](const std::string &s) {
+          std::clog << s << std::endl;
+        };
         std::clog << "will be verbose" << std::endl;
       } else if (flag == "version") {
         std::cout << libndt::version_major << "." << libndt::version_minor
@@ -253,15 +271,18 @@ int main(int, char **argv) {
   }
 
   settings.summary_only = summary;
-  std::unique_ptr<libndt::Client>  client;
+
   if (batch_mode) {
-    client.reset(new BatchClient{settings});
-  } else {
-    client.reset(new libndt::Client{settings});
+    if (!settings.summary_only) {
+      settings.logger.on_result = batch_result;
+      settings.logger.on_performance = batch_performance;
+    }
+
+    settings.logger.on_summary = batch_summary;
   }
-  bool rv = client->run();
-  if (rv ) {
-    client->summary();
-  }
+
+  libndt::Client client{settings};
+
+  bool rv = client.run();
   return (rv) ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -144,24 +144,6 @@ constexpr NettestFlags nettest_flag_upload_ext = NettestFlags{1U << 6};
 /// Run the multi-stream download subtest.
 constexpr NettestFlags nettest_flag_download_ext = NettestFlags{1U << 7};
 
-// Verbosity levels
-// ````````````````
-
-/// Library's logging verbosity.
-using Verbosity = unsigned int;
-
-/// Do not emit any log message.
-constexpr Verbosity verbosity_quiet = Verbosity{0};
-
-/// Emit only warning messages.
-constexpr Verbosity verbosity_warning = Verbosity{1};
-
-/// Emit warning and informational messages.
-constexpr Verbosity verbosity_info = Verbosity{2};
-
-/// Emit all log messages.
-constexpr Verbosity verbosity_debug = Verbosity{3};
-
 // Flags for selecting what NDT protocol features to use
 // `````````````````````````````````````````````````````
 
@@ -228,6 +210,41 @@ using Timeout = unsigned int;
 
 constexpr const char *ndt_version_compat = "v3.7.0";
 
+// SummaryData contains the fields that are needed to generate the summary
+// at the end of the tests.
+struct SummaryData {
+    // download speed in kbit/s.
+    double download_speed;
+
+    // upload speed in kbit/s.
+    double upload_speed;
+
+    // download retransmission rate (bytes_retrans / bytes_sent).
+    double download_retrans;
+
+    // upload retransmission rate (bytes_retrans / bytes_sent).
+    double upload_retrans;
+
+    // TCPInfo's MinRTT (microseconds).
+    uint32_t min_rtt;
+
+    nlohmann::json web100;
+};
+
+class Logger {
+  public:
+    std::function<void(const std::string &)> on_debug;
+    std::function<void(const std::string &)> on_info;
+    std::function<void(NettestFlags tid, uint8_t nflows,
+                              double measured_bytes, double elapsed,
+                              double max_runtime)> on_performance;
+    std::function<void(const std::string &,
+                        const std::string &,
+                        const std::string &)> on_result;
+    std::function<void(const libndt::SummaryData &)> on_summary;
+    std::function<void(const std::string &)> on_warning;
+};
+
 /// NDT client settings. If you do not customize the settings when creating
 /// a Client, the defaults listed below will be used instead.
 class Settings {
@@ -256,9 +273,8 @@ class Settings {
   /// a download test, because that is probably the typical usage.
   NettestFlags nettest_flags = nettest_flag_download;
 
-  /// Verbosity of the client. By default no message is emitted. Set to other
-  /// values to get more messages (useful when debugging).
-  Verbosity verbosity = verbosity_quiet;
+  /// Logger (TODO)
+  Logger logger;
 
   /// Metadata to include in the server side logs. By default we just identify
   /// the NDT version and the application.
@@ -388,57 +404,6 @@ class Client {
   /// Runs a NDT test using the configured (or default) settings.
   bool run() noexcept;
 
-  // Implementation note: currently SWIG does not propagate `noexcept` even
-  // though that is implemented in master [1], hence we have removed this
-  // qualifiers from the functions that SWIG needs to wrap.
-  //
-  // .. [1] https://github.com/swig/swig/issues/526
-
-  /// Called when a warning message is emitted. The default behavior is to write
-  /// the warning onto the `std::clog` standard stream. \warning This method
-  /// could be called from a different thread context.
-  virtual void on_warning(const std::string &s) const;
-
-  /// Called when an informational message is emitted. The default behavior is
-  /// to write the message onto the `std::clog` standard stream. \warning This method
-  /// could be called from a different thread context.
-  virtual void on_info(const std::string &s) const;
-
-  /// Called when a debug message is emitted. The default behavior is
-  /// to write the message onto the `std::clog` standard stream. \warning This method
-  /// could be called from a different thread context.
-  virtual void on_debug(const std::string &s) const;
-
-  /// Called to inform you about the measured speed. The default behavior is
-  /// to write the provided information as an info message. @param tid is either
-  /// nettest_flag_download or nettest_flag_upload. @param nflows is the number
-  /// of used flows. @param measured_bytes is the number of bytes received
-  /// or sent since the beginning of the measurement. @param elapsed
-  /// is the number of seconds elapsed since the beginning of the nettest.
-  /// @param max_runtime is the maximum runtime of this nettest, as copied from
-  /// the Settings. @remark By dividing @p elapsed by @p max_runtime, you can
-  /// get the percentage of completion of the current nettest. @remark We
-  /// provide you with @p tid, so you know whether the nettest is downloading
-  /// bytes from the server or uploading bytes to the server. \warning This
-  /// method could be called from another thread context.
-  virtual void on_performance(NettestFlags tid, uint8_t nflows,
-                              double measured_bytes, double elapsed,
-                              double max_runtime);
-
-  /// Called to provide you with NDT results. The default behavior is
-  /// to write the provided information as an info message. @param scope is
-  /// "web100", when we're passing you Web 100 variables, "tcp_info" when
-  /// we're passing you TCP info variables, "summary" when we're passing you
-  /// summary variables, or "ndt7" when we're passing you results returned
-  /// by a ndt7 server. @param name is the name of the variable; if @p scope
-  /// is "ndt7", then @p name should be "download". @param value is the
-  /// variable value; variables are typically int, float, or string when
-  /// running ndt5 tests, instead they are serialized JSON returned by the
-  /// server when running a ndt7 test. \warning This method could be called
-  /// from another thread context.
-  virtual void on_result(std::string scope, std::string name,
-                         std::string value);
-
   /// Called when the server is busy. The default behavior is to write a
   /// warning message. @param msg is the reason why the server is busy, encoded
   /// according to the NDT protocol. @remark when Settings::hostname is empty,
@@ -448,6 +413,9 @@ class Client {
   /// than once if some of these servers happen to be busy. \warning This
   /// method could be called from another thread context.
   virtual void on_server_busy(std::string msg);
+
+  /// TODO
+  const Logger &get_logger() const noexcept;
 
   /*
                _        __             _    _ _                _
@@ -470,7 +438,6 @@ class Client {
 #endif
 
   // High-level API
-  virtual void summary() noexcept;
   virtual bool query_mlabns(std::vector<std::string> *) noexcept;
   virtual bool connect() noexcept;
   virtual bool send_login() noexcept;
@@ -723,35 +690,8 @@ class Client {
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
 
-  // Other helpers
-
-  Verbosity get_verbosity() const noexcept;
-
   // Reference to overridable system dependencies
   std::unique_ptr<Sys> sys{new Sys{}};
-
- protected:
-  // SummaryData contains the fields that are needed to generate the summary
-  // at the end of the tests.
-  struct SummaryData {
-      // download speed in kbit/s.
-      double download_speed;
-
-      // upload speed in kbit/s.
-      double upload_speed;
-
-      // download retransmission rate (bytes_retrans / bytes_sent).
-      double download_retrans;
-
-      // upload retransmission rate (bytes_retrans / bytes_sent).
-      double upload_retrans;
-
-      // TCPInfo's MinRTT (microseconds).
-      uint32_t min_rtt;
-  };
-
-  SummaryData summary_;
-  nlohmann::json web100;
 
  private:
   class Winsock {
@@ -767,8 +707,10 @@ class Client {
   Socket sock_ = (Socket)-1;
   std::vector<NettestFlags> granted_suite_;
   Settings settings_;
+  SummaryData summary_;
 
   std::map<Socket, SSL *> fd_to_ssl_;
+
 #ifdef _WIN32
   Winsock winsock_;
 #endif

@@ -222,14 +222,6 @@ TEST_CASE("Client::run() deals with Client::wait_close() failure") {
   REQUIRE(client.run() == false);
 }
 
-// Client::on_warning() tests
-// --------------------------
-
-TEST_CASE("Client::on_warning() works as expected") {
-  libndt::Client client;
-  client.on_warning("calling on_warning() to increase coverage");
-}
-
 // Client::query_mlabns() tests
 // ----------------------------
 

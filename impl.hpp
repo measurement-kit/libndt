@@ -189,18 +189,13 @@ static std::string libndt_perror(Err err) noexcept {
 }
 
 // Generic macro for emitting logs.
-#define LIBNDT_EMIT_LOG_EX(client, level, statements)      \
-  do {                                                     \
-    if (client->get_verbosity() >= verbosity_##level) {    \
-      std::stringstream ss_log_lines;                      \
-      ss_log_lines << statements;                          \
-      std::string log_line;                                \
-      while (std::getline(ss_log_lines, log_line, '\n')) { \
-        if (!log_line.empty()) {                           \
-          client->on_##level(std::move(log_line));         \
-        }                                                  \
-      }                                                    \
-    }                                                      \
+#define LIBNDT_EMIT_LOG_EX(client, level, statements)                 \
+  do {                                                                \
+    if (client->get_logger().on_##level != nullptr) {                 \
+      std::stringstream ss_log_lines;                                 \
+      ss_log_lines << statements;                                     \
+      client->get_logger().on_##level(std::move(ss_log_lines.str())); \
+    }                                                                 \
   } while (0)
 
 #define LIBNDT_EMIT_WARNING_EX(clnt, stmnts) LIBNDT_EMIT_LOG_EX(clnt, warning, stmnts)
@@ -259,7 +254,7 @@ static std::string format_speed_from_kbits(double speed) noexcept {
   return ss.str();
 }
 
-static std::string format_speed_from_kbits(double data, double elapsed) noexcept {
+static inline std::string format_speed_from_kbits(double data, double elapsed) noexcept {
   return format_speed_from_kbits(compute_speed_kbits(data, elapsed));
 }
 
@@ -469,76 +464,12 @@ bool Client::run() noexcept {
   return false;
 }
 
-void Client::on_warning(const std::string &msg) const {
-  std::clog << "[!] " << msg << std::endl;
-}
-
-void Client::on_info(const std::string &msg) const {
-  std::clog << msg << std::endl;
-}
-
-void Client::on_debug(const std::string &msg) const {
-  std::clog << "[D] " << msg << std::endl;
-}
-
-void Client::on_performance(NettestFlags tid, uint8_t nflows,
-                            double measured_bytes,
-                            double elapsed_time, double max_runtime) {
-  auto percent = 0.0;
-  if (max_runtime > 0.0) {
-    percent = (elapsed_time * 100.0 / max_runtime);
-  }
-  LIBNDT_EMIT_INFO("  [" << std::fixed << std::setprecision(0) << std::setw(2)
-                  << std::right << percent << "%] speed: "
-                  << format_speed_from_kbits(measured_bytes, elapsed_time));
-
-  LIBNDT_EMIT_DEBUG("  [" << std::fixed << std::setprecision(0) << std::setw(2)
-                  << std::right << percent << "%]"
-                  << " elapsed: " << std::fixed << std::setprecision(3)
-                  << std::setw(6) << elapsed_time << " s;"
-                  << " test_id: " << (int)tid << "; num_flows: " << (int)nflows
-                  << "; measured_bytes: " << measured_bytes);
-}
-
-void Client::on_result(std::string scope, std::string name, std::string value) {
-  LIBNDT_EMIT_INFO("  - [" << scope << "] " << name << ": " << value);
-}
-
 void Client::on_server_busy(std::string msg) {
   LIBNDT_EMIT_WARNING("server is busy: " << msg);
 }
 
 // High-level API
 // ``````````````
-
-void Client::summary() noexcept {
-  LIBNDT_EMIT_INFO(std::endl << "[Test results]");
-  if (summary_.download_speed != 0.0) {
-    LIBNDT_EMIT_INFO("Download speed: "
-      << format_speed_from_kbits(summary_.download_speed));
-  }
-  if (summary_.upload_speed != 0.0) {
-    LIBNDT_EMIT_INFO("Upload speed: "
-      << format_speed_from_kbits(summary_.upload_speed));
-  }
-  if (summary_.min_rtt != 0) {
-    LIBNDT_EMIT_INFO("Latency: " << std::fixed << std::setprecision(2)
-      << (summary_.min_rtt / 1000.0) << " ms");
-  }
-  if (summary_.download_retrans != 0.0) {
-      LIBNDT_EMIT_INFO("Download retransmission: "
-        << std::fixed << std::setprecision(2)
-        << (summary_.download_retrans * 100) << "%");
-  }
-  if (summary_.upload_retrans != 0.0) {
-      LIBNDT_EMIT_INFO("Upload retransmission: "
-        << std::fixed << std::setprecision(2)
-        << (summary_.upload_retrans * 100) << "%");
-  }
-  if (web100 != nullptr) {
-    LIBNDT_EMIT_DEBUG("web100: " << web100.dump());
-  }
-}
 
 bool Client::query_mlabns(std::vector<std::string> *fqdns) noexcept {
   assert(fqdns != nullptr);
@@ -872,13 +803,11 @@ bool Client::run_download() noexcept {
       }
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> elapsed = now - begin;
-      if (!settings_.summary_only) {
-        on_performance(nettest_flag_download,           //
+      get_logger().on_performance(nettest_flag_download,           //
                      active,                            // atomic
                      static_cast<double>(total_data),   // atomic
                      elapsed.count(),                   //
                      settings_.max_runtime);
-      }
       prev = now;
     }
     auto now = std::chrono::steady_clock::now();
@@ -917,14 +846,14 @@ bool Client::run_download() noexcept {
       return false;
     }
     if (code == msg_test_finalize) {
-      if (this->get_verbosity() == verbosity_debug) {
-        this->on_result("web100", "web100", web100.dump());
+      if (get_logger().on_result != nullptr) {
+        get_logger().on_result("web100", "web100", summary_.web100.dump());
       }
 
       // Calculate retransmission rate (BytesRetrans / BytesSent).
       try {
-        double bytes_retrans = std::stod(web100["TCPInfo.BytesRetrans"].get<std::string>());
-        double bytes_sent = std::stod(web100["TCPInfo.BytesSent"].get<std::string>());
+        double bytes_retrans = std::stod(summary_.web100["TCPInfo.BytesRetrans"].get<std::string>());
+        double bytes_sent = std::stod(summary_.web100["TCPInfo.BytesSent"].get<std::string>());
         summary_.download_retrans = (bytes_sent != 0.0) ? bytes_retrans / bytes_sent : 0.0;
       } catch(const std::exception& e) {
         LIBNDT_EMIT_DEBUG("TCPInfo.BytesRetrans and TCPInfo.BytesSent \
@@ -933,14 +862,14 @@ bool Client::run_download() noexcept {
 
       // Use MinRTT as "latency".
       try {
-        summary_.min_rtt = (uint32_t) std::stoul(web100["TCPInfo.MinRTT"].get<std::string>());
+        summary_.min_rtt = (uint32_t) std::stoul(summary_.web100["TCPInfo.MinRTT"].get<std::string>());
       } catch(const std::exception& e) {
         LIBNDT_EMIT_WARNING("Unable to read TCPInfo.MinRTT: " << e.what());
       }
 
       return true;
     }
-    if (!jsonify_web100(this, web100, std::move(message))) {
+    if (!jsonify_web100(this, summary_.web100, std::move(message))) {
       // NOTHING - jsonify_web100 warns the user already if it cannot parse
       // the message.
     }
@@ -1081,13 +1010,11 @@ bool Client::run_upload() noexcept {
       }
       auto now = std::chrono::steady_clock::now();
       std::chrono::duration<double> elapsed = now - begin;
-      if (!settings_.summary_only) {
-        on_performance(nettest_flag_upload,             //
+      get_logger().on_performance(nettest_flag_upload,             //
                      active,                            // atomic
                      static_cast<double>(total_data),   // atomic
                      elapsed.count(),                   //
                      settings_.max_runtime);
-      }
       prev = now;
     }
     auto now = std::chrono::steady_clock::now();
@@ -1147,10 +1074,8 @@ bool Client::ndt7_download() noexcept {
     constexpr auto measurement_interval = 0.25;
     std::chrono::duration<double> interval = now - latest;
     if (interval.count() > measurement_interval) {
-      if (!settings_.summary_only) {
-        on_performance(nettest_flag_download, 1, static_cast<double>(total),
+      get_logger().on_performance(nettest_flag_download, 1, static_cast<double>(total),
                      elapsed.count(), settings_.max_runtime);
-      }
       latest = now;
     }
     uint8_t opcode = 0;
@@ -1190,9 +1115,7 @@ bool Client::ndt7_download() noexcept {
           LIBNDT_EMIT_WARNING("Unable to parse message as JSON: " << sinfo);
         }
 
-        if (get_verbosity() == verbosity_debug) {
-          on_result("ndt7", "download", std::move(sinfo));
-        }
+        get_logger().on_result("ndt7", "download", std::move(sinfo));
       }
     }
     total += count;  // Assume we won't overflow
@@ -1261,15 +1184,13 @@ bool Client::ndt7_upload() noexcept {
       }
 #endif  // __linux__
       if (!settings_.summary_only) {
-        on_performance(nettest_flag_upload, 1, static_cast<double>(total),
+        get_logger().on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
       }
       // This could fail if there are non-utf8 characters. This structure just
       // contains integers and ASCII strings, so we should be good.
       std::string json = measurement.dump();
-      if (get_verbosity() == verbosity_debug) {
-        on_result("ndt7", "upload", json);
-      }
+      get_logger().on_result("ndt7", "upload", json);
       // Send measurement to the server.
       Err err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
                               (uint8_t *)json.data(), json.size());
@@ -3401,8 +3322,8 @@ bool Client::query_mlabns_curl(const std::string &url, long timeout,
 // Other helpers
 // `````````````
 
-Verbosity Client::get_verbosity() const noexcept {
-  return settings_.verbosity;
+const Logger &Client::get_logger() const noexcept {
+  return settings_.logger;
 }
 
 }  // namespace libndt
