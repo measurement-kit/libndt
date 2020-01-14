@@ -846,9 +846,7 @@ bool Client::run_download() noexcept {
       return false;
     }
     if (code == msg_test_finalize) {
-      if (get_logger().on_result != nullptr) {
         get_logger().on_result("web100", "web100", summary_.web100.dump());
-      }
 
       // Calculate retransmission rate (BytesRetrans / BytesSent).
       try {
@@ -1183,10 +1181,8 @@ bool Client::ndt7_upload() noexcept {
         LIBNDT_EMIT_WARNING("Cannot calculate retransmission rate: " << e.what());
       }
 #endif  // __linux__
-      if (!settings_.summary_only) {
         get_logger().on_performance(nettest_flag_upload, 1, static_cast<double>(total),
                      elapsed.count(), max_upload_time);
-      }
       // This could fail if there are non-utf8 characters. This structure just
       // contains integers and ASCII strings, so we should be good.
       std::string json = measurement.dump();
