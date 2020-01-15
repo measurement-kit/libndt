@@ -751,7 +751,15 @@ class Client {
   };
 
   SummaryData summary_;
+
+  // NDT web100 summary data.
   nlohmann::json web100;
+
+  // ndt7 Measurement object.
+  nlohmann::json measurement_;
+
+  // ndt7 ConnectionInfo object.
+  nlohmann::json connection_info_;
 
  private:
   class Winsock {

@@ -1173,11 +1173,14 @@ bool Client::ndt7_download() noexcept {
         std::string sinfo{(const char *)buff.get(), (size_t)count};
         // Try parsing the received message as JSON.
         try {
-          nlohmann::json appinfo = nlohmann::json::parse(sinfo);
+          measurement_ = nlohmann::json::parse(sinfo);
+          if (measurement_.find("ConnectionInfo") != measurement_.end()) {
+            connection_info_ = measurement_["ConnectionInfo"];
+          }
 
           // Calculate retransmission rate (BytesRetrans / BytesSent).
           try {
-            nlohmann::json tcpinfo_json = appinfo["TCPInfo"];
+            nlohmann::json tcpinfo_json = measurement_["TCPInfo"];
             double bytes_retrans = (double) tcpinfo_json["BytesRetrans"].get<int64_t>();
             double bytes_sent = (double) tcpinfo_json["BytesSent"].get<int64_t>();
             summary_.download_retrans = (bytes_sent != 0.0) ? bytes_retrans / bytes_sent : 0.0;
