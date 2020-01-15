@@ -233,20 +233,17 @@ struct SummaryData {
 
 class Logger {
   public:
-    std::function<void(const std::string &)> on_debug = [](const std::string &) {};
-    std::function<void(const std::string &)> on_info =  [](const std::string &) {};
-    std::function<void(NettestFlags tid, uint8_t nflows,
-                              double measured_bytes, double elapsed,
-                              double max_runtime)> on_performance = [](NettestFlags, uint8_t,
+    virtual void on_debug(const std::string &) const {};
+    virtual void on_info(const std::string &) const {};
+    virtual void on_performance(NettestFlags, uint8_t,
                               double, double,
-                              double) {};
-    std::function<void(const std::string &,
+                              double) const {};
+    virtual void on_result(const std::string &,
                         const std::string &,
-                        const std::string &)> on_result = [](const std::string &,
-                        const std::string &,
-                        const std::string &) {};
-    std::function<void(const libndt::SummaryData &)> on_summary = [](const libndt::SummaryData &) {};
-    std::function<void(const std::string &)> on_warning = {};
+                        const std::string &) const {};
+    virtual void on_summary(const libndt::SummaryData &) const {};
+    virtual void on_warning(const std::string &) const {};
+    virtual ~Logger() {};
 };
 
 /// NDT client settings. If you do not customize the settings when creating

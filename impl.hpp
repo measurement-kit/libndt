@@ -191,11 +191,9 @@ static std::string libndt_perror(Err err) noexcept {
 // Generic macro for emitting logs.
 #define LIBNDT_EMIT_LOG_EX(client, level, statements)                 \
   do {                                                                \
-    if (client->get_logger().on_##level != nullptr) {                 \
       std::stringstream ss_log_lines;                                 \
       ss_log_lines << statements;                                     \
       client->get_logger().on_##level(std::move(ss_log_lines.str())); \
-    }                                                                 \
   } while (0)
 
 #define LIBNDT_EMIT_WARNING_EX(clnt, stmnts) LIBNDT_EMIT_LOG_EX(clnt, warning, stmnts)

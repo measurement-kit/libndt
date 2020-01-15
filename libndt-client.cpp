@@ -116,43 +116,57 @@ The `-version` shows the version number and exits.)" << std::endl;
 //   }
 // }
 
-static void batch_result(std::string, std::string,  std::string value) {
-  std::cout << value << std::endl;
-}
+class JSONLogger : public measurement_kit::libndt::Logger {
+  public:
+    void on_debug(const std::string &s) const {
+      std::clog << s << std::endl;
+    };
+    
+    void on_info(const std::string &s) const {
+      std::clog << s << std::endl;
+    };
 
-static void batch_performance(libndt::NettestFlags tid, uint8_t nflows,
-                              double measured_bytes,
-                              double elapsed_time, double) {
-  nlohmann::json performance;
-  performance["ElapsedTime"] = elapsed_time;
-  performance["NumFlows"] = nflows;
-  performance["TestId"] = (int)tid;
-  performance["Speed"] = libndt::format_speed_from_kbits(measured_bytes,
-                                                  elapsed_time);
-  std::cout << performance.dump() << std::endl;
-}
+    void on_performance(measurement_kit::libndt::NettestFlags tid, uint8_t nflows,
+                              double measured_bytes, double elapsed_time,
+                              double) const {
+      nlohmann::json performance;
+      performance["ElapsedTime"] = elapsed_time;
+      performance["NumFlows"] = nflows;
+      performance["TestId"] = (int)tid;
+      performance["Speed"] = libndt::format_speed_from_kbits(measured_bytes,
+                                                      elapsed_time);
+      std::cout << performance.dump() << std::endl;
+    };
 
-static void batch_summary(const libndt::SummaryData &summary_) {
-  nlohmann::json summary;
+    void on_result(const std::string &,
+                        const std::string &,
+                        const std::string &value) const {
+      std::cout << value << std::endl;
+    };
+    void on_summary(const libndt::SummaryData &summary_) const {
+      nlohmann::json summary;
 
-  if (summary_.download_speed != 0.0) {
-    nlohmann::json download;
-    download["Speed"] = summary_.download_speed;
-    download["Retransmission"] = summary_.download_retrans;
-    download["Web100"] = summary_.web100;
-    summary["Download"] = download;
-    summary["Latency"] = summary_.min_rtt;
-  }
+      if (summary_.download_speed != 0.0) {
+        nlohmann::json download;
+        download["Speed"] = summary_.download_speed;
+        download["Retransmission"] = summary_.download_retrans;
+        download["Web100"] = summary_.web100;
+        summary["Download"] = download;
+        summary["Latency"] = summary_.min_rtt;
+      }
 
-  if (summary_.upload_speed != 0.0) {
-    nlohmann::json upload;
-    upload["Speed"] = summary_.upload_speed;
-    upload["Retransmission"] = summary_.upload_retrans;
-    summary["Upload"] = upload;
-  }
+      if (summary_.upload_speed != 0.0) {
+        nlohmann::json upload;
+        upload["Speed"] = summary_.upload_speed;
+        upload["Retransmission"] = summary_.upload_retrans;
+        summary["Upload"] = upload;
+      }
 
-  std::cout << summary.dump() << std::endl;
-}
+      std::cout << summary.dump() << std::endl;
+    };
+
+    void on_warning(const std::string &) const {};
+};
 
 int main(int, char **argv) {
   libndt::Settings settings;
@@ -160,6 +174,7 @@ int main(int, char **argv) {
   settings.nettest_flags = libndt::NettestFlags{0};
   bool batch_mode = false;
   bool summary = false;
+  bool verbose = false;
 
   {
     argh::parser cmdline;
@@ -199,9 +214,7 @@ int main(int, char **argv) {
         settings.nettest_flags |= libndt::nettest_flag_upload;
         std::clog << "will run the upload sub-test" << std::endl;
       } else if (flag == "verbose") {
-        settings.logger.on_debug = [](const std::string &s) {
-          std::clog << s << std::endl;
-        };
+        verbose = true;
         std::clog << "will be verbose" << std::endl;
       } else if (flag == "version") {
         std::cout << libndt::version_major << "." << libndt::version_minor
@@ -271,15 +284,7 @@ int main(int, char **argv) {
   }
 
   settings.summary_only = summary;
-
-  if (batch_mode) {
-    if (!settings.summary_only) {
-      settings.logger.on_result = batch_result;
-      settings.logger.on_performance = batch_performance;
-    }
-
-    settings.logger.on_summary = batch_summary;
-  }
+  settings.logger = JSONLogger{};
 
   libndt::Client client{settings};
 
