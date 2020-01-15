@@ -58,7 +58,16 @@ void BatchClient::summary() noexcept {
     nlohmann::json download;
     download["Speed"] = summary_.download_speed;
     download["Retransmission"] = summary_.download_retrans;
-    download["Web100"] = web100;
+
+    if (web100 != nullptr) {
+      download["Web100"] = web100;
+    }
+
+    if (measurement_ != nullptr) {
+      download["ConnectionInfo"] = connection_info_;
+      download["LastMeasurement"] = measurement_;
+    }
+
     summary["Download"] = download;
     summary["Latency"] = summary_.min_rtt;
   }
