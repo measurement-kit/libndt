@@ -1174,7 +1174,7 @@ bool Client::ndt7_download() noexcept {
         // Try parsing the received message as JSON.
         try {
           measurement_ = nlohmann::json::parse(sinfo);
-          if (measurement_.find("ConnectionInfo") != measurement_.end()) {
+          if (measurement_.contains("ConnectionInfo")) {
             connection_info_ = measurement_["ConnectionInfo"];
           }
 
