@@ -118,17 +118,17 @@ The `-version` shows the version number and exits.)" << std::endl;
 
 class JSONLogger : public measurement_kit::libndt::Logger {
   public:
-    void on_debug(const std::string &s) const {
-      std::clog << s << std::endl;
+    void on_debug(const std::string &s) const override {
+      std::clog << "debug:" << s << std::endl;
     };
-    
-    void on_info(const std::string &s) const {
+
+    void on_info(const std::string &s) const override {
       std::clog << s << std::endl;
     };
 
     void on_performance(measurement_kit::libndt::NettestFlags tid, uint8_t nflows,
                               double measured_bytes, double elapsed_time,
-                              double) const {
+                              double) const override {
       nlohmann::json performance;
       performance["ElapsedTime"] = elapsed_time;
       performance["NumFlows"] = nflows;
@@ -140,10 +140,11 @@ class JSONLogger : public measurement_kit::libndt::Logger {
 
     void on_result(const std::string &,
                         const std::string &,
-                        const std::string &value) const {
+                        const std::string &value) const override {
       std::cout << value << std::endl;
     };
-    void on_summary(const libndt::SummaryData &summary_) const {
+
+    void on_summary(const libndt::SummaryData &summary_) const override {
       nlohmann::json summary;
 
       if (summary_.download_speed != 0.0) {
@@ -165,7 +166,6 @@ class JSONLogger : public measurement_kit::libndt::Logger {
       std::cout << summary.dump() << std::endl;
     };
 
-    void on_warning(const std::string &) const {};
 };
 
 int main(int, char **argv) {
