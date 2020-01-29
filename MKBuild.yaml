@@ -6,7 +6,10 @@ docker_tc_disabled: true
 amalgamate:
   libndt.hpp:
   - preamble.hpp
+  - assert.hpp
+  - logger.hpp
   - sys.hpp
+  - curlx.hpp
   - api.hpp
   - impl.hpp
 
@@ -30,14 +33,14 @@ targets:
       compile: [libndt-standalone-builds.cpp libndt.hpp]
     sys_test:
       compile: [sys_test.cpp api.hpp impl.hpp sys.hpp]
-    tests-curl:
-      compile: [curlx_test.cpp api.hpp impl.hpp sys.hpp]
+    curlx_test:
+      compile: [curlx_test.cpp curlx.hpp]
     tests-libndt:
       compile: [libndt_test.cpp api.hpp impl.hpp sys.hpp]
 
 tests:
-  curl_unit_tests:
-    command: tests-curl
+  curlx_unit_tests:
+    command: curlx_test
   sys_unit_tests:
     command: sys_test
   other_unit_tests:

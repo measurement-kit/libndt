@@ -3,6 +3,7 @@
 
 #ifndef LIBNDT_STANDALONE
 #include "sys.hpp"
+#include "curlx.hpp"
 #include "api.hpp"
 #endif // !LIBNDT_STANDALONE
 
@@ -3231,167 +3232,47 @@ Err Client::netx_closesocket(Socket fd) noexcept {
   return Err::none;
 }
 
-// Dependencies (cURL)
-// ```````````````````
-}  // namespace libndt
-}  // namespace measurement_kit
-extern "C" {
+// Curl helpers
+// ````````````
 
-static size_t curl_callback(char *ptr, size_t size, size_t nmemb,
-                            void *userdata) {
-  // Note: I have this habit of using `<= 0` rather than `== 0` even for
-  // unsigned numbers because that makes the check robust when there is a
-  // refactoring in which the number later becomes signed. In this case
-  // it's probably a bit redundant because it's a cURL API but I still like
-  // to continue to use it to avoid losing the habit. Spelling this out
-  // explicitly here such that it's clear why I am doing it.
-  if (nmemb <= 0) {
-    return 0;  // This means "no body"
-  }
-  if (size > SIZE_MAX / nmemb) {
-    // Note: if size is zero we end up here because we already excluded with
-    // the above check the case where nmemb is zero.
-    assert(false);
-    return 0;
-  }
-  auto realsiz = size * nmemb;  // Overflow not possible (see above)
-  auto ss = static_cast<std::stringstream *>(userdata);
-  (*ss) << std::string{ptr, realsiz};
-  // From fwrite(3): "[the return value] equals the number of bytes
-  // written _only_ when `size` equals `1`".
-  return nmemb;
-}
+class CurlxLoggerAdapter : public Logger {
+ public:
+  explicit CurlxLoggerAdapter(Client *client) noexcept : client_{client} {}
 
-}  // extern "C"
-namespace measurement_kit {
-namespace libndt {
+  bool is_warning_enabled() const noexcept override {
+		return client_->get_verbosity() >= verbosity_warning;
+  }
 
-void Client::CurlDeleter::operator()(CURL *handle) noexcept {
-  if (handle != nullptr) {
-    curl_easy_cleanup(handle);
+  bool is_info_enabled() const noexcept override {
+		return client_->get_verbosity() >= verbosity_info;
   }
-}
 
-bool Client::curlx_get_maybe_socks5(const std::string &proxy_port,
-                                    const std::string &url, long timeout,
-                                    std::string *body) noexcept {
-  auto handle = curlx_easy_init();
-  if (!handle) {
-    LIBNDT_EMIT_WARNING("curlx: cannot initialize cURL");
-    return false;
+  bool is_debug_enabled() const noexcept override {
+		return client_->get_verbosity() >= verbosity_debug;
   }
-  if (!proxy_port.empty()) {
-    std::stringstream ss;
-    ss << "socks5h://127.0.0.1:" << proxy_port;
-    if (curlx_setopt_proxy(handle, ss.str()) != CURLE_OK) {
-      LIBNDT_EMIT_WARNING("curlx: cannot configure proxy: " << ss.str());
-      return false;
-    }
-  }
-  return curlx_get(handle, url, timeout, body);
-}
 
-bool Client::curlx_get(UniqueCurl &handle, const std::string &url, long timeout,
-                       std::string *body) noexcept {
-  if (body == nullptr) {
-    LIBNDT_EMIT_WARNING("curlx: passed a nullptr body");
-    return false;
+  void emit_warning(const std::string &s) const noexcept override {
+		client_->on_warning(s);
   }
-  std::stringstream ss;
-  if (curlx_setopt_url(handle, url) != CURLE_OK) {
-    LIBNDT_EMIT_WARNING("curlx: cannot set URL: " << url);
-    return false;
-  }
-  if (curlx_setopt_writefunction(handle, curl_callback) != CURLE_OK) {
-    LIBNDT_EMIT_WARNING("curlx: cannot set callback function");
-    return false;
-  }
-  if (curlx_setopt_writedata(handle, &ss) != CURLE_OK) {
-    LIBNDT_EMIT_WARNING("curlx: cannot set callback function context");
-    return false;
-  }
-  if (curlx_setopt_timeout(handle, timeout) != CURLE_OK) {
-    LIBNDT_EMIT_WARNING("curlx: cannot set timeout");
-    return false;
-  }
-  if (curlx_setopt_failonerror(handle) != CURLE_OK) {
-    LIBNDT_EMIT_WARNING("curlx: cannot set fail-on-error option");
-    return false;
-  }
-  LIBNDT_EMIT_DEBUG("curlx: performing request");
-  auto rv = curlx_perform(handle);
-  if (rv != CURLE_OK) {
-    LIBNDT_EMIT_WARNING("curlx: cURL failed: " << curl_easy_strerror(rv));
-    return false;
-  }
-  long response_code = 0L;
-  if (curlx_getinfo_response_code(handle, &response_code) != 0) {
-    LIBNDT_EMIT_WARNING("curlx: cannot get the response code");
-    return false;
-  }
-  if (response_code == 204) {
-    LIBNDT_EMIT_WARNING("curlx: mlab-ns is out of capacity");
-    return false;
-  }
-  if (response_code != 200) {
-    LIBNDT_EMIT_WARNING("curlx: unexpected mlab-ns response");
-    return false;
-  }
-  LIBNDT_EMIT_DEBUG("curlx: request complete");
-  *body = ss.str();
-  return true;
-}
 
-CURLcode Client::curlx_setopt_url(UniqueCurl &handle, const std::string &url) noexcept {
-  assert(handle);
-  return ::curl_easy_setopt(handle.get(), CURLOPT_URL, url.c_str());
-}
+  void emit_info(const std::string &s) const noexcept override {
+		client_->on_info(s);
+  }
 
-CURLcode Client::curlx_setopt_proxy(UniqueCurl &handle, const std::string &url) noexcept {
-  assert(handle);
-  return ::curl_easy_setopt(handle.get(), CURLOPT_PROXY, url.c_str());
-}
+  void emit_debug(const std::string &s) const noexcept override {
+		client_->on_debug(s);
+  }
 
-CURLcode Client::curlx_setopt_writefunction(UniqueCurl &handle, size_t (*callback)(char *ptr, size_t size, size_t nmemb, void *userdata)) noexcept {
-  assert(handle);
-  return ::curl_easy_setopt(handle.get(), CURLOPT_WRITEFUNCTION, callback);
-}
+  ~CurlxLoggerAdapter() noexcept override {}
 
-CURLcode Client::curlx_setopt_writedata(UniqueCurl &handle, void *pointer) noexcept {
-  assert(handle);
-  return ::curl_easy_setopt(handle.get(), CURLOPT_WRITEDATA, pointer);
-}
-
-CURLcode Client::curlx_setopt_timeout(UniqueCurl &handle, long timeout) noexcept {
-  assert(handle);
-  return ::curl_easy_setopt(handle.get(), CURLOPT_TIMEOUT, timeout);
-}
-
-CURLcode Client::curlx_setopt_failonerror(UniqueCurl &handle) noexcept {
-  assert(handle);
-  return ::curl_easy_setopt(handle.get(), CURLOPT_FAILONERROR, 1L);
-}
-
-CURLcode Client::curlx_perform(UniqueCurl &handle) noexcept {
-  assert(handle);
-  return ::curl_easy_perform(handle.get());
-}
-
-Client::UniqueCurl Client::curlx_easy_init() noexcept {
-  return Client::UniqueCurl{::curl_easy_init()};
-}
-
-CURLcode Client::curlx_getinfo_response_code(
-    UniqueCurl &handle, long *response_code) noexcept {
-  assert(handle);
-  assert(response_code);
-  return ::curl_easy_getinfo(
-      handle.get(), CURLINFO_RESPONSE_CODE, response_code);
-}
+ private:
+  Client *client_;
+};
 
 bool Client::query_mlabns_curl(const std::string &url, long timeout,
                                std::string *body) noexcept {
-  return curlx_get_maybe_socks5(settings_.socks5h_port, url, timeout, body);
+  Curlx curlx{CurlxLoggerAdapter{this}};
+  return curlx.GetMaybeSOCKS5(settings_.socks5h_port, url, timeout, body);
 }
 
 // Other helpers

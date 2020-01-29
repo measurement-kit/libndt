@@ -1,0 +1,81 @@
+// Part of Measurement Kit <https://measurement-kit.github.io/>.
+// Measurement Kit is free software under the BSD license. See AUTHORS
+// and LICENSE for more information on the copying conditions.
+#ifndef MEASUREMENT_KIT_LIBNDT_LOGGER_HPP
+#define MEASUREMENT_KIT_LIBNDT_LOGGER_HPP
+
+// libndt/logger.hpp - logger API
+
+#include <sstream>
+#include <string>
+
+namespace measurement_kit {
+namespace libndt {
+
+class Logger {
+ public:
+  virtual bool is_warning_enabled() const noexcept = 0;
+  virtual bool is_info_enabled() const noexcept = 0;
+  virtual bool is_debug_enabled() const noexcept = 0;
+  virtual void emit_warning(const std::string &) const noexcept = 0;
+  virtual void emit_info(const std::string &) const noexcept = 0;
+  virtual void emit_debug(const std::string &) const noexcept = 0;
+  virtual ~Logger() noexcept;
+};
+
+class NoLogger : public Logger {
+ public:
+  bool is_warning_enabled() const noexcept override;
+  bool is_info_enabled() const noexcept override;
+  bool is_debug_enabled() const noexcept override;
+  void emit_warning(const std::string &) const noexcept override;
+  void emit_info(const std::string &) const noexcept override;
+  void emit_debug(const std::string &) const noexcept override;
+  ~NoLogger() noexcept override;
+};
+
+// LIBNDT_NO_INLINE_IMPL controls whether to inline the impl
+#ifndef LIBNDT_NO_INLINE_IMPL
+
+#define LIBNDT_LOGGER_LEVEL_(logger, level, statements) \
+  if ((logger).is_##level##_enabled()) {                \
+    std::stringstream ss;                               \
+    ss << statements;                                   \
+    logger.emit_##level(ss.str());                      \
+  }
+
+#define LIBNDT_LOGGER_WARNING(logger, statements) \
+  LIBNDT_LOGGER_LEVEL_(logger, warning, statements)
+
+#define LIBNDT_LOGGER_INFO(logger, statements) \
+  LIBNDT_LOGGER_LEVEL_(logger, info, statements)
+
+#define LIBNDT_LOGGER_DEBUG(logger, statements) \
+  LIBNDT_LOGGER_LEVEL_(logger, debug, statements)
+
+Logger::~Logger() noexcept {}
+
+bool NoLogger::is_warning_enabled() const noexcept {
+  return false;
+}
+
+bool NoLogger::is_info_enabled() const noexcept {
+  return false;
+}
+
+bool NoLogger::is_debug_enabled() const noexcept {
+  return false;
+}
+
+void NoLogger::emit_warning(const std::string &) const noexcept {}
+
+void NoLogger::emit_info(const std::string &) const noexcept {}
+
+void NoLogger::emit_debug(const std::string &) const noexcept {}
+
+NoLogger::~NoLogger() noexcept {}
+
+#endif  // LIBNDT_NO_INLINE_IMPL
+}  // namespace libndt
+}  // namespace measurement_kit
+#endif

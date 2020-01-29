@@ -2,159 +2,157 @@
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
 
-#include "json.hpp"
-
-#include "impl.hpp" // not standalone
+#include "curlx.hpp"
 
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
+#include "logger.hpp"
+
 using namespace measurement_kit;
 
-// Client::curlx_get_maybe_socks5() tests
-// --------------------------------------
+// Curlx::GetMaybeSOCKS5() tests
+// -----------------------------
 
-class FailCurlxEasyInit : public libndt::Client {
+class FailCurlxEasyInit : public libndt::Curlx {
  public:
-  using libndt::Client::Client;
-  virtual libndt::Client::UniqueCurl curlx_easy_init() noexcept override {
+  using libndt::Curlx::Curlx;
+  virtual libndt::UniqueCurl NewUniqueCurl() noexcept override {
       return {};
   }
 };
 
-TEST_CASE("Client::curlx_get_maybe_socks5() deals with Client::curlx_easy_init() failure") {
-  FailCurlxEasyInit client;
+TEST_CASE("Curlx::GetMaybeSOSCKS5() deals with Curlx::NewUniqueCurl() failure") {
+  FailCurlxEasyInit curlx{libndt::NoLogger{}};
   std::string body;
-  REQUIRE(!client.curlx_get_maybe_socks5("", "http://x.org", 1, &body));
+  REQUIRE(!curlx.GetMaybeSOCKS5("", "http://x.org", 1, &body));
 }
 
-class FailCurlxSetoptProxy : public libndt::Client {
+class FailCurlxSetoptProxy : public libndt::Curlx {
  public:
-  using libndt::Client::Client;
-  virtual CURLcode curlx_setopt_proxy(
-      libndt::Client::UniqueCurl &, const std::string &) noexcept override {
+  using libndt::Curlx::Curlx;
+  virtual CURLcode SetoptProxy(
+      libndt::UniqueCurl &, const std::string &) noexcept override {
     return CURLE_UNSUPPORTED_PROTOCOL; // any error is okay here
   }
 };
 
 TEST_CASE(
-    "Client::curlx_get_maybe_socks5() deals with Client::curlx_setopt_proxy() failure") {
-  FailCurlxSetoptProxy client;
+    "Curlx::GetMaybeSOCKS5() deals with Curlx::SetoptProxy() failure") {
+  FailCurlxSetoptProxy curlx{libndt::NoLogger{}};
   std::string body;
-  REQUIRE(!client.curlx_get_maybe_socks5("9050", "http://x.org", 1, &body));
+  REQUIRE(!curlx.GetMaybeSOCKS5("9050", "http://x.org", 1, &body));
 }
 
-// Client::curlx_get() tests
-// -------------------------
+// Curlx::Get() tests
+// ------------------
 
-TEST_CASE("Client::curlx_get() deals with null body") {
-  libndt::Client client;
-  libndt::Client::UniqueCurl handle{client.curlx_easy_init()};
-  REQUIRE(client.curlx_get(handle, "http://x.org", 1, nullptr) == false);
+TEST_CASE("Curlx::Get() deals with null body") {
+  libndt::Curlx curlx{libndt::NoLogger{}};
+  libndt::UniqueCurl handle{curlx.NewUniqueCurl()};
+  REQUIRE(curlx.Get(handle, "http://x.org", 1, nullptr) == false);
 }
 
-class FailCurlxSetoptUrl : public libndt::Client {
+class FailCurlxSetoptUrl : public libndt::Curlx {
  public:
-  using libndt::Client::Client;
-  virtual CURLcode curlx_setopt_url(
-      libndt::Client::UniqueCurl &, const std::string &) noexcept {
+  using libndt::Curlx::Curlx;
+  virtual CURLcode SetoptURL(
+      libndt::UniqueCurl &, const std::string &) noexcept {
     return CURLE_AGAIN;
   }
 };
 
-TEST_CASE("Client::curlx_get() deals with Client::curlx_setopt_url() failure") {
-  FailCurlxSetoptUrl client;
-  libndt::Client::UniqueCurl handle{client.curlx_easy_init()};
+TEST_CASE("Curlx::Get() deals with Curlx::SetoptURL() failure") {
+  FailCurlxSetoptUrl curlx{libndt::NoLogger{}};
+  libndt::UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
-  REQUIRE(client.curlx_get(handle, "http://x.org", 1, &body) == false);
+  REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
 }
 
-class FailCurlxSetoptWritefunction : public libndt::Client {
+class FailCurlxSetoptWritefunction : public libndt::Curlx {
  public:
-  using libndt::Client::Client;
-  virtual CURLcode curlx_setopt_writefunction(
-      libndt::Client::UniqueCurl &, size_t (*)(
-        char *ptr, size_t size, size_t nmemb, void *userdata))
-          noexcept override {
+  using libndt::Curlx::Curlx;
+  virtual CURLcode SetoptWriteFunction(
+      libndt::UniqueCurl &, libndt::CurlWriteCb) noexcept override {
     return CURLE_AGAIN;
   }
 };
 
-TEST_CASE("Client::curlx_get() deals with Client::curlx_setopt_writefunction() failure") {
-  FailCurlxSetoptWritefunction client;
-  libndt::Client::UniqueCurl handle{client.curlx_easy_init()};
+TEST_CASE("Curlx::Get() deals with Curlx::SetoptWriteFunction() failure") {
+  FailCurlxSetoptWritefunction curlx{libndt::NoLogger{}};
+  libndt::UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
-  REQUIRE(client.curlx_get(handle, "http://x.org", 1, &body) == false);
+  REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
 }
 
-class FailCurlxSetoptWritedata : public libndt::Client {
+class FailCurlxSetoptWritedata : public libndt::Curlx {
  public:
-  using libndt::Client::Client;
-  virtual CURLcode curlx_setopt_writedata(
-      libndt::Client::UniqueCurl &, void *) noexcept override {
+  using libndt::Curlx::Curlx;
+  virtual CURLcode SetoptWriteData(
+      libndt::UniqueCurl &, void *) noexcept override {
     return CURLE_AGAIN;
   }
 };
 
-TEST_CASE("Client::curlx_get() deals with Client::curlx_setopt_writedata() failure") {
-  FailCurlxSetoptWritedata client;
-  libndt::Client::UniqueCurl handle{client.curlx_easy_init()};
+TEST_CASE("Curlx::Get() deals with Curlx::SetoptWriteData() failure") {
+  FailCurlxSetoptWritedata curlx{libndt::NoLogger{}};
+  libndt::UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
-  REQUIRE(client.curlx_get(handle, "http://x.org", 1, &body) == false);
+  REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
 }
 
-class FailCurlxSetoptTimeout : public libndt::Client {
+class FailCurlxSetoptTimeout : public libndt::Curlx {
  public:
-  using libndt::Client::Client;
-  virtual CURLcode curlx_setopt_timeout(
-      libndt::Client::UniqueCurl &, long) noexcept override {
+  using libndt::Curlx::Curlx;
+  virtual CURLcode SetoptTimeout(
+      libndt::UniqueCurl &, long) noexcept override {
     return CURLE_AGAIN;
   }
 };
 
-TEST_CASE("Client::curlx_get() deals with Client::curlx_setopt_timeout() failure") {
-  FailCurlxSetoptTimeout client;
-  libndt::Client::UniqueCurl handle{client.curlx_easy_init()};
+TEST_CASE("Curlx::Get() deals with Curlx::SetoptTimeout() failure") {
+  FailCurlxSetoptTimeout curlx{libndt::NoLogger{}};
+  libndt::UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
-  REQUIRE(client.curlx_get(handle, "http://x.org", 1, &body) == false);
+  REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
 }
 
-class FailCurlxSetoptFailonerror : public libndt::Client {
+class FailCurlxSetoptFailonerror : public libndt::Curlx {
  public:
-  using libndt::Client::Client;
-  virtual CURLcode curlx_setopt_failonerror(
-      libndt::Client::UniqueCurl &) noexcept override {
+  using libndt::Curlx::Curlx;
+  virtual CURLcode SetoptFailonerr(
+      libndt::UniqueCurl &) noexcept override {
     return CURLE_AGAIN;
   }
 };
 
-TEST_CASE("Client::curlx_get() deals with Client::curlx_setopt_failonerror() failure") {
-  FailCurlxSetoptFailonerror client;
-  libndt::Client::UniqueCurl handle{client.curlx_easy_init()};
+TEST_CASE("Curlx::Get() deals with Curlx::SetoptFailonerror() failure") {
+  FailCurlxSetoptFailonerror curlx{libndt::NoLogger{}};
+  libndt::UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
-  REQUIRE(client.curlx_get(handle, "http://x.org", 1, &body) == false);
+  REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
 }
 
-class FailCurlxPerform : public libndt::Client {
+class FailCurlxPerform : public libndt::Curlx {
  public:
-  using libndt::Client::Client;
-  virtual CURLcode curlx_perform(
-    libndt::Client::UniqueCurl &) noexcept override { return CURLE_AGAIN; }
+  using libndt::Curlx::Curlx;
+  virtual CURLcode Perform(
+    libndt::UniqueCurl &) noexcept override { return CURLE_AGAIN; }
 };
 
-TEST_CASE("Client::curlx_get() deals with Client::curlx_perform() failure") {
-  FailCurlxPerform client;
-  libndt::Client::UniqueCurl handle{client.curlx_easy_init()};
+TEST_CASE("Curlx::Get() deals with Curlx::Perform() failure") {
+  FailCurlxPerform curlx{libndt::NoLogger{}};
+  libndt::UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
-  REQUIRE(client.curlx_get(handle, "http://x.org", 1, &body) == false);
+  REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
 }
 
-// Client::curlx_setopt_proxy() tests
-// ----------------------------------
+// Curlx::SetoptProxy() tests
+// --------------------------
 
-TEST_CASE("Client::setopt_proxy() works") {
-  libndt::Client client;
-  libndt::Client::UniqueCurl handle{client.curlx_easy_init()};
-  REQUIRE(client.curlx_setopt_proxy(
+TEST_CASE("Curlx::SetoptProxy() works") {
+  libndt::Curlx curlx{libndt::NoLogger{}};
+  libndt::UniqueCurl handle{curlx.NewUniqueCurl()};
+  REQUIRE(curlx.SetoptProxy(
     handle, "socks5h://127.0.0.1:9050") == CURLE_OK);
 }

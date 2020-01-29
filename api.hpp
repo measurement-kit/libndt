@@ -99,8 +99,6 @@
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 
-#include <curl/curl.h>
-
 namespace measurement_kit {
 namespace libndt {
 
@@ -699,45 +697,6 @@ class Client : public EventHandler {
 
   // Close a socket.
   virtual Err netx_closesocket(Socket fd) noexcept;
-
-  // Dependencies (cURL)
-  // ```````````````````
-  //
-  // This section contains functionality used by cURL.
-  class CurlDeleter {
-   public:
-    void operator()(CURL *handle) noexcept;
-  };
-  using UniqueCurl = std::unique_ptr<CURL, CurlDeleter>;
-
-  bool curlx_get_maybe_socks5(const std::string &proxy_port,
-                              const std::string &url, long timeout,
-                              std::string *body) noexcept;
-
-  bool curlx_get(UniqueCurl &, const std::string &url, long timeout,
-                 std::string *body) noexcept;
-
-  virtual CURLcode curlx_setopt_url(
-                UniqueCurl &, const std::string &url) noexcept;
-
-  virtual CURLcode curlx_setopt_proxy(UniqueCurl &,
-                const std::string &url) noexcept;
-
-  virtual CURLcode curlx_setopt_writefunction(UniqueCurl &, size_t (*callback)(
-      char *ptr, size_t size, size_t nmemb, void *userdata)) noexcept;
-
-  virtual CURLcode curlx_setopt_writedata(UniqueCurl &, void *pointer) noexcept;
-
-  virtual CURLcode curlx_setopt_timeout(UniqueCurl &, long timeout) noexcept;
-
-  virtual CURLcode curlx_setopt_failonerror(UniqueCurl &) noexcept;
-
-  virtual CURLcode curlx_perform(UniqueCurl &) noexcept;
-
-  virtual UniqueCurl curlx_easy_init() noexcept;
-
-  virtual CURLcode curlx_getinfo_response_code(
-    UniqueCurl &handle, long *response_code) noexcept;
 
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
