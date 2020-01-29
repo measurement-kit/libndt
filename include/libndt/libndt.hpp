@@ -3972,7 +3972,8 @@ class CurlxLoggerAdapter : public internal::Logger {
 
 bool Client::query_mlabns_curl(const std::string &url, long timeout,
                                std::string *body) noexcept {
-	internal::Curlx curlx{CurlxLoggerAdapter{this}};
+  CurlxLoggerAdapter adapter{this};
+  internal::Curlx curlx{adapter};
   return curlx.GetMaybeSOCKS5(settings_.socks5h_port, url, timeout, body);
 }
 

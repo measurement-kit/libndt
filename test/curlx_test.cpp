@@ -9,6 +9,11 @@
 
 using namespace measurement_kit::libndt::internal;
 
+static const Logger &NoLoggerInstance() {
+  static NoLogger singleton;
+  return singleton;
+}
+
 // Curlx::GetMaybeSOCKS5() tests
 // -----------------------------
 
@@ -19,7 +24,7 @@ class FailCurlxEasyInit : public Curlx {
 };
 
 TEST_CASE("Curlx::GetMaybeSOSCKS5() deals with Curlx::NewUniqueCurl() failure") {
-  FailCurlxEasyInit curlx{NoLogger{}};
+  FailCurlxEasyInit curlx{NoLoggerInstance()};
   std::string body;
   REQUIRE(!curlx.GetMaybeSOCKS5("", "http://x.org", 1, &body));
 }
@@ -33,7 +38,7 @@ class FailCurlxSetoptProxy : public Curlx {
 };
 
 TEST_CASE("Curlx::GetMaybeSOCKS5() deals with Curlx::SetoptProxy() failure") {
-  FailCurlxSetoptProxy curlx{NoLogger{}};
+  FailCurlxSetoptProxy curlx{NoLoggerInstance()};
   std::string body;
   REQUIRE(!curlx.GetMaybeSOCKS5("9050", "http://x.org", 1, &body));
 }
@@ -42,7 +47,7 @@ TEST_CASE("Curlx::GetMaybeSOCKS5() deals with Curlx::SetoptProxy() failure") {
 // ------------------
 
 TEST_CASE("Curlx::Get() deals with null body") {
-  Curlx curlx{NoLogger{}};
+  Curlx curlx{NoLoggerInstance()};
   UniqueCurl handle{curlx.NewUniqueCurl()};
   REQUIRE(curlx.Get(handle, "http://x.org", 1, nullptr) == false);
 }
@@ -54,7 +59,7 @@ class FailCurlxSetoptUrl : public Curlx {
 };
 
 TEST_CASE("Curlx::Get() deals with Curlx::SetoptURL() failure") {
-  FailCurlxSetoptUrl curlx{NoLogger{}};
+  FailCurlxSetoptUrl curlx{NoLoggerInstance()};
   UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
   REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
@@ -69,7 +74,7 @@ class FailCurlxSetoptWritefunction : public Curlx {
 };
 
 TEST_CASE("Curlx::Get() deals with Curlx::SetoptWriteFunction() failure") {
-  FailCurlxSetoptWritefunction curlx{NoLogger{}};
+  FailCurlxSetoptWritefunction curlx{NoLoggerInstance()};
   UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
   REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
@@ -82,7 +87,7 @@ class FailCurlxSetoptWritedata : public Curlx {
 };
 
 TEST_CASE("Curlx::Get() deals with Curlx::SetoptWriteData() failure") {
-  FailCurlxSetoptWritedata curlx{NoLogger{}};
+  FailCurlxSetoptWritedata curlx{NoLoggerInstance()};
   UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
   REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
@@ -95,7 +100,7 @@ class FailCurlxSetoptTimeout : public Curlx {
 };
 
 TEST_CASE("Curlx::Get() deals with Curlx::SetoptTimeout() failure") {
-  FailCurlxSetoptTimeout curlx{NoLogger{}};
+  FailCurlxSetoptTimeout curlx{NoLoggerInstance()};
   UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
   REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
@@ -108,7 +113,7 @@ class FailCurlxSetoptFailonerror : public Curlx {
 };
 
 TEST_CASE("Curlx::Get() deals with Curlx::SetoptFailonerror() failure") {
-  FailCurlxSetoptFailonerror curlx{NoLogger{}};
+  FailCurlxSetoptFailonerror curlx{NoLoggerInstance()};
   UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
   REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
@@ -121,7 +126,7 @@ class FailCurlxPerform : public Curlx {
 };
 
 TEST_CASE("Curlx::Get() deals with Curlx::Perform() failure") {
-  FailCurlxPerform curlx{NoLogger{}};
+  FailCurlxPerform curlx{NoLoggerInstance()};
   UniqueCurl handle{curlx.NewUniqueCurl()};
   std::string body;
   REQUIRE(curlx.Get(handle, "http://x.org", 1, &body) == false);
@@ -131,7 +136,7 @@ TEST_CASE("Curlx::Get() deals with Curlx::Perform() failure") {
 // --------------------------
 
 TEST_CASE("Curlx::SetoptProxy() works") {
-  Curlx curlx{NoLogger{}};
+  Curlx curlx{NoLoggerInstance()};
   UniqueCurl handle{curlx.NewUniqueCurl()};
   REQUIRE(curlx.SetoptProxy(handle, "socks5h://127.0.0.1:9050") == CURLE_OK);
 }
