@@ -14,14 +14,6 @@ function_checks:
 - name: strtonum
   define: LIBNDT_HAVE_STRTONUM
 
-symbol_checks:
-- name: SO_NOSIGPIPE
-  header: sys/socket.h
-  define: LIBNDT_HAVE_SO_NOSIGPIPE
-- name: MSG_NOSIGNAL
-  header: sys/socket.h
-  define: LIBNDT_HAVE_MSG_NOSIGNAL
-
 dependencies:
 - github.com/adishavit/argh
 - github.com/catchorg/catch2

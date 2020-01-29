@@ -256,7 +256,7 @@ Ssize Sys::recv(Socket fd, void *base, Size count) const noexcept {
     return -1;
   }
   int flags = 0;
-#ifdef LIBNDT_HAVE_MSG_NOSIGNAL
+#ifdef MSG_NOSIGNAL
   // On Linux systems this flag prevents socket ops from raising SIGPIPE.
   flags |= MSG_NOSIGNAL;
 #endif
@@ -270,7 +270,7 @@ Ssize Sys::send(Socket fd, const void *base, Size count) const noexcept {
     return -1;
   }
   int flags = 0;
-#ifdef LIBNDT_HAVE_MSG_NOSIGNAL
+#ifdef MSG_NOSIGNAL
   // On Linux systems this flag prevents socket ops from raising SIGPIPE.
   flags |= MSG_NOSIGNAL;
 #endif

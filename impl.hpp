@@ -115,13 +115,6 @@ constexpr auto max_loops = 256;
 constexpr char msg_kickoff[] = "123456 654321";
 constexpr size_t msg_kickoff_size = sizeof(msg_kickoff) - 1;
 
-// SIGPIPE correctness
-// ```````````````````
-
-#if !defined _WIN32 && !defined LIBNDT_HAVE_MSG_NOSIGNAL && !defined LIBNDT_HAVE_SO_NOSIGPIPE
-#error "No way to avoid SIGPIPE in the current thread when doing socket I/O."
-#endif
-
 // Private utils
 // `````````````
 
@@ -2812,7 +2805,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         LIBNDT_EMIT_WARNING("netx_dial: socket() failed");
         continue;
       }
-#ifdef LIBNDT_HAVE_SO_NOSIGPIPE
+#ifdef SO_NOSIGPIPE
       // Implementation note: SO_NOSIGPIPE is the nonportable BSD solution to
       // avoid SIGPIPE when writing on a connection closed by the peer.
       {
@@ -2825,7 +2818,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
           continue;
         }
       }
-#endif  // LIBNDT_HAVE_SO_NOSIGPIPE
+#endif  // SO_NOSIGPIPE
       if (netx_setnonblocking(*sock, true) != Err::none) {
         LIBNDT_EMIT_WARNING("netx_dial: netx_setnonblocking() failed");
         sys->closesocket(*sock);
