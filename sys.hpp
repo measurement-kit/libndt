@@ -6,9 +6,6 @@
 
 // libndt/sys.hpp - system dependent routines
 
-// LIBNDT_NO_INLINE_IMPL controls whether to inline the impl
-#ifndef LIBNDT_NO_INLINE_IMPL
-
 #ifdef _WIN32
 #include <winsock2.h>
 #else
@@ -135,6 +132,9 @@ class Sys {
   // ~Sys is the destructor
   virtual ~Sys() noexcept;
 };
+
+// LIBNDT_NO_INLINE_IMPL controls whether to inline the impl
+#ifndef LIBNDT_NO_INLINE_IMPL
 
 // LIBNDT_HAVE_STRTONUM tells us whether we have strtonum in libc
 #ifndef LIBNDT_HAVE_STRTONUM
@@ -324,7 +324,7 @@ int Sys::getsockopt(Socket socket, int level, int name, void *value,
 
 Sys::~Sys() noexcept {}
 
+#endif  // LIBNDT_NO_INLINE_IMPL
 }  // namespace libndt
 }  // namespace measurement_kit
-#endif  // LIBNDT_NO_INLINE_IMPL
 #endif  // MEASUREMENT_KIT_LIBNDT_SYS_HPP

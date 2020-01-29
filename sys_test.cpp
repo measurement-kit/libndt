@@ -2,7 +2,6 @@
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
 
-#define LIBNDT_INLINE_IMPL
 #include "sys.hpp"
 
 #include <string.h>
