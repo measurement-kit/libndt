@@ -419,9 +419,6 @@ enum class Err {
 // Client
 // ``````
 
-// Sys contains system dependent routines
-class Sys;
-
 /// NDT client. In the typical usage, you just need to construct a Client,
 /// optionally providing settings, and to call the run() method. More advanced
 /// usage may require you to override methods in a subclass to customize the
