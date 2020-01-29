@@ -6,6 +6,12 @@
 
 // libndt/internal/err.hpp - definition of error
 
+#include <climits>
+#include <sstream>
+#include <string>
+
+#include <openssl/err.h>
+
 namespace measurement_kit {
 namespace libndt {
 namespace internal {
@@ -54,6 +60,68 @@ enum class Err {
   socks5h,   // SOCKSv5 protocol error
   ws_proto,  // WebSocket protocol error
 };
+
+std::string libndt_perror(Err err) noexcept;
+std::string ssl_format_error() noexcept;
+
+std::string libndt_perror(Err err) noexcept {
+  std::string rv;
+  //
+#define LIBNDT_PERROR(value) \
+  case Err::value: rv = #value; break
+  //
+  switch (err) {
+    LIBNDT_PERROR(none);
+    LIBNDT_PERROR(broken_pipe);
+    LIBNDT_PERROR(connection_aborted);
+    LIBNDT_PERROR(connection_refused);
+    LIBNDT_PERROR(connection_reset);
+    LIBNDT_PERROR(function_not_supported);
+    LIBNDT_PERROR(host_unreachable);
+    LIBNDT_PERROR(interrupted);
+    LIBNDT_PERROR(invalid_argument);
+    LIBNDT_PERROR(io_error);
+    LIBNDT_PERROR(message_size);
+    LIBNDT_PERROR(network_down);
+    LIBNDT_PERROR(network_reset);
+    LIBNDT_PERROR(network_unreachable);
+    LIBNDT_PERROR(operation_in_progress);
+    LIBNDT_PERROR(operation_would_block);
+    LIBNDT_PERROR(timed_out);
+    LIBNDT_PERROR(value_too_large);
+    LIBNDT_PERROR(eof);
+    LIBNDT_PERROR(ai_generic);
+    LIBNDT_PERROR(ai_again);
+    LIBNDT_PERROR(ai_fail);
+    LIBNDT_PERROR(ai_noname);
+    LIBNDT_PERROR(socks5h);
+    LIBNDT_PERROR(ssl_generic);
+    LIBNDT_PERROR(ssl_want_read);
+    LIBNDT_PERROR(ssl_want_write);
+    LIBNDT_PERROR(ssl_syscall);
+    LIBNDT_PERROR(ws_proto);
+  }
+#undef LIBNDT_PERROR  // Tidy
+  //
+  if (err == Err::ssl_generic) {
+    rv += ": ";
+    rv += ssl_format_error();
+  }
+  //
+  return rv;
+}
+
+std::string ssl_format_error() noexcept {
+  std::stringstream ss;
+  for (unsigned short i = 0; i < USHRT_MAX; ++i) {
+    unsigned long err = ERR_get_error();
+    if (err == 0) {
+      break;
+    }
+    ss << ((i > 0) ? ": " : "") << ERR_reason_error_string(err);
+  }
+  return ss.str();
+}
 
 }  // namespace internal
 }  // namespace libndt

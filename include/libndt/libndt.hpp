@@ -820,69 +820,6 @@ constexpr size_t msg_kickoff_size = sizeof(msg_kickoff) - 1;
 // Private utils
 // `````````````
 
-// Format OpenSSL error as a C++ string.
-static std::string ssl_format_error() noexcept {
-  std::stringstream ss;
-  for (unsigned short i = 0; i < USHRT_MAX; ++i) {
-    unsigned long err = ERR_get_error();
-    if (err == 0) {
-      break;
-    }
-    ss << ((i > 0) ? ": " : "") << ERR_reason_error_string(err);
-  }
-  return ss.str();
-}
-
-// Map an error code to the corresponding string value.
-static std::string libndt_perror(internal::Err err) noexcept {
-  std::string rv;
-  //
-#define LIBNDT_PERROR(value) \
-case internal::Err::value:   \
-    rv = #value;             \
-    break
-  //
-  switch (err) {
-    LIBNDT_PERROR(none);
-    LIBNDT_PERROR(broken_pipe);
-    LIBNDT_PERROR(connection_aborted);
-    LIBNDT_PERROR(connection_refused);
-    LIBNDT_PERROR(connection_reset);
-    LIBNDT_PERROR(function_not_supported);
-    LIBNDT_PERROR(host_unreachable);
-    LIBNDT_PERROR(interrupted);
-    LIBNDT_PERROR(invalid_argument);
-    LIBNDT_PERROR(io_error);
-    LIBNDT_PERROR(message_size);
-    LIBNDT_PERROR(network_down);
-    LIBNDT_PERROR(network_reset);
-    LIBNDT_PERROR(network_unreachable);
-    LIBNDT_PERROR(operation_in_progress);
-    LIBNDT_PERROR(operation_would_block);
-    LIBNDT_PERROR(timed_out);
-    LIBNDT_PERROR(value_too_large);
-    LIBNDT_PERROR(eof);
-    LIBNDT_PERROR(ai_generic);
-    LIBNDT_PERROR(ai_again);
-    LIBNDT_PERROR(ai_fail);
-    LIBNDT_PERROR(ai_noname);
-    LIBNDT_PERROR(socks5h);
-    LIBNDT_PERROR(ssl_generic);
-    LIBNDT_PERROR(ssl_want_read);
-    LIBNDT_PERROR(ssl_want_write);
-    LIBNDT_PERROR(ssl_syscall);
-    LIBNDT_PERROR(ws_proto);
-  }
-#undef LIBNDT_PERROR  // Tidy
-  //
-  if (err == internal::Err::ssl_generic) {
-    rv += ": ";
-    rv += ssl_format_error();
-  }
-  //
-  return rv;
-}
-
 // Generic macro for emitting logs.
 #define LIBNDT_EMIT_LOG_EX(client, level, statements)      \
   do {                                                     \
@@ -1542,7 +1479,7 @@ bool Client::run_download() noexcept {
           if (err != internal::Err::none) {
             if (err != internal::Err::eof) {
               LIBNDT_EMIT_WARNING_EX(const_this,
-                "run_download: receiving: " << libndt_perror(err));
+                "run_download: receiving: " << internal::libndt_perror(err));
             }
             break;
           }
@@ -1751,7 +1688,7 @@ bool Client::run_upload() noexcept {
           if (err != internal::Err::none) {
             if (err != internal::Err::broken_pipe) {
               LIBNDT_EMIT_WARNING_EX(const_this,
-                "run_upload: sending: " << libndt_perror(err));
+                "run_upload: sending: " << internal::libndt_perror(err));
             }
             break;
           }
@@ -3030,7 +2967,7 @@ again:
   }
   // Otherwise let the caller know
   if (err != internal::Err::none) {
-    LIBNDT_EMIT_WARNING_EX(client, opname << " failed: " << libndt_perror(err));
+    LIBNDT_EMIT_WARNING_EX(client, opname << " failed: " << internal::libndt_perror(err));
   }
   return err;
 }
@@ -3561,7 +3498,7 @@ internal::Err Client::netx_dial(const std::string &hostname, const std::string &
         }
       }
       LIBNDT_EMIT_WARNING("netx_dial: connect() failed: "
-                   << libndt_perror(netx_map_errno(sys->GetLastError())));
+                   << internal::libndt_perror(netx_map_errno(sys->GetLastError())));
       sys->Closesocket(*sock);
       *sock = (libndt::internal::Socket)-1;
     }
@@ -3593,7 +3530,7 @@ again:
     goto again;
   }
   LIBNDT_EMIT_DEBUG(
-      "netx_recv: netx_recv_nonblocking() failed: " << libndt_perror(err));
+      "netx_recv: netx_recv_nonblocking() failed: " << internal::libndt_perror(err));
   return err;
 }
 
@@ -3674,7 +3611,7 @@ again:
     goto again;
   }
   LIBNDT_EMIT_DEBUG(
-      "netx_send: netx_send_nonblocking() failed: " << libndt_perror(err));
+      "netx_send: netx_send_nonblocking() failed: " << internal::libndt_perror(err));
   return err;
 }
 
@@ -3756,7 +3693,7 @@ internal::Err Client::netx_resolve(const std::string &hostname,
     if (rv != 0) {
       auto err = netx_map_eai(rv);
       LIBNDT_EMIT_WARNING(
-          "netx_resolve: getaddrinfo() failed: " << libndt_perror(err));
+          "netx_resolve: getaddrinfo() failed: " << internal::libndt_perror(err));
       return err;
     }
     // FALLTHROUGH
