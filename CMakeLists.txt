@@ -127,20 +127,21 @@ macro(MKSetRestrictiveCompilerFlags)
 endmacro()
 MKSetRestrictiveCompilerFlags()
 
-file(READ "include/libndt/preamble.hpp" MK_AMALGAMATE_PREAMBLE)
-file(APPEND "single_include/libndt.hpp" "${MK_AMALGAMATE_PREAMBLE}")
-file(READ "third_party/github.com/nlohmann/json/json.hpp" MK_AMALGAMATE_JSON)
-file(APPEND "single_include/libndt.hpp" "${MK_AMALGAMATE_JSON}")
-file(READ "include/libndt/internal/assert.hpp" MK_AMALGAMATE_ASSERT)
-file(APPEND "single_include/libndt.hpp" "${MK_AMALGAMATE_ASSERT}")
-file(READ "include/libndt/internal/logger.hpp" MK_AMALGAMATE_LOGGER)
-file(APPEND "single_include/libndt.hpp" "${MK_AMALGAMATE_LOGGER}")
-file(READ "include/libndt/internal/sys.hpp" MK_AMALGAMATE_SYS)
-file(APPEND "single_include/libndt.hpp" "${MK_AMALGAMATE_SYS}")
-file(READ "include/libndt/internal/curlx.hpp" MK_AMALGAMATE_CURLX)
-file(APPEND "single_include/libndt.hpp" "${MK_AMALGAMATE_CURLX}")
-file(READ "include/libndt/libndt.hpp" MK_AMALGAMATE_LIBNDT)
-file(APPEND "single_include/libndt.hpp" "${MK_AMALGAMATE_LIBNDT}")
+set(MK_LIBNDT_AMALGAMATE_DEST single_include/libndt.hpp)
+file(REMOVE ${MK_LIBNDT_AMALGAMATE_DEST})
+foreach(SOURCE IN ITEMS
+        include/libndt/preamble.hpp
+        third_party/github.com/nlohmann/json/json.hpp
+        include/libndt/internal/assert.hpp
+        include/libndt/internal/sys.hpp
+        include/libndt/internal/logger.hpp
+        include/libndt/internal/curlx.hpp
+        include/libndt/internal/err.hpp
+        include/libndt/timeout.hpp
+        include/libndt/libndt.hpp)
+  file(READ ${SOURCE} CONTENT)
+  file(APPEND ${MK_LIBNDT_AMALGAMATE_DEST} "${CONTENT}")
+endforeach()
 
 add_definitions(${CMAKE_REQUIRED_DEFINITIONS})
 include_directories(${CMAKE_REQUIRED_INCLUDES}
