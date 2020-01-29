@@ -1,3 +1,0 @@
-#ifndef LIBNDT_STANDALONE
-#define LIBNDT_STANDALONE 1
-#endif

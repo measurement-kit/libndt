@@ -1,10 +1,10 @@
 // Part of Measurement Kit <https://measurement-kit.github.io/>.
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
-#ifndef MEASUREMENT_KIT_LIBNDT_ASSERT_HPP
-#define MEASUREMENT_KIT_LIBNDT_ASSERT_HPP
+#ifndef MEASUREMENT_KIT_LIBNDT_INTERNAL_ASSERT_HPP
+#define MEASUREMENT_KIT_LIBNDT_INTERNAL_ASSERT_HPP
 
-// libndt/assert.hpp - assert API
+// libndt/internal/assert.hpp - assert API
 
 #include <cstdlib>
 

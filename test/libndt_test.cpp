@@ -2,9 +2,9 @@
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
 
-#include "json.hpp"
+#include "third_party/github.com/nlohmann/json/json.hpp"
 
-#include "impl.hpp" // not standalone
+#include "libndt/libndt.hpp"
 
 #ifndef _WIN32
 #include <arpa/inet.h>
@@ -24,8 +24,7 @@
 #include <vector>
 
 #define CATCH_CONFIG_MAIN
-#include "catch.hpp"
-#include "json.hpp"
+#include "third_party/github.com/catchorg/Catch2/catch.hpp"
 
 #ifdef _WIN32
 #define OS_EINVAL WSAEINVAL
@@ -35,7 +34,7 @@
 #define OS_EWOULDBLOCK EWOULDBLOCK
 #endif
 
-using namespace measurement_kit;
+using namespace measurement_kit::libndt;
 
 // Unit tests
 // ==========
@@ -46,9 +45,9 @@ using namespace measurement_kit;
 // Client::run() tests
 // -------------------
 
-class FailQueryMlabns : public libndt::Client {
+class FailQueryMlabns : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns(std::vector<std::string> *) noexcept override {
     return false;
   }
@@ -59,9 +58,9 @@ TEST_CASE("Client::run() deals with Client::query_mlabns() failure") {
   REQUIRE(client.run() == false);
 }
 
-class FailConnect : public libndt::Client {
+class FailConnect : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns(std::vector<std::string> *) noexcept override {
     return true;
   }
@@ -73,9 +72,9 @@ TEST_CASE("Client::run() deals with Client::connect() failure") {
   REQUIRE(client.run() == false);
 }
 
-class FailSendLogin : public libndt::Client {
+class FailSendLogin : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns(std::vector<std::string> *) noexcept override {
     return true;
   }
@@ -88,9 +87,9 @@ TEST_CASE("Client::run() deals with Client::send_login() failure") {
   REQUIRE(client.run() == false);
 }
 
-class FailRecvKickoff : public libndt::Client {
+class FailRecvKickoff : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns(std::vector<std::string> *) noexcept override {
     return true;
   }
@@ -104,9 +103,9 @@ TEST_CASE("Client::run() deals with Client::recv_kickoff() failure") {
   REQUIRE(client.run() == false);
 }
 
-class FailWaitInQueue : public libndt::Client {
+class FailWaitInQueue : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns(std::vector<std::string> *) noexcept override {
     return true;
   }
@@ -121,9 +120,9 @@ TEST_CASE("Client::run() deals with Client::wait_in_queue() failure") {
   REQUIRE(client.run() == false);
 }
 
-class FailRecvVersion : public libndt::Client {
+class FailRecvVersion : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns(std::vector<std::string> *) noexcept override {
     return true;
   }
@@ -139,9 +138,9 @@ TEST_CASE("Client::run() deals with Client::recv_version() failure") {
   REQUIRE(client.run() == false);
 }
 
-class FailRecvTestsId : public libndt::Client {
+class FailRecvTestsId : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns(std::vector<std::string> *) noexcept override {
     return true;
   }
@@ -158,9 +157,9 @@ TEST_CASE("Client::run() deals with Client::recv_tests_ids() failure") {
   REQUIRE(client.run() == false);
 }
 
-class FailRunTests : public libndt::Client {
+class FailRunTests : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns(std::vector<std::string> *) noexcept override {
     return true;
   }
@@ -178,9 +177,9 @@ TEST_CASE("Client::run() deals with Client::run_tests() failure") {
   REQUIRE(client.run() == false);
 }
 
-class FailRecvResultsAndLogout : public libndt::Client {
+class FailRecvResultsAndLogout : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns(std::vector<std::string> *) noexcept override {
     return true;
   }
@@ -200,9 +199,9 @@ TEST_CASE(  //
   REQUIRE(client.run() == false);
 }
 
-class FailWaitClose : public libndt::Client {
+class FailWaitClose : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns(std::vector<std::string> *) noexcept override {
     return true;
   }
@@ -226,16 +225,16 @@ TEST_CASE("Client::run() deals with Client::wait_close() failure") {
 // --------------------------
 
 TEST_CASE("Client::on_warning() works as expected") {
-  libndt::Client client;
+  Client client;
   client.on_warning("calling on_warning() to increase coverage");
 }
 
 // Client::query_mlabns() tests
 // ----------------------------
 
-class FailQueryMlabnsCurl : public libndt::Client {
+class FailQueryMlabnsCurl : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns_curl(const std::string &, long,
                          std::string *) noexcept override {
     return false;
@@ -243,7 +242,7 @@ class FailQueryMlabnsCurl : public libndt::Client {
 };
 
 TEST_CASE("Client::query_mlabns() does nothing when we already know hostname") {
-  libndt::Settings settings;
+  Settings settings;
   settings.hostname = "neubot.mlab.mlab1.trn01.measurement-lab.org";
   FailQueryMlabnsCurl client{settings};
   std::vector<std::string> v;
@@ -257,9 +256,9 @@ TEST_CASE(
   REQUIRE(client.query_mlabns(&v) == false);
 }
 
-class EmptyMlabnsJson : public libndt::Client {
+class EmptyMlabnsJson : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns_curl(const std::string &, long,
                          std::string *body) noexcept override {
     *body = "";
@@ -273,9 +272,9 @@ TEST_CASE("Client::query_mlabns() deals with empty JSON") {
   REQUIRE(client.query_mlabns(&v) == false);
 }
 
-class InvalidMlabnsJson : public libndt::Client {
+class InvalidMlabnsJson : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns_curl(const std::string &, long,
                          std::string *body) noexcept override {
     *body = "{{{{";
@@ -289,9 +288,9 @@ TEST_CASE("Client::query_mlabns() deals with invalid JSON") {
   REQUIRE(client.query_mlabns(&v) == false);
 }
 
-class IncompleteMlabnsJson : public libndt::Client {
+class IncompleteMlabnsJson : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool query_mlabns_curl(const std::string &, long,
                          std::string *body) noexcept override {
     *body = "{}";
@@ -308,12 +307,11 @@ TEST_CASE("Client::query_mlabns() deals with incomplete JSON") {
 // Client::recv_kickoff() tests
 // ----------------------------
 
-class FailNetxRecvn : public libndt::Client {
+class FailNetxRecvn : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_recvn(libndt::Socket, void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::io_error;
+  using Client::Client;
+  Err netx_recvn(internal::Socket, void *, internal::Size) const noexcept override {
+    return Err::io_error;
   }
 };
 
@@ -322,12 +320,11 @@ TEST_CASE("Client::recv_kickoff() deals with Client::recvn() failure") {
   REQUIRE(client.recv_kickoff() == false);
 }
 
-class NetxRecvnEof : public libndt::Client {
+class NetxRecvnEof : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_recvn(libndt::Socket, void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::eof;
+  using Client::Client;
+  Err netx_recvn(internal::Socket, void *, internal::Size) const noexcept override {
+    return Err::eof;
   }
 };
 
@@ -336,17 +333,17 @@ TEST_CASE("Client::recv_kickoff() deals with Client::recvn() EOF") {
   REQUIRE(client.recv_kickoff() == false);
 }
 
-class NetxRecvnInvalidKickoff : public libndt::Client {
+class NetxRecvnInvalidKickoff : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_recvn(  //
-      libndt::Socket, void *buf, libndt::Size siz) const noexcept override {
+  using Client::Client;
+  Err netx_recvn(  //
+      internal::Socket, void *buf, internal::Size siz) const noexcept override {
     REQUIRE(buf != nullptr);
     REQUIRE(siz >= 1);
-    for (libndt::Size i = 0; i < siz; ++i) {
+    for (internal::Size i = 0; i < siz; ++i) {
       ((char *)buf)[i] = 'x';
     }
-    return libndt::Err::none;
+    return Err::none;
   }
 };
 
@@ -358,10 +355,10 @@ TEST_CASE("Client::recv_kickoff() deals with invalid kickoff") {
 // Client::wait_in_queue() tests
 // ----------------------------
 
-class FailMsgExpect : public libndt::Client {
+class FailMsgExpect : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect(libndt::MsgType, std::string *) noexcept override {
+  using Client::Client;
+  bool msg_expect(MsgType, std::string *) noexcept override {
     return false;
   }
 };
@@ -371,10 +368,10 @@ TEST_CASE("Client::wait_in_queue() deals with Client::msg_expect() failure") {
   REQUIRE(client.wait_in_queue() == false);
 }
 
-class ServerBusy : public libndt::Client {
+class ServerBusy : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect(libndt::MsgType, std::string *val) noexcept override {
+  using Client::Client;
+  bool msg_expect(MsgType, std::string *val) noexcept override {
     *val = "9999";
     return true;
   }
@@ -401,10 +398,10 @@ TEST_CASE("Client::recv_tests_ids() deals with Client::msg_expect() failure") {
   REQUIRE(client.recv_tests_ids() == false);
 }
 
-class InvalidTestsIds : public libndt::Client {
+class InvalidTestsIds : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect(libndt::MsgType, std::string *val) noexcept override {
+  using Client::Client;
+  bool msg_expect(MsgType, std::string *val) noexcept override {
     *val = "777 888 999";
     return true;
   }
@@ -418,10 +415,10 @@ TEST_CASE("Client::recv_tests_ids() fails with invalid tests ids") {
 // Client::run_tests() tests
 // -------------------------
 
-class RunTestsMock : public libndt::Client {
+class RunTestsMock : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect(libndt::MsgType, std::string *val) noexcept override {
+  using Client::Client;
+  bool msg_expect(MsgType, std::string *val) noexcept override {
     *val = tests_ids;
     return true;
   }
@@ -435,28 +432,28 @@ class RunTestsMock : public libndt::Client {
 
 TEST_CASE("Client::run_tests() deals with Client::run_upload() failure") {
   RunTestsMock client;
-  client.tests_ids = std::to_string((uint64_t)libndt::nettest_flag_upload);
+  client.tests_ids = std::to_string((uint64_t)nettest_flag_upload);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
 
 TEST_CASE("Client::run_tests() deals with Client::run_meta() failure") {
   RunTestsMock client;
-  client.tests_ids = std::to_string((uint64_t)libndt::nettest_flag_meta);
+  client.tests_ids = std::to_string((uint64_t)nettest_flag_meta);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
 
 TEST_CASE("Client::run_tests() deals with Client::run_download() failure") {
   RunTestsMock client;
-  client.tests_ids = std::to_string((uint64_t)libndt::nettest_flag_download);
+  client.tests_ids = std::to_string((uint64_t)nettest_flag_download);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
 
 TEST_CASE("Client::run_tests() deals with unexpected test-id") {
   RunTestsMock client;
-  client.tests_ids = std::to_string((uint64_t)libndt::nettest_flag_status);
+  client.tests_ids = std::to_string((uint64_t)nettest_flag_status);
   REQUIRE(client.recv_tests_ids() == true);
   REQUIRE(client.run_tests() == false);
 }
@@ -464,10 +461,10 @@ TEST_CASE("Client::run_tests() deals with unexpected test-id") {
 // Client::recv_results_and_logout() tests
 // ---------------------------------------
 
-class FailMsgRead : public libndt::Client {
+class FailMsgRead : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_read(libndt::MsgType *, std::string *) noexcept override {
+  using Client::Client;
+  bool msg_read(MsgType *, std::string *) noexcept override {
     return false;
   }
 };
@@ -478,11 +475,11 @@ TEST_CASE(
   REQUIRE(client.recv_results_and_logout() == false);
 }
 
-class NeitherResultsNorLogout : public libndt::Client {
+class NeitherResultsNorLogout : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_read(libndt::MsgType *code, std::string *msg) noexcept override {
-    *code = libndt::msg_comm_failure;
+  using Client::Client;
+  bool msg_read(MsgType *code, std::string *msg) noexcept override {
+    *code = msg_comm_failure;
     *msg = "";
     return true;
   }
@@ -493,11 +490,11 @@ TEST_CASE("Client::recv_results_and_logout() deals with unexpected message") {
   REQUIRE(client.recv_results_and_logout() == false);
 }
 
-class InvalidResults : public libndt::Client {
+class InvalidResults : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_read(libndt::MsgType *code, std::string *msg) noexcept override {
-    *code = libndt::msg_results;
+  using Client::Client;
+  bool msg_read(MsgType *code, std::string *msg) noexcept override {
+    *code = msg_results;
     *msg = "antani-antani";
     return true;
   }
@@ -508,11 +505,11 @@ TEST_CASE("Client::recv_results_and_logout() deals with invalid results") {
   REQUIRE(client.recv_results_and_logout() == false);
 }
 
-class TooManyResults : public libndt::Client {
+class TooManyResults : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_read(libndt::MsgType *code, std::string *msg) noexcept override {
-    *code = libndt::msg_results;
+  using Client::Client;
+  bool msg_read(MsgType *code, std::string *msg) noexcept override {
+    *code = msg_results;
     *msg = "antani:antani";
     return true;
   }
@@ -526,9 +523,9 @@ TEST_CASE("Client::recv_results_and_logout() deals with too many results") {
 // Client::run_download() tests
 // ----------------------------
 
-class FailMsgExpectTestPrepare : public libndt::Client {
+class FailMsgExpectTestPrepare : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return false;
   }
@@ -541,15 +538,15 @@ TEST_CASE(
   REQUIRE(client.run_download() == false);
 }
 
-class FailNetxMaybesocks5hConnect : public libndt::Client {
+class FailNetxMaybesocks5hConnect : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *) noexcept override {
-    return libndt::Err::io_error;
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *) noexcept override {
+    return Err::io_error;
   }
 };
 
@@ -560,18 +557,18 @@ TEST_CASE(
   REQUIRE(client.run_download() == false);
 }
 
-class FailMsgExpectEmpty : public libndt::Client {
+class FailMsgExpectEmpty : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return false; }
+  bool msg_expect_empty(MsgType) noexcept override { return false; }
 };
 
 TEST_CASE(
@@ -580,20 +577,20 @@ TEST_CASE(
   REQUIRE(client.run_download() == false);
 }
 
-class FailNetxSelectDuringDownload : public libndt::Client {
+class FailNetxSelectDuringDownload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::io_error;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::io_error;
   }
 };
 
@@ -602,24 +599,24 @@ TEST_CASE("Client::run_download() deals with Client::netx_poll() failure") {
   REQUIRE(client.run_download() == false);
 }
 
-class FailRecvDuringDownload : public libndt::Client {
+class FailRecvDuringDownload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::invalid_argument;
+  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::invalid_argument;
   }
 };
 
@@ -628,54 +625,54 @@ TEST_CASE("Client::run_download() deals with Client::recv() failure") {
   REQUIRE(client.run_download() == false);
 }
 
-class RecvEofDuringDownload : public libndt::Client {
+class RecvEofDuringDownload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::eof;
+  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::eof;
   }
 };
 
 TEST_CASE("Client::run_download() honours max_runtime") {
-  libndt::Settings settings;
-  settings.max_runtime = libndt::Timeout{0};
+  Settings settings;
+  settings.max_runtime = Timeout{0};
   RecvEofDuringDownload client{settings};
   REQUIRE(client.run_download() == false);
 }
 
-class FailMsgReadLegacyDuringDownload : public libndt::Client {
+class FailMsgReadLegacyDuringDownload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::eof;
+  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::eof;
   }
-  bool msg_read_legacy(libndt::MsgType *, std::string *) noexcept override {
+  bool msg_read_legacy(MsgType *, std::string *) noexcept override {
     return false;
   }
 };
@@ -686,27 +683,27 @@ TEST_CASE(
   REQUIRE(client.run_download() == false);
 }
 
-class RecvNonTestMsgDuringDownload : public libndt::Client {
+class RecvNonTestMsgDuringDownload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::eof;
+  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::eof;
   }
-  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
-    *code = libndt::msg_logout;
+  bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
+    *code = msg_logout;
     return true;
   }
 };
@@ -716,30 +713,30 @@ TEST_CASE("Client::run_download() deals with non-msg_test_msg receipt") {
   REQUIRE(client.run_download() == false);
 }
 
-class FailMsgWriteDuringDownload : public libndt::Client {
+class FailMsgWriteDuringDownload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::eof;
+  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::eof;
   }
-  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
-    *code = libndt::msg_test_msg;
+  bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
+    *code = msg_test_msg;
     return true;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+  bool msg_write(MsgType, std::string &&) noexcept override {
     return false;
   }
 };
@@ -749,33 +746,33 @@ TEST_CASE("Client::run_download() deals with Client::msg_write() failure") {
   REQUIRE(client.run_download() == false);
 }
 
-class FailMsgReadDuringDownload : public libndt::Client {
+class FailMsgReadDuringDownload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::eof;
+  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::eof;
   }
-  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
-    *code = libndt::msg_test_msg;
+  bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
+    *code = msg_test_msg;
     return true;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+  bool msg_write(MsgType, std::string &&) noexcept override {
     return true;
   }
-  bool msg_read(libndt::MsgType *, std::string *) noexcept override {
+  bool msg_read(MsgType *, std::string *) noexcept override {
     return false;
   }
 };
@@ -785,34 +782,34 @@ TEST_CASE("Client::run_download() deals with Client::msg_read() failure") {
   REQUIRE(client.run_download() == false);
 }
 
-class RecvNonTestOrLogoutMsgDuringDownload : public libndt::Client {
+class RecvNonTestOrLogoutMsgDuringDownload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::eof;
+  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::eof;
   }
-  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
-    *code = libndt::msg_test_msg;
+  bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
+    *code = msg_test_msg;
     return true;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+  bool msg_write(MsgType, std::string &&) noexcept override {
     return true;
   }
-  bool msg_read(libndt::MsgType *code, std::string *) noexcept override {
-    *code = libndt::msg_login;
+  bool msg_read(MsgType *code, std::string *) noexcept override {
+    *code = msg_login;
     return true;
   }
 };
@@ -822,34 +819,34 @@ TEST_CASE("Client::run_download() deals with non-logout-or-test msg") {
   REQUIRE(client.run_download() == false);
 }
 
-class FailEmitResultDuringDownload : public libndt::Client {
+class FailEmitResultDuringDownload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::eof;
+  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::eof;
   }
-  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
-    *code = libndt::msg_test_msg;
+  bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
+    *code = msg_test_msg;
     return true;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+  bool msg_write(MsgType, std::string &&) noexcept override {
     return true;
   }
-  bool msg_read(libndt::MsgType *code, std::string *s) noexcept override {
-    *code = libndt::msg_test_msg;
+  bool msg_read(MsgType *code, std::string *s) noexcept override {
+    *code = msg_test_msg;
     *s = "antani-antani";  // Causes emit_result() to fail
     return true;
   }
@@ -860,34 +857,34 @@ TEST_CASE("Client::run_download() deals with emit_result() failure") {
   REQUIRE(client.run_download() == false);
 }
 
-class TooManyTestMsgsDuringDownload : public libndt::Client {
+class TooManyTestMsgsDuringDownload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recv_nonblocking(libndt::Socket, void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::eof;
+  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::eof;
   }
-  bool msg_read_legacy(libndt::MsgType *code, std::string *) noexcept override {
-    *code = libndt::msg_test_msg;
+  bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
+    *code = msg_test_msg;
     return true;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+  bool msg_write(MsgType, std::string &&) noexcept override {
     return true;
   }
-  bool msg_read(libndt::MsgType *code, std::string *s) noexcept override {
-    *code = libndt::msg_test_msg;
+  bool msg_read(MsgType *code, std::string *s) noexcept override {
+    *code = msg_test_msg;
     *s = "antani:antani";  // Accepted by emit_result()
     return true;
   }
@@ -901,10 +898,10 @@ TEST_CASE("Client::run_download() deals with too many results messages") {
 // Client::run_meta() tests
 // ------------------------
 
-class FailFirstMsgExpectEmpty : public libndt::Client {
+class FailFirstMsgExpectEmpty : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return false; }
+  using Client::Client;
+  bool msg_expect_empty(MsgType) noexcept override { return false; }
 };
 
 TEST_CASE(
@@ -913,11 +910,11 @@ TEST_CASE(
   REQUIRE(client.run_meta() == false);
 }
 
-class FailSecondMsgExpectEmpty : public libndt::Client {
+class FailSecondMsgExpectEmpty : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_empty(libndt::MsgType code) noexcept override {
-    return code == libndt::msg_test_prepare;
+  using Client::Client;
+  bool msg_expect_empty(MsgType code) noexcept override {
+    return code == msg_test_prepare;
   }
 };
 
@@ -927,11 +924,11 @@ TEST_CASE(
   REQUIRE(client.run_meta() == false);
 }
 
-class FailMsgWriteDuringMeta : public libndt::Client {
+class FailMsgWriteDuringMeta : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+  using Client::Client;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  bool msg_write(MsgType, std::string &&) noexcept override {
     return false;
   }
 };
@@ -941,11 +938,11 @@ TEST_CASE("Client::run_meta() deals with Client::msg_write() failure") {
   REQUIRE(client.run_meta() == false);
 }
 
-class FailFinalMsgWriteDuringMeta : public libndt::Client {
+class FailFinalMsgWriteDuringMeta : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  bool msg_write(libndt::MsgType, std::string &&s) noexcept override {
+  using Client::Client;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  bool msg_write(MsgType, std::string &&s) noexcept override {
     return s != "";
   }
 };
@@ -955,13 +952,13 @@ TEST_CASE("Client::run_meta() deals with final Client::msg_write() failure") {
   REQUIRE(client.run_meta() == false);
 }
 
-class FailFinalMsgExpectEmptyDuringMeta : public libndt::Client {
+class FailFinalMsgExpectEmptyDuringMeta : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect_empty(libndt::MsgType code) noexcept override {
-    return code != libndt::msg_test_finalize;
+  using Client::Client;
+  bool msg_expect_empty(MsgType code) noexcept override {
+    return code != msg_test_finalize;
   }
-  bool msg_write(libndt::MsgType, std::string &&) noexcept override {
+  bool msg_write(MsgType, std::string &&) noexcept override {
     return true;
   }
 };
@@ -982,9 +979,9 @@ TEST_CASE(
   REQUIRE(client.run_upload() == false);
 }
 
-class TestPrepareMoreThanOneFlow : public libndt::Client {
+class TestPrepareMoreThanOneFlow : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *,
                                uint8_t *nflows) noexcept override {
     *nflows = 11;
@@ -1015,24 +1012,24 @@ TEST_CASE("Client::run_upload() deals with Client::netx_poll() failure") {
   REQUIRE(client.run_upload() == false);
 }
 
-class FailSendDuringUpload : public libndt::Client {
+class FailSendDuringUpload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::io_error;
+  Err netx_send_nonblocking(internal::Socket, const void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::io_error;
   }
 };
 
@@ -1042,32 +1039,32 @@ TEST_CASE("Client::run_upload() deals with Client::send() failure") {
 }
 
 TEST_CASE("Client::run_upload() honours max_runtime") {
-  libndt::Settings settings;
-  settings.max_runtime = libndt::Timeout{0};
+  Settings settings;
+  settings.max_runtime = Timeout{0};
   FailSendDuringUpload client{settings};
   REQUIRE(client.run_upload() == false);
 }
 
-class FailMsgExpectDuringUpload : public libndt::Client {
+class FailMsgExpectDuringUpload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType) noexcept override { return true; }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  bool msg_expect_empty(MsgType) noexcept override { return true; }
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::io_error;
+  Err netx_send_nonblocking(internal::Socket, const void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::io_error;
   }
-  bool msg_expect(libndt::MsgType, std::string *) noexcept override {
+  bool msg_expect(MsgType, std::string *) noexcept override {
     return false;
   }
 };
@@ -1077,28 +1074,28 @@ TEST_CASE("Client::run_upload() deals with Client::msg_expect() failure") {
   REQUIRE(client.run_upload() == false);
 }
 
-class FailFinalMsgExpectEmptyDuringUpload : public libndt::Client {
+class FailFinalMsgExpectEmptyDuringUpload : public Client {
  public:
-  using libndt::Client::Client;
+  using Client::Client;
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  libndt::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
-                                     libndt::Socket *sock) noexcept override {
+  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+                                     internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  bool msg_expect_empty(libndt::MsgType code) noexcept override {
-    return code != libndt::msg_test_finalize;
+  bool msg_expect_empty(MsgType code) noexcept override {
+    return code != msg_test_finalize;
   }
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::none;
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_send_nonblocking(libndt::Socket, const void *, libndt::Size,
-                                    libndt::Size *) const noexcept override {
-    return libndt::Err::io_error;
+  Err netx_send_nonblocking(internal::Socket, const void *, internal::Size,
+                                    internal::Size *) const noexcept override {
+    return Err::io_error;
   }
-  bool msg_expect(libndt::MsgType, std::string *) noexcept override {
+  bool msg_expect(MsgType, std::string *) noexcept override {
     return true;
   }
 };
@@ -1114,16 +1111,16 @@ TEST_CASE(
 // -------------------------------
 
 TEST_CASE("Client::msg_write_login() deals with invalid protocol") {
-  libndt::Settings settings;
+  Settings settings;
   settings.protocol_flags = (1 << 11); // nonexisting protocol
-  libndt::Client client{settings};
-  REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == false);
+  Client client{settings};
+  REQUIRE(client.msg_write_login(ndt_version_compat) == false);
 }
 
-class FailMsgWriteLegacy : public libndt::Client {
+class FailMsgWriteLegacy : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_write_legacy(libndt::MsgType, std::string &&) noexcept override {
+  using Client::Client;
+  bool msg_write_legacy(MsgType, std::string &&) noexcept override {
     return false;
   }
 };
@@ -1131,36 +1128,36 @@ class FailMsgWriteLegacy : public libndt::Client {
 TEST_CASE(
     "Client::msg_write_login() deals with Client::msg_write_legacy() failure") {
   FailMsgWriteLegacy client;
-  REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == false);
+  REQUIRE(client.msg_write_login(ndt_version_compat) == false);
 }
 
-class ValidatingMsgWriteLegacy : public libndt::Client {
+class ValidatingMsgWriteLegacy : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_write_legacy(libndt::MsgType,
+  using Client::Client;
+  bool msg_write_legacy(MsgType,
                         std::string &&value) noexcept override {
     auto doc = nlohmann::json::parse(value);
     std::string tests_string = doc.at("tests");
     const char *errstr = nullptr;
-    libndt::NettestFlags tests{
-        (uint8_t)libndt::Sys{}.Strtonum(tests_string.c_str(), 0, 256, &errstr)};
+    NettestFlags tests{
+        (uint8_t)internal::Sys{}.Strtonum(tests_string.c_str(), 0, 256, &errstr)};
     REQUIRE(errstr == nullptr);
-    REQUIRE((tests & libndt::nettest_flag_middlebox) ==
-            libndt::NettestFlags{0});
-    REQUIRE((tests & libndt::nettest_flag_simple_firewall) ==
-            libndt::NettestFlags{0});
-    REQUIRE((tests & libndt::nettest_flag_upload_ext) ==
-            libndt::NettestFlags{0});
+    REQUIRE((tests & nettest_flag_middlebox) ==
+            NettestFlags{0});
+    REQUIRE((tests & nettest_flag_simple_firewall) ==
+            NettestFlags{0});
+    REQUIRE((tests & nettest_flag_upload_ext) ==
+            NettestFlags{0});
     return true;
   }
 };
 
 TEST_CASE("Client::msg_write_login() does not propagate unknown tests ids") {
-  libndt::Settings settings;
-  settings.protocol_flags = libndt::protocol_flag_json;
-  settings.nettest_flags = libndt::NettestFlags{0xff};
+  Settings settings;
+  settings.protocol_flags = protocol_flag_json;
+  settings.nettest_flags = NettestFlags{0xff};
   ValidatingMsgWriteLegacy client{settings};
-  REQUIRE(client.msg_write_login(libndt::ndt_version_compat) == true);
+  REQUIRE(client.msg_write_login(ndt_version_compat) == true);
 }
 
 static std::string non_serializable() noexcept {
@@ -1187,9 +1184,9 @@ static std::string non_serializable() noexcept {
 }
 
 TEST_CASE("Client::msg_write_login() deals with unserializable JSON") {
-  libndt::Settings settings;
-  settings.protocol_flags = libndt::protocol_flag_json;
-  libndt::Client client{settings};
+  Settings settings;
+  settings.protocol_flags = protocol_flag_json;
+  Client client{settings};
   auto s = non_serializable();
   REQUIRE(client.msg_write_login(s) == false);
 }
@@ -1198,42 +1195,42 @@ TEST_CASE("Client::msg_write_login() deals with unserializable JSON") {
 // -------------------------
 
 TEST_CASE("Client::msg_write() deals with unserializable JSON") {
-  libndt::Settings settings;
-  settings.protocol_flags = libndt::protocol_flag_json;
-  libndt::Client client{settings};
+  Settings settings;
+  settings.protocol_flags = protocol_flag_json;
+  Client client{settings};
   auto s = non_serializable();
-  REQUIRE(client.msg_write(libndt::msg_test_start, std::move(s)) == false);
+  REQUIRE(client.msg_write(msg_test_start, std::move(s)) == false);
 }
 
 TEST_CASE("Client::msg_write() deals with invalid protocol") {
-  libndt::Settings settings;
+  Settings settings;
   settings.protocol_flags = (1 << 11); // nonexisting protocol
-  libndt::Client client{settings};
-  REQUIRE(client.msg_write(libndt::msg_test_start, "foo") == false);
+  Client client{settings};
+  REQUIRE(client.msg_write(msg_test_start, "foo") == false);
 }
 
 TEST_CASE("Client::msg_write() deals with Client::msg_write_legacy() failure") {
   FailMsgWriteLegacy client;
-  REQUIRE(client.msg_write(libndt::msg_test_start, "foo") == false);
+  REQUIRE(client.msg_write(msg_test_start, "foo") == false);
 }
 
 // Client::msg_write_legacy() tests
 // --------------------------------
 
 TEST_CASE("Client::msg_write_legacy() deals with too-big messages") {
-  libndt::Client client;
+  Client client;
   std::string m;
   m.resize(UINT16_MAX + 1);
   REQUIRE(client.msg_write_legacy(  //
-              libndt::msg_test_start, std::move(m)) == false);
+              msg_test_start, std::move(m)) == false);
 }
 
-class FailNetxSendn : public libndt::Client {
+class FailNetxSendn : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::io_error;
+  using Client::Client;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::io_error;
   }
 };
 
@@ -1244,15 +1241,15 @@ TEST_CASE(
   std::string m{"foo"};
   client.sys->SetLastError(0);
   REQUIRE(client.msg_write_legacy(  //
-              libndt::msg_test_start, std::move(m)) == false);
+              msg_test_start, std::move(m)) == false);
 }
 
-class FailLargeNetxSendn : public libndt::Client {
+class FailLargeNetxSendn : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size siz) const noexcept override {
-    return siz == 3 ? libndt::Err::none : libndt::Err::io_error;
+  using Client::Client;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size siz) const noexcept override {
+    return siz == 3 ? Err::none : Err::io_error;
   }
 };
 
@@ -1263,7 +1260,7 @@ TEST_CASE(
   std::string m{"foobar"};
   client.sys->SetLastError(0);
   REQUIRE(client.msg_write_legacy(  //
-              libndt::msg_test_start, std::move(m)) == false);
+              msg_test_start, std::move(m)) == false);
 }
 
 // Client::msg_expect_test_prepare() tests
@@ -1278,10 +1275,10 @@ TEST_CASE(
   REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
 }
 
-class TooShortVector : public libndt::Client {
+class TooShortVector : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect(libndt::MsgType, std::string *) noexcept override {
+  using Client::Client;
+  bool msg_expect(MsgType, std::string *) noexcept override {
     return true;
   }
 };
@@ -1293,10 +1290,10 @@ TEST_CASE("Client::msg_expect_test_prepare() deals with too-short vector") {
   REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
 }
 
-class InvalidPortVector : public libndt::Client {
+class InvalidPortVector : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect(libndt::MsgType, std::string *s) noexcept override {
+  using Client::Client;
+  bool msg_expect(MsgType, std::string *s) noexcept override {
     *s = "65536";
     return true;
   }
@@ -1309,10 +1306,10 @@ TEST_CASE("Client::msg_expect_test_prepare() deals with invalid port") {
   REQUIRE(client.msg_expect_test_prepare(&port, &nflows) == false);
 }
 
-class InvalidNumFlowsVector : public libndt::Client {
+class InvalidNumFlowsVector : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect(libndt::MsgType, std::string *s) noexcept override {
+  using Client::Client;
+  bool msg_expect(MsgType, std::string *s) noexcept override {
     *s = "65530 xx xx xx xx 32";
     return true;
   }
@@ -1331,13 +1328,13 @@ TEST_CASE("Client::msg_expect_test_prepare() deals with invalid num-flows") {
 TEST_CASE(
     "Client::msg_expect_empty() deals with Client::msg_expect() failure") {
   FailMsgExpect client;
-  REQUIRE(client.msg_expect_empty(libndt::msg_test_start) == false);
+  REQUIRE(client.msg_expect_empty(msg_test_start) == false);
 }
 
-class NonEmptyMessage : public libndt::Client {
+class NonEmptyMessage : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_expect(libndt::MsgType, std::string *s) noexcept override {
+  using Client::Client;
+  bool msg_expect(MsgType, std::string *s) noexcept override {
     *s = "asd asd asd";
     return true;
   }
@@ -1345,7 +1342,7 @@ class NonEmptyMessage : public libndt::Client {
 
 TEST_CASE("Client::msg_expect_empty() deals with nonempty message") {
   NonEmptyMessage client;
-  REQUIRE(client.msg_expect_empty(libndt::msg_test_start) == false);
+  REQUIRE(client.msg_expect_empty(msg_test_start) == false);
 }
 
 // Client::msg_expect() tests
@@ -1354,73 +1351,73 @@ TEST_CASE("Client::msg_expect_empty() deals with nonempty message") {
 TEST_CASE("Client::msg_expect() deals with Client::msg_read() failure") {
   FailMsgRead client;
   std::string s;
-  REQUIRE(client.msg_expect(libndt::msg_test_start, &s) == false);
+  REQUIRE(client.msg_expect(msg_test_start, &s) == false);
 }
 
 TEST_CASE("Client::msg_expect() deals with unexpected message") {
   NeitherResultsNorLogout client;
   std::string s;
-  REQUIRE(client.msg_expect(libndt::msg_logout, &s) == false);
+  REQUIRE(client.msg_expect(msg_logout, &s) == false);
 }
 
 // Client::msg_read() tests
 // ------------------------
 
-class FailMsgReadLegacy : public libndt::Client {
+class FailMsgReadLegacy : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_read_legacy(libndt::MsgType *, std::string *) noexcept override {
+  using Client::Client;
+  bool msg_read_legacy(MsgType *, std::string *) noexcept override {
     return false;
   }
 };
 
 TEST_CASE("Client::msg_read() deals with Client::msg_read_legacy() failure") {
   FailMsgReadLegacy client;
-  libndt::MsgType code = libndt::MsgType{0};
+  MsgType code = MsgType{0};
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
 }
 
-class ReadInvalidJson : public libndt::Client {
+class ReadInvalidJson : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_read_legacy(libndt::MsgType *, std::string *s) noexcept override {
+  using Client::Client;
+  bool msg_read_legacy(MsgType *, std::string *s) noexcept override {
     *s = "{{{";
     return true;
   }
 };
 
 TEST_CASE("Client::msg_read() deals with invalid JSON") {
-  libndt::Settings settings;
-  settings.protocol_flags = libndt::protocol_flag_json;
+  Settings settings;
+  settings.protocol_flags = protocol_flag_json;
   ReadInvalidJson client{settings};
-  libndt::MsgType code = libndt::MsgType{0};
+  MsgType code = MsgType{0};
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
 }
 
-class ReadIncompleteJson : public libndt::Client {
+class ReadIncompleteJson : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_read_legacy(libndt::MsgType *, std::string *s) noexcept override {
+  using Client::Client;
+  bool msg_read_legacy(MsgType *, std::string *s) noexcept override {
     *s = "{}";
     return true;
   }
 };
 
 TEST_CASE("Client::msg_read() deals with incomplete JSON") {
-  libndt::Settings settings;
-  settings.protocol_flags = libndt::protocol_flag_json;
+  Settings settings;
+  settings.protocol_flags = protocol_flag_json;
   ReadIncompleteJson client{settings};
-  libndt::MsgType code = libndt::MsgType{0};
+  MsgType code = MsgType{0};
   std::string s;
   REQUIRE(client.msg_read(&code, &s) == false);
 }
 
-class OkayMsgReadLegacy : public libndt::Client {
+class OkayMsgReadLegacy : public Client {
  public:
-  using libndt::Client::Client;
-  bool msg_read_legacy(libndt::MsgType *, std::string *) noexcept override {
+  using Client::Client;
+  bool msg_read_legacy(MsgType *, std::string *) noexcept override {
     return true;
   }
 };
@@ -1433,24 +1430,24 @@ TEST_CASE(
     "header") {
   FailNetxRecvn client;
   client.sys->SetLastError(0);
-  libndt::MsgType code = libndt::MsgType{0};
+  MsgType code = MsgType{0};
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
 }
 
-class FailLargeNetxRecvn : public libndt::Client {
+class FailLargeNetxRecvn : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_recvn(libndt::Socket, void *p,
-                         libndt::Size siz) const noexcept override {
+  using Client::Client;
+  Err netx_recvn(internal::Socket, void *p,
+                         internal::Size siz) const noexcept override {
     if (siz == 3) {
       char *usablep = (char *)p;
-      usablep[0] = libndt::msg_login;
+      usablep[0] = msg_login;
       uint16_t len = htons(155);
       memcpy(&usablep[1], &len, 2);
-      return libndt::Err::none;
+      return Err::none;
     }
-    return libndt::Err::io_error;
+    return Err::io_error;
   }
 };
 
@@ -1459,7 +1456,7 @@ TEST_CASE(
     "message") {
   FailLargeNetxRecvn client;
   client.sys->SetLastError(0);
-  libndt::MsgType code = libndt::MsgType{0};
+  MsgType code = MsgType{0};
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
 }
@@ -1467,395 +1464,395 @@ TEST_CASE(
 // Client::netx_maybesocks5h_dial() tests
 // --------------------------------------
 
-class FailNetxConnect : public libndt::Client {
+class FailNetxConnect : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *) noexcept override {
-    return libndt::Err::io_error;
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *) noexcept override {
+    return Err::io_error;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with Client::netx_dial() "
     "error when a socks5 port is specified") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   FailNetxConnect client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::io_error);
+          Err::io_error);
 }
 
-class Maybesocks5hConnectFailFirstNetxSendn : public libndt::Client {
+class Maybesocks5hConnectFailFirstNetxSendn : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::io_error;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::io_error;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with Client::netx_sendn() "
     "failure when sending auth_request") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectFailFirstNetxSendn client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err ::io_error);
+          Err ::io_error);
 }
 
-class Maybesocks5hConnectFailFirstNetxRecvn : public libndt::Client {
+class Maybesocks5hConnectFailFirstNetxRecvn : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::none;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recvn(libndt::Socket, void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::io_error;
+  Err netx_recvn(internal::Socket, void *,
+                         internal::Size) const noexcept override {
+    return Err::io_error;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with Client::netx_sendn() "
     "failure when receiving auth_response") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectFailFirstNetxRecvn client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::io_error);
+          Err::io_error);
 }
 
-class Maybesocks5hConnectInvalidAuthResponseVersion : public libndt::Client {
+class Maybesocks5hConnectInvalidAuthResponseVersion : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::none;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) const noexcept override {
+  Err netx_recvn(internal::Socket, void *buf,
+                         internal::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 4;  // unexpected
     ((char *)buf)[1] = 0;
-    return libndt::Err::none;
+    return Err::none;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with invalid version "
     "number in the auth_response") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectInvalidAuthResponseVersion client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::socks5h);
+          Err::socks5h);
 }
 
-class Maybesocks5hConnectInvalidAuthResponseMethod : public libndt::Client {
+class Maybesocks5hConnectInvalidAuthResponseMethod : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::none;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) const noexcept override {
+  Err netx_recvn(internal::Socket, void *buf,
+                         internal::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 1;
-    return libndt::Err::none;
+    return Err::none;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with invalid method "
     "number in the auth_response") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectInvalidAuthResponseMethod client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::socks5h);
+          Err::socks5h);
 }
 
-class Maybesocks5hConnectInitialHandshakeOkay : public libndt::Client {
+class Maybesocks5hConnectInitialHandshakeOkay : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::none;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) const noexcept override {
+  Err netx_recvn(internal::Socket, void *buf,
+                         internal::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 0;
-    return libndt::Err::none;
+    return Err::none;
   }
 };
 
 TEST_CASE("Client::netx_maybesocks5h_dial() deals with too long hostname") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectInitialHandshakeOkay client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   std::string hostname;
   for (size_t i = 0; i < 300; ++i) {
     hostname += "A";
   }
   REQUIRE(client.netx_maybesocks5h_dial(hostname, "80", &sock) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
 }
 
 TEST_CASE("Client::netx_maybesocks5h_dial() deals with invalid port") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectInitialHandshakeOkay client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "xx", &sock) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
 }
 
-class Maybesocks5hConnectFailSecondNetxSendn : public libndt::Client {
+class Maybesocks5hConnectFailSecondNetxSendn : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size size) const noexcept override {
-    return size == 3 ? libndt::Err::none : libndt::Err::io_error;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size size) const noexcept override {
+    return size == 3 ? Err::none : Err::io_error;
   }
-  libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) const noexcept override {
+  Err netx_recvn(internal::Socket, void *buf,
+                         internal::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 0;
-    return libndt::Err::none;
+    return Err::none;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with Client::netx_sendn() "
     "error while sending connect_request") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectFailSecondNetxSendn client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::io_error);
+          Err::io_error);
 }
 
-class Maybesocks5hConnectFailSecondNetxRecvn : public libndt::Client {
+class Maybesocks5hConnectFailSecondNetxRecvn : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::none;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) const noexcept override {
+  Err netx_recvn(internal::Socket, void *buf,
+                         internal::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return libndt::Err::none;
+      return Err::none;
     }
-    return libndt::Err::io_error;
+    return Err::io_error;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with Client::recvn() "
     "error while receiving connect_response_hdr") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectFailSecondNetxRecvn client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::io_error);
+          Err::io_error);
 }
 
-class Maybesocks5hConnectInvalidSecondVersion : public libndt::Client {
+class Maybesocks5hConnectInvalidSecondVersion : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::none;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) const noexcept override {
+  Err netx_recvn(internal::Socket, void *buf,
+                         internal::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return libndt::Err::none;
+      return Err::none;
     }
     if (size == 4) {
       ((char *)buf)[0] = 4;  // unexpected
       ((char *)buf)[1] = 0;
-      return libndt::Err::none;
+      return Err::none;
     }
-    return libndt::Err::io_error;
+    return Err::io_error;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with receiving "
     "invalid version number in second Client::recvn()") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectInvalidSecondVersion client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::socks5h);
+          Err::socks5h);
 }
 
-class Maybesocks5hConnectErrorResult : public libndt::Client {
+class Maybesocks5hConnectErrorResult : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::none;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) const noexcept override {
+  Err netx_recvn(internal::Socket, void *buf,
+                         internal::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return libndt::Err::none;
+      return Err::none;
     }
     if (size == 4) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 1;  // error occurred
-      return libndt::Err::none;
+      return Err::none;
     }
-    return libndt::Err::io_error;
+    return Err::io_error;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with receiving "
     "an error code in second Client::recvn()") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectErrorResult client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::io_error);
+          Err::io_error);
 }
 
-class Maybesocks5hConnectInvalidReserved : public libndt::Client {
+class Maybesocks5hConnectInvalidReserved : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::none;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::none;
   }
-  libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) const noexcept override {
+  Err netx_recvn(internal::Socket, void *buf,
+                         internal::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return libndt::Err::none;
+      return Err::none;
     }
     if (size == 4) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
       ((char *)buf)[2] = 1;  // should instead be zero
-      return libndt::Err::none;
+      return Err::none;
     }
-    return libndt::Err::io_error;
+    return Err::io_error;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with receiving "
     "an invalid reserved field in second Client::recvn()") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectInvalidReserved client{settings};
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::socks5h);
+          Err::socks5h);
 }
 
-class Maybesocks5hConnectFailAddressNetxRecvn : public libndt::Client {
+class Maybesocks5hConnectFailAddressNetxRecvn : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::none;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::none;
   }
   uint8_t type = 0;
   std::shared_ptr<bool> seen = std::make_shared<bool>(false);
-  libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) const noexcept override {
+  Err netx_recvn(internal::Socket, void *buf,
+                         internal::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return libndt::Err::none;
+      return Err::none;
     }
     if (size == 4 && !*seen) {
       *seen = true;  // use flag because IPv4 is also 4 bytes
@@ -1864,95 +1861,95 @@ class Maybesocks5hConnectFailAddressNetxRecvn : public libndt::Client {
       ((char *)buf)[1] = 0;
       ((char *)buf)[2] = 0;
       ((char *)buf)[3] = (char)type;  // Sign change safe b/c we're serializing
-      return libndt::Err::none;
+      return Err::none;
     }
     // the subsequent recvn() will fail
-    return libndt::Err::io_error;
+    return Err::io_error;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with Client::recvn() "
     "error when reading a IPv4") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectFailAddressNetxRecvn client{settings};
   client.type = 1;
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::io_error);
+          Err::io_error);
 }
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with Client::recvn() "
     "error when reading a IPv6") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectFailAddressNetxRecvn client{settings};
   client.type = 4;
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::io_error);
+          Err::io_error);
 }
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with Client::recvn() "
     "error when reading a invalid address type") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectFailAddressNetxRecvn client{settings};
   client.type = 7;
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::socks5h);
+          Err::socks5h);
 }
 
-class Maybesocks5hConnectWithArray : public libndt::Client {
+class Maybesocks5hConnectWithArray : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_dial(const std::string &, const std::string &,
-                        libndt::Socket *sock) noexcept override {
+  using Client::Client;
+  Err netx_dial(const std::string &, const std::string &,
+                        internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return libndt::Err::none;
+    return Err::none;
   }
-  libndt::Err netx_sendn(libndt::Socket, const void *,
-                         libndt::Size) const noexcept override {
-    return libndt::Err::none;
+  Err netx_sendn(internal::Socket, const void *,
+                         internal::Size) const noexcept override {
+    return Err::none;
   }
   std::shared_ptr<std::deque<std::string>> array = std::make_shared<
       std::deque<std::string>>();
-  libndt::Err netx_recvn(libndt::Socket, void *buf,
-                         libndt::Size size) const noexcept override {
+  Err netx_recvn(internal::Socket, void *buf,
+                         internal::Size size) const noexcept override {
     if (!array->empty() && size == (*array)[0].size()) {
       for (size_t idx = 0; idx < (*array)[0].size(); ++idx) {
         ((char *)buf)[idx] = (*array)[0][idx];
       }
       array->pop_front();
-      return libndt::Err::none;
+      return Err::none;
     }
-    return libndt::Err::io_error;
+    return Err::io_error;
   }
 };
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with Client::recvn() "
     "error when failing to read domain length") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectWithArray client{settings};
   *client.array = {
       std::string{"\5\0", 2},
       std::string{"\5\0\0\3", 4},
   };
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::io_error);
+          Err::io_error);
 }
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with Client::recvn() "
     "error when failing to read domain") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectWithArray client{settings};
   *client.array = {
@@ -1960,15 +1957,15 @@ TEST_CASE(
       std::string{"\5\0\0\3", 4},
       std::string{"\7", 1},
   };
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::io_error);
+          Err::io_error);
 }
 
 TEST_CASE(
     "Client::netx_maybesocks5h_dial() deals with Client::recvn() "
     "error when failing to read port") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectWithArray client{settings};
   *client.array = {
@@ -1977,13 +1974,13 @@ TEST_CASE(
       std::string{"\7", 1},
       std::string{"123.org", 7},
   };
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::io_error);
+          Err::io_error);
 }
 
 TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv4 (mocked)") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectWithArray client{settings};
   *client.array = {
@@ -1992,13 +1989,13 @@ TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv4 (mocked)") {
       std::string{"\0\0\0\0", 4},
       std::string{"\0\0", 2},
   };
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::none);
+          Err::none);
 }
 
 TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv6 (mocked)") {
-  libndt::Settings settings;
+  Settings settings;
   settings.socks5h_port = "9050";
   Maybesocks5hConnectWithArray client{settings};
   *client.array = {
@@ -2007,9 +2004,9 @@ TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv6 (mocked)") {
       std::string{"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16},
       std::string{"\0\0", 2},
   };
-  libndt::Socket sock = (libndt::Socket)-1;
+	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          libndt::Err::none);
+          Err::none);
 }
 
 // Client::netx_map_errno() tests
@@ -2022,7 +2019,7 @@ TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv6 (mocked)") {
 #endif
 
 TEST_CASE("Client::netx_map_errno() correctly maps all errors") {
-  using namespace libndt;
+  using namespace measurement_kit::libndt;
 #ifdef NDEBUG  // There is an assertion that would fail in DEBUG mode
   REQUIRE(Client::netx_map_errno(0) == Err::io_error);
 #endif
@@ -2053,7 +2050,7 @@ TEST_CASE("Client::netx_map_errno() correctly maps all errors") {
 // ----------------------------
 
 TEST_CASE("Client::netx_map_eai() correctly maps all errors") {
-  using namespace libndt;
+  using namespace measurement_kit::libndt;
   Client client;
   REQUIRE(client.netx_map_eai(EAI_AGAIN) == Err::ai_again);
   REQUIRE(client.netx_map_eai(EAI_FAIL) == Err::ai_fail);
@@ -2073,41 +2070,41 @@ TEST_CASE("Client::netx_map_eai() correctly maps all errors") {
 // -------------------------
 
 TEST_CASE("Client::netx_dial() requires initial socket to be -1") {
-  libndt::Client client;
-  libndt::Socket sock = 21;
+  Client client;
+	internal::Socket sock = 21;
   REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
 }
 
-class FailNetxResolve : public libndt::Client {
+class FailNetxResolve : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_resolve(const std::string &,
+  using Client::Client;
+  Err netx_resolve(const std::string &,
                            std::vector<std::string> *) noexcept override {
-    return libndt::Err::ai_again;
+    return Err::ai_again;
   }
 };
 
 TEST_CASE("Client::netx_dial() deals with Client::netx_resolve() failure") {
   FailNetxResolve client;
-  libndt::Socket sock = (libndt::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::ai_again);
+	internal::Socket sock = (internal::Socket)-1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::ai_again);
 }
 
-class FailGetaddrinfoInNetxConnectClient : public libndt::Client {
+class FailGetaddrinfoInNetxConnectClient : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_resolve(const std::string &str,
+  using Client::Client;
+  Err netx_resolve(const std::string &str,
                            std::vector<std::string> *addrs) noexcept override {
     REQUIRE(str == "1.2.3.4");  // make sure it did not change
     addrs->push_back(str);
-    return libndt::Err::none;
+    return Err::none;
   }
 };
 
-class FailGetaddrinfoInNetxConnectSys : public libndt::Sys {
+class FailGetaddrinfoInNetxConnectSys : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
+  using Sys::Sys;
   int Getaddrinfo(const char *, const char *, const addrinfo *,
                   addrinfo **) const noexcept override {
     return EAI_AGAIN;
@@ -2117,46 +2114,46 @@ class FailGetaddrinfoInNetxConnectSys : public libndt::Sys {
 TEST_CASE("Client::netx_dial() deals with Client::getaddrinfo() failure") {
   FailGetaddrinfoInNetxConnectClient client;
   client.sys.reset(new FailGetaddrinfoInNetxConnectSys{});
-  libndt::Socket sock = (libndt::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::ai_again);
+	internal::Socket sock = (internal::Socket)-1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::ai_again);
 }
 
-class FailSocket : public libndt::Sys {
+class FailSocket : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
-  libndt::Socket NewSocket(int, int, int) const noexcept override {
+  using Sys::Sys;
+	internal::Socket NewSocket(int, int, int) const noexcept override {
     this->SetLastError(OS_EINVAL);
-    return (libndt::Socket)-1;
+    return (internal::Socket)-1;
   }
 };
 
 TEST_CASE("Client::netx_dial() deals with Client::socket() failure") {
-  libndt::Client client;
+  Client client;
   client.sys.reset(new FailSocket{});
-  libndt::Socket sock = (libndt::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+	internal::Socket sock = (internal::Socket)-1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
 }
 
-class FailSetnonblocking : public libndt::Client {
+class FailSetnonblocking : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_setnonblocking(libndt::Socket, bool) noexcept override {
-    return libndt::Err::io_error;
+  using Client::Client;
+  Err netx_setnonblocking(internal::Socket, bool) noexcept override {
+    return Err::io_error;
   }
 };
 
 TEST_CASE(
     "Client::netx_dial() deals with Client::netx_setnonblocking() failure") {
   FailSetnonblocking client;
-  libndt::Socket sock = (libndt::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+	internal::Socket sock = (internal::Socket)-1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
 }
 
-class FailSocketConnectImmediate : public libndt::Sys {
+class FailSocketConnectImmediate : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
+  using Sys::Sys;
   int Connect(  //
-      libndt::Socket, const sockaddr *, socklen_t) const noexcept override {
+      internal::Socket, const sockaddr *, socklen_t) const noexcept override {
     this->SetLastError(OS_EINVAL);
     return -1;
   }
@@ -2164,10 +2161,10 @@ class FailSocketConnectImmediate : public libndt::Sys {
 
 TEST_CASE(
     "Client::netx_dial() deals with immediate Client::connect() failure") {
-  libndt::Client client{};
+  Client client{};
   client.sys.reset(new FailSocketConnectImmediate);
-  libndt::Socket sock = (libndt::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+	internal::Socket sock = (internal::Socket)-1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
 }
 
 #ifdef _WIN32
@@ -2176,19 +2173,19 @@ TEST_CASE(
 #define OS_EINPROGRESS EINPROGRESS
 #endif
 
-class FailSocketConnectTimeoutClient : public libndt::Client {
+class FailSocketConnectTimeoutClient : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return libndt::Err::timed_out;
+  using Client::Client;
+  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return Err::timed_out;
   }
 };
 
-class FailSocketConnectTimeoutSys : public libndt::Sys {
+class FailSocketConnectTimeoutSys : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
+  using Sys::Sys;
   int Connect(  //
-      libndt::Socket, const sockaddr *, socklen_t) const noexcept override {
+      internal::Socket, const sockaddr *, socklen_t) const noexcept override {
     this->SetLastError(OS_EINPROGRESS);
     return -1;
   }
@@ -2197,31 +2194,31 @@ class FailSocketConnectTimeoutSys : public libndt::Sys {
 TEST_CASE("Client::netx_dial() deals with Client::connect() timeout") {
   FailSocketConnectTimeoutClient client{};
   client.sys.reset(new FailSocketConnectTimeoutSys{});
-  libndt::Socket sock = (libndt::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+	internal::Socket sock = (internal::Socket)-1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
 }
 
-class FailSocketConnectGetsockoptErrorClient : public libndt::Client {
+class FailSocketConnectGetsockoptErrorClient : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_poll(
+  using Client::Client;
+  Err netx_poll(
       std::vector<pollfd> *pfds, int) const noexcept override {
     for (auto &fd : *pfds) {
       fd.revents = fd.events;
     }
-    return libndt::Err::none;
+    return Err::none;
   }
 };
 
-class FailSocketConnectGetsockoptErrorSys : public libndt::Sys {
+class FailSocketConnectGetsockoptErrorSys : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
+  using Sys::Sys;
   int Connect(  //
-      libndt::Socket, const sockaddr *, socklen_t) const noexcept override {
+      internal::Socket, const sockaddr *, socklen_t) const noexcept override {
     this->SetLastError(OS_EINPROGRESS);
     return -1;
   }
-  int Getsockopt(libndt::Socket, int, int, void *,
+  int Getsockopt(internal::Socket, int, int, void *,
                  socklen_t *) const noexcept override {
     this->SetLastError(OS_EINVAL);
     return -1;
@@ -2232,31 +2229,31 @@ TEST_CASE(
     "Client::netx_dial() deals with Client::connect() getsockopt() error") {
   FailSocketConnectGetsockoptErrorClient client{};
   client.sys.reset(new FailSocketConnectGetsockoptErrorSys{});
-  libndt::Socket sock = (libndt::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+	internal::Socket sock = (internal::Socket)-1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
 }
 
-class FailSocketConnectSocketErrorClient : public libndt::Client {
+class FailSocketConnectSocketErrorClient : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_poll(
+  using Client::Client;
+  Err netx_poll(
       std::vector<pollfd> *pfds, int) const noexcept override {
     for (auto &fd : *pfds) {
       fd.revents = fd.events;
     }
-    return libndt::Err::none;
+    return Err::none;
   }
 };
 
-class FailSocketConnectSocketErrorSys : public libndt::Sys {
+class FailSocketConnectSocketErrorSys : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
+  using Sys::Sys;
   int Connect(  //
-      libndt::Socket, const sockaddr *, socklen_t) const noexcept override {
+      internal::Socket, const sockaddr *, socklen_t) const noexcept override {
     this->SetLastError(OS_EINPROGRESS);
     return -1;
   }
-  virtual int Getsockopt(libndt::Socket, int, int, void *value,
+  virtual int Getsockopt(internal::Socket, int, int, void *value,
                          socklen_t *) const noexcept override {
     int *ivalue = static_cast<int *>(value);
     *ivalue = OS_EINVAL;  // Any error would actually do here
@@ -2267,19 +2264,19 @@ class FailSocketConnectSocketErrorSys : public libndt::Sys {
 TEST_CASE("Client::netx_dial() deals with Client::connect() socket error") {
   FailSocketConnectSocketErrorClient client{};
   client.sys.reset(new FailSocketConnectSocketErrorSys{});
-  libndt::Socket sock = (libndt::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == libndt::Err::io_error);
+	internal::Socket sock = (internal::Socket)-1;
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
 }
 
 // Client::netx_recv_nonblocking() tests
 // -------------------------------------
 
 TEST_CASE("Client::netx_recv_nonblocking() deals with zero recv correctly") {
-  libndt::Client client;
+  Client client;
   char buf{};
-  libndt::Size n = 0;
+	internal::Size n = 0;
   REQUIRE(client.netx_recv_nonblocking(0, &buf, 0, &n) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
 }
 
 // Client::netx_recvn() tests
@@ -2292,18 +2289,18 @@ TEST_CASE("Client::netx_recv_nonblocking() deals with zero recv correctly") {
 #endif
 
 TEST_CASE("Client::netx_recvn() deals with too-large buffer") {
-  libndt::Client client;
+  Client client;
   char buf{};
   REQUIRE(client.netx_recvn(0, &buf, (unsigned long long)OS_SSIZE_MAX + 1) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
 }
 
-class FailNetxRecv : public libndt::Client {
+class FailNetxRecv : public Client {
  public:
-  using libndt::Client::Client;
-  libndt::Err netx_recv(libndt::Socket, void *, libndt::Size,
-                        libndt::Size *) const noexcept override {
-    return libndt::Err::invalid_argument;
+  using Client::Client;
+  Err netx_recv(internal::Socket, void *, internal::Size,
+                        internal::Size *) const noexcept override {
+    return Err::invalid_argument;
   }
 };
 
@@ -2311,42 +2308,42 @@ TEST_CASE("Client::netx_recvn() deals with Client::netx_recv() failure") {
   char buf[1024];
   FailNetxRecv client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
 }
 
-class RecvEof : public libndt::Sys {
+class RecvEof : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
-  libndt::Ssize Recv(libndt::Socket, void *,
-                     libndt::Size) const noexcept override {
+  using Sys::Sys;
+	internal::Ssize Recv(internal::Socket, void *,
+                     internal::Size) const noexcept override {
     return 0;
   }
 };
 
 TEST_CASE("Client::netx_recvn() deals with Client::recv() EOF") {
   char buf[1024];
-  libndt::Client client;
+  Client client;
   client.sys.reset(new RecvEof{});
-  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == libndt::Err::eof);
+  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == Err::eof);
 }
 
-class PartialNetxRecvAndThenError : public libndt::Client {
+class PartialNetxRecvAndThenError : public Client {
  public:
-  using libndt::Client::Client;
-  static constexpr libndt::Size amount = 11;
-  static constexpr libndt::Size good_amount = 3;
-  libndt::Err netx_recv(libndt::Socket, void *buf, libndt::Size size,
-                        libndt::Size *rv) const noexcept override {
+  using Client::Client;
+  static constexpr internal::Size amount = 11;
+  static constexpr internal::Size good_amount = 3;
+  Err netx_recv(internal::Socket, void *buf, internal::Size size,
+                        internal::Size *rv) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       for (size_t i = 0; i < good_amount; ++i) {
         ((char *)buf)[i] = 'A';
       }
       *rv = good_amount;
-      return libndt::Err::none;
+      return Err::none;
     }
     *rv = 0;
-    return libndt::Err::invalid_argument;
+    return Err::invalid_argument;
   }
 };
 
@@ -2356,7 +2353,7 @@ TEST_CASE(
   char buf[PartialNetxRecvAndThenError::amount] = {};
   PartialNetxRecvAndThenError client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return -1, not a short read.
   for (size_t i = 0; i < sizeof(buf); ++i) {
@@ -2368,13 +2365,13 @@ TEST_CASE(
   }
 }
 
-class PartialRecvAndThenEof : public libndt::Sys {
+class PartialRecvAndThenEof : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
-  static constexpr libndt::Size amount = 7;
-  static constexpr libndt::Size good_amount = 5;
-  libndt::Ssize Recv(libndt::Socket, void *buf,
-                     libndt::Size size) const noexcept override {
+  using Sys::Sys;
+  static constexpr internal::Size amount = 7;
+  static constexpr internal::Size good_amount = 5;
+	internal::Ssize Recv(internal::Socket, void *buf,
+                     internal::Size size) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       for (size_t i = 0; i < good_amount; ++i) {
@@ -2389,9 +2386,9 @@ class PartialRecvAndThenEof : public libndt::Sys {
 TEST_CASE(
     "Client::netx_recvn() deals with partial Client::recv() and then EOF") {
   char buf[PartialRecvAndThenEof::amount] = {};
-  libndt::Client client;
+  Client client;
   client.sys.reset(new PartialRecvAndThenEof{});
-  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == libndt::Err::eof);
+  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == Err::eof);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return zero, not a short read.
   for (size_t i = 0; i < sizeof(buf); ++i) {
@@ -2407,28 +2404,28 @@ TEST_CASE(
 // -------------------------------------
 
 TEST_CASE("Client::netx_send() deals with zero send correctly") {
-  libndt::Client client;
-  libndt::Size n = 0;
+  Client client;
+	internal::Size n = 0;
   char buf{};
   REQUIRE(client.netx_send_nonblocking(0, &buf, 0, &n) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
 }
 
 // Client::netx_sendn() tests
 // --------------------------
 
 TEST_CASE("Client::netx_sendn() deals with too-large buffer") {
-  libndt::Client client;
+  Client client;
   char buf{};
   REQUIRE(client.netx_sendn(0, &buf, (unsigned long long)OS_SSIZE_MAX + 1) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
 }
 
-class FailSend : public libndt::Sys {
+class FailSend : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
-  libndt::Ssize Send(libndt::Socket, const void *,
-                     libndt::Size) const noexcept override {
+  using Sys::Sys;
+	internal::Ssize Send(internal::Socket, const void *,
+                     internal::Size) const noexcept override {
     this->SetLastError(OS_EINVAL);
     return -1;
   }
@@ -2436,37 +2433,37 @@ class FailSend : public libndt::Sys {
 
 TEST_CASE("Client::netx_sendn() deals with Client::send() failure") {
   char buf[1024];
-  libndt::Client client;
+  Client client;
   client.sys.reset(new FailSend{});
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
 }
 
 // As much as EOF should not appear on a socket when sending, be ready.
-class SendEof : public libndt::Sys {
+class SendEof : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
-  libndt::Ssize Send(libndt::Socket, const void *,
-                     libndt::Size) const noexcept override {
+  using Sys::Sys;
+	internal::Ssize Send(internal::Socket, const void *,
+                     internal::Size) const noexcept override {
     return 0;
   }
 };
 
 TEST_CASE("Client::netx_sendn() deals with Client::send() EOF") {
   char buf[1024];
-  libndt::Client client;
+  Client client;
   client.sys.reset(new SendEof{});
-  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == libndt::Err::io_error);
+  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == Err::io_error);
 }
 
-class PartialSendAndThenError : public libndt::Sys {
+class PartialSendAndThenError : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
-  static constexpr libndt::Size amount = 11;
-  static constexpr libndt::Size good_amount = 3;
-  std::shared_ptr<libndt::Size> successful = std::make_shared<libndt::Size>(0);
-  libndt::Ssize Send(libndt::Socket, const void *,
-                     libndt::Size size) const noexcept override {
+  using Sys::Sys;
+  static constexpr internal::Size amount = 11;
+  static constexpr internal::Size good_amount = 3;
+  std::shared_ptr<internal::Size> successful = std::make_shared<internal::Size>(0);
+	internal::Ssize Send(internal::Socket, const void *,
+                     internal::Size size) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       *successful += good_amount;
@@ -2479,11 +2476,11 @@ class PartialSendAndThenError : public libndt::Sys {
 
 TEST_CASE("Client::send() deals with partial Client::send() and then error") {
   char buf[PartialSendAndThenError::amount] = {};
-  libndt::Client client;
+  Client client;
   auto sys = new PartialSendAndThenError{}; // managed by client
   client.sys.reset(sys);
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return -1, not a short write.
   //
@@ -2493,14 +2490,14 @@ TEST_CASE("Client::send() deals with partial Client::send() and then error") {
 }
 
 // See above comment regarding likelihood of send returning EOF (i.e. zero)
-class PartialSendAndThenEof : public libndt::Sys {
+class PartialSendAndThenEof : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
-  static constexpr libndt::Size amount = 7;
-  static constexpr libndt::Size good_amount = 5;
-  std::shared_ptr<libndt::Size> successful = std::make_shared<libndt::Size>(0);
-  libndt::Ssize Send(libndt::Socket, const void *,
-                     libndt::Size size) const noexcept override {
+  using Sys::Sys;
+  static constexpr internal::Size amount = 7;
+  static constexpr internal::Size good_amount = 5;
+  std::shared_ptr<internal::Size> successful = std::make_shared<internal::Size>(0);
+	internal::Ssize Send(internal::Socket, const void *,
+                     internal::Size size) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       *successful += good_amount;
@@ -2513,10 +2510,10 @@ class PartialSendAndThenEof : public libndt::Sys {
 TEST_CASE(
     "Client::netx_sendn() deals with partial Client::send() and then EOF") {
   char buf[PartialSendAndThenEof::amount] = {};
-  libndt::Client client;
+  Client client;
   auto sys = new PartialSendAndThenEof{}; // managed by client
   client.sys.reset(sys);
-  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == libndt::Err::io_error);
+  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == Err::io_error);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return zero, not a short write.
   //
@@ -2528,9 +2525,9 @@ TEST_CASE(
 // Client::netx_resolve() tests
 // ----------------------------
 
-class FailGetaddrinfo : public libndt::Sys {
+class FailGetaddrinfo : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
+  using Sys::Sys;
   int Getaddrinfo(const char *, const char *, const addrinfo *,
                   addrinfo **) const noexcept override {
     return EAI_AGAIN;
@@ -2538,15 +2535,15 @@ class FailGetaddrinfo : public libndt::Sys {
 };
 
 TEST_CASE("Client::netx_resolve() deals with Client::getaddrinfo() failure") {
-  libndt::Client client;
+  Client client;
   client.sys.reset(new FailGetaddrinfo{});
   std::vector<std::string> addrs;
-  REQUIRE(client.netx_resolve("x.org", &addrs) == libndt::Err::ai_again);
+  REQUIRE(client.netx_resolve("x.org", &addrs) == Err::ai_again);
 }
 
-class FailGetnameinfo : public libndt::Sys {
+class FailGetnameinfo : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
+  using Sys::Sys;
   int Getnameinfo(const sockaddr *, socklen_t, char *, socklen_t, char *,
                   socklen_t, int) const noexcept override {
     return EAI_AGAIN;
@@ -2554,10 +2551,10 @@ class FailGetnameinfo : public libndt::Sys {
 };
 
 TEST_CASE("Client::netx_resolve() deals with Client::getnameinfo() failure") {
-  libndt::Client client;
+  Client client;
   client.sys.reset(new FailGetnameinfo{});
   std::vector<std::string> addrs;
-  REQUIRE(client.netx_resolve("x.org", &addrs) == libndt::Err::ai_generic);
+  REQUIRE(client.netx_resolve("x.org", &addrs) == Err::ai_generic);
 }
 
 // Client::netx_setnonblocking() tests
@@ -2565,11 +2562,11 @@ TEST_CASE("Client::netx_resolve() deals with Client::getnameinfo() failure") {
 
 #ifdef _WIN32
 
-class FailIoctlsocket : public libndt::Sys {
+class FailIoctlsocket : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
+  using Sys::Sys;
   u_long expect = 2UL;  // value that should not be used
-  int Ioctlsocket(libndt::Socket, long cmd,
+  int Ioctlsocket(internal::Socket, long cmd,
                   u_long *value) const noexcept override {
     REQUIRE(cmd == FIONBIO);
     REQUIRE(*value == expect);
@@ -2580,28 +2577,28 @@ class FailIoctlsocket : public libndt::Sys {
 
 TEST_CASE(
     "Client::netx_setnonblocking() deals with Client::ioctlsocket() failure") {
-  libndt::Client client;
+  Client client;
   auto sys = new FailIoctlsocket{}; // managed by client
   client.sys.reset(sys);
   {
     sys->expect = 1UL;
     REQUIRE(client.netx_setnonblocking(17, true) ==
-            libndt::Err::invalid_argument);
+            Err::invalid_argument);
   }
   {
     sys->expect = 0UL;
     REQUIRE(client.netx_setnonblocking(17, false) ==
-            libndt::Err::invalid_argument);
+            Err::invalid_argument);
   }
 }
 
 #else
 
-class FailFcntlGet : public libndt::Sys {
+class FailFcntlGet : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
-  using libndt::Sys::Fcntl;
-  int Fcntl(libndt::Socket, int cmd) const noexcept override {
+  using Sys::Sys;
+  using Sys::Fcntl;
+  int Fcntl(internal::Socket, int cmd) const noexcept override {
     REQUIRE(cmd == F_GETFL);
     errno = EINVAL;
     return -1;
@@ -2610,21 +2607,21 @@ class FailFcntlGet : public libndt::Sys {
 
 TEST_CASE(
     "Client::netx_setnonblocking() deals with Client::fcntl(F_GETFL) failure") {
-  libndt::Client client;
+  Client client;
   client.sys.reset(new FailFcntlGet{});
   REQUIRE(client.netx_setnonblocking(17, true) ==
-          libndt::Err::invalid_argument);
+          Err::invalid_argument);
 }
 
-class FailFcntlSet : public libndt::Sys {
+class FailFcntlSet : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
-  int Fcntl(libndt::Socket, int cmd) const noexcept override {
+  using Sys::Sys;
+  int Fcntl(internal::Socket, int cmd) const noexcept override {
     REQUIRE(cmd == F_GETFL);
     return 0;
   }
   int expect = ~0;  // value that should never appear
-  int Fcntl(libndt::Socket, int cmd, int flags) const noexcept override {
+  int Fcntl(internal::Socket, int cmd, int flags) const noexcept override {
     REQUIRE(cmd == F_SETFL);
     REQUIRE(flags == expect);
     errno = EINVAL;
@@ -2634,18 +2631,18 @@ class FailFcntlSet : public libndt::Sys {
 
 TEST_CASE(
     "Client::netx_setnonblocking() deals with Client::fcntl(F_SETFL) failure") {
-  libndt::Client client;
+  Client client;
   auto sys = new FailFcntlSet{}; // managed by client
   client.sys.reset(sys);
   {
     sys->expect = O_NONBLOCK;
     REQUIRE(client.netx_setnonblocking(17, true) ==
-            libndt::Err::invalid_argument);
+            Err::invalid_argument);
   }
   {
     sys->expect = 0;
     REQUIRE(client.netx_setnonblocking(17, false) ==
-            libndt::Err::invalid_argument);
+            Err::invalid_argument);
   }
 }
 
@@ -2656,9 +2653,9 @@ TEST_CASE(
 
 #ifndef _WIN32
 
-class InterruptPoll : public libndt::Sys {
+class InterruptPoll : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
+  using Sys::Sys;
   std::shared_ptr<unsigned int> count = std::make_shared<unsigned int>();
   int Poll(pollfd *, nfds_t, int) const noexcept override {
     if ((*count)++ == 0) {
@@ -2672,24 +2669,24 @@ class InterruptPoll : public libndt::Sys {
 
 TEST_CASE("Client::netx_poll() deals with EINTR") {
   pollfd pfd{};
-  constexpr libndt::Socket sock = 17;
+  constexpr internal::Socket sock = 17;
   pfd.fd = sock;
   pfd.events |= POLLIN;
   std::vector<pollfd> pfds;
   pfds.push_back(pfd);
-  libndt::Client client;
+  Client client;
   auto sys = new InterruptPoll{}; // managed by client
   client.sys.reset(sys);
   constexpr int timeout = 100;
-  REQUIRE(client.netx_poll(&pfds, timeout) == libndt::Err::io_error);
+  REQUIRE(client.netx_poll(&pfds, timeout) == Err::io_error);
   REQUIRE(*sys->count == 2);
 }
 
 #endif  // !_WIN32
 
-class TimeoutPoll : public libndt::Sys {
+class TimeoutPoll : public internal::Sys {
  public:
-  using libndt::Sys::Sys;
+  using Sys::Sys;
 #ifdef _WIN32
   int Poll(LPWSAPOLLFD, ULONG, INT) const noexcept override
 #else
@@ -2702,15 +2699,15 @@ class TimeoutPoll : public libndt::Sys {
 
 TEST_CASE("Client::netx_poll() deals with timeout") {
   pollfd pfd{};
-  constexpr libndt::Socket sock = 17;
+  constexpr internal::Socket sock = 17;
   pfd.fd = sock;
   pfd.events |= POLLIN;
   std::vector<pollfd> pfds;
   pfds.push_back(pfd);
-  libndt::Client client;
+  Client client;
   client.sys.reset(new TimeoutPoll{});
   constexpr int timeout = 100;
-  REQUIRE(client.netx_poll(&pfds, timeout) == libndt::Err::timed_out);
+  REQUIRE(client.netx_poll(&pfds, timeout) == Err::timed_out);
 }
 
 // Client::query_mlabns_curl() tests
@@ -2718,7 +2715,7 @@ TEST_CASE("Client::netx_poll() deals with timeout") {
 
 #ifdef HAVE_CURL
 TEST_CASE("Client::query_mlabns_curl() deals with Curl{} failure") {
-  libndt::Client client;
+  Client client;
   // Note: passing `nullptr` should cause Curl{} to fail and hence we can
   // also easily check for cases where Curl{} fails.
   REQUIRE(client.query_mlabns_curl("", 3, nullptr) == false);
@@ -2735,7 +2732,7 @@ TEST_CASE("Client::query_mlabns_curl() deals with Curl{} failure") {
 #endif
 
 TEST_CASE("Client::sys->GetLastError() works as expected") {
-  libndt::Client client;
+  Client client;
   client.sys->SetLastError(OS_EINVAL);
   REQUIRE(client.sys->GetLastError() == OS_EINVAL);
   client.sys->SetLastError(0);  // clear
@@ -2746,7 +2743,7 @@ TEST_CASE("Client::sys->GetLastError() works as expected") {
 // --------------------
 
 TEST_CASE("Sys::recv() deals with too-large buffer") {
-  libndt::Client client;
+  Client client;
   REQUIRE(client.sys->Recv(
         0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
 }
@@ -2755,7 +2752,7 @@ TEST_CASE("Sys::recv() deals with too-large buffer") {
 // --------------------
 
 TEST_CASE("Sys::send() deals with too-large buffer") {
-  libndt::Client client;
+  Client client;
   REQUIRE(client.sys->Send(
         0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
 }

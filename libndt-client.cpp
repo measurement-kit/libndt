@@ -2,9 +2,9 @@
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
 
-#include "json.hpp"
+#include "third_party/github.com/nlohmann/json/json.hpp"
 
-#include "impl.hpp" // not standalone
+#include "libndt/libndt.hpp"  // not standalone
 
 #include <stdlib.h>
 
@@ -16,7 +16,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #endif  // __clang__
-#include "argh.h"
+#include "third_party/github.com/adishavit/argh/argh.h"
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif  // __clang__

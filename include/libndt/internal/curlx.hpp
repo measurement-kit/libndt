@@ -1,10 +1,10 @@
 // Part of Measurement Kit <https://measurement-kit.github.io/>.
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
-#ifndef MEASUREMENT_KIT_LIBNDT_CURLX_HPP
-#define MEASUREMENT_KIT_LIBNDT_CURLX_HPP
+#ifndef MEASUREMENT_KIT_LIBNDT_INTERNAL_CURLX_HPP
+#define MEASUREMENT_KIT_LIBNDT_INTERNAL_CURLX_HPP
 
-// libndt/curlx.hpp - libcurl wrappers
+// libndt/internal/curlx.hpp - libcurl wrappers
 
 #include <cstddef>
 #include <cstdint>
@@ -13,13 +13,14 @@
 
 #include <curl/curl.h>
 
-#ifndef LIBNDT_STANDALONE
-#include "assert.hpp"
-#include "logger.hpp"
+#ifndef LIBNDT_SINGLE_INCLUDE
+#include "libndt/internal/assert.hpp"
+#include "libndt/internal/logger.hpp"
 #endif
 
 namespace measurement_kit {
 namespace libndt {
+namespace internal {
 
 // CurlDeleter is a deleter for a libcurl handle.
 class CurlDeleter {
@@ -75,8 +76,7 @@ class Curlx {
   const Logger &logger_;
 };
 
-// LIBNDT_NO_INLINE_IMPL controls whether to inline the impl
-#ifndef LIBNDT_NO_INLINE_IMPL
+}  // namespace internal
 }  // namespace libndt
 }  // namespace measurement_kit
 extern "C" {
@@ -109,6 +109,7 @@ static size_t libndt_curl_callback(char *ptr, size_t size, size_t nmemb,
 }  // extern "C"
 namespace measurement_kit {
 namespace libndt {
+namespace internal {
 
 void CurlDeleter::operator()(CURL *handle) noexcept {
   if (handle != nullptr) {
@@ -237,7 +238,7 @@ CURLcode Curlx::GetinfoResponseCode(
 
 Curlx::~Curlx() noexcept {}
 
-#endif  // LIBNDT_NO_INLINE_IMPL
+}  // namespace internal
 }  // namespace libndt
 }  // namespace measurement_kit
 #endif

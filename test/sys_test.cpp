@@ -2,14 +2,14 @@
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
 
-#include "sys.hpp"
+#include "libndt/internal/sys.hpp"
 
 #include <string.h>
 
 #define CATCH_CONFIG_MAIN
-#include "catch.hpp"
+#include "third_party/github.com/catchorg/Catch2/catch.hpp"
 
-using namespace measurement_kit::libndt;
+using namespace measurement_kit::libndt::internal;
 
 TEST_CASE("strtonum() deals with minval greater than maxval") {
   const char *errstr = nullptr;

@@ -1,10 +1,10 @@
 // Part of Measurement Kit <https://measurement-kit.github.io/>.
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
-#ifndef MEASUREMENT_KIT_LIBNDT_SYS_HPP
-#define MEASUREMENT_KIT_LIBNDT_SYS_HPP
+#ifndef MEASUREMENT_KIT_LIBNDT_INTERNAL_SYS_HPP
+#define MEASUREMENT_KIT_LIBNDT_INTERNAL_SYS_HPP
 
-// libndt/sys.hpp - system dependent routines
+// libndt/internal/sys.hpp - system dependent routines
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -23,6 +23,7 @@
 
 namespace measurement_kit {
 namespace libndt {
+namespace internal {
 
 // Size is our definition of size
 using Size = uint64_t;
@@ -40,8 +41,8 @@ using Socket = SOCKET;
 using Socket = int;
 #endif
 
-// is_socket_valid tells you whether a socket is valid
-constexpr bool is_socket_valid(Socket s) noexcept {
+// IsSocketValid tells you whether a socket is valid
+constexpr bool IsSocketValid(Socket s) noexcept {
 #ifdef _WIN32
   return s != INVALID_SOCKET;
 #else
@@ -110,9 +111,6 @@ class Sys {
 
   virtual ~Sys() noexcept;
 };
-
-// LIBNDT_NO_INLINE_IMPL controls whether to inline the impl
-#ifndef LIBNDT_NO_INLINE_IMPL
 
 // LIBNDT_HAVE_STRTONUM tells us whether we have strtonum in libc
 #ifndef LIBNDT_HAVE_STRTONUM
@@ -302,7 +300,7 @@ int Sys::Getsockopt(Socket socket, int level, int name, void *value,
 
 Sys::~Sys() noexcept {}
 
-#endif  // LIBNDT_NO_INLINE_IMPL
+}  // namespace internal
 }  // namespace libndt
 }  // namespace measurement_kit
-#endif  // MEASUREMENT_KIT_LIBNDT_SYS_HPP
+#endif  // MEASUREMENT_KIT_LIBNDT_INTERNAL_SYS_HPP

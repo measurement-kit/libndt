@@ -1,16 +1,17 @@
 // Part of Measurement Kit <https://measurement-kit.github.io/>.
 // Measurement Kit is free software under the BSD license. See AUTHORS
 // and LICENSE for more information on the copying conditions.
-#ifndef MEASUREMENT_KIT_LIBNDT_LOGGER_HPP
-#define MEASUREMENT_KIT_LIBNDT_LOGGER_HPP
+#ifndef MEASUREMENT_KIT_LIBNDT_INTERNAL_LOGGER_HPP
+#define MEASUREMENT_KIT_LIBNDT_INTERNAL_LOGGER_HPP
 
-// libndt/logger.hpp - logger API
+// libndt/internal/logger.hpp - logger API
 
 #include <sstream>
 #include <string>
 
 namespace measurement_kit {
 namespace libndt {
+namespace internal {
 
 class Logger {
  public:
@@ -33,9 +34,6 @@ class NoLogger : public Logger {
   void emit_debug(const std::string &) const noexcept override;
   ~NoLogger() noexcept override;
 };
-
-// LIBNDT_NO_INLINE_IMPL controls whether to inline the impl
-#ifndef LIBNDT_NO_INLINE_IMPL
 
 #define LIBNDT_LOGGER_LEVEL_(logger, level, statements) \
   if ((logger).is_##level##_enabled()) {                \
@@ -75,7 +73,7 @@ void NoLogger::emit_debug(const std::string &) const noexcept {}
 
 NoLogger::~NoLogger() noexcept {}
 
-#endif  // LIBNDT_NO_INLINE_IMPL
+}  // namespace internal
 }  // namespace libndt
 }  // namespace measurement_kit
-#endif
+#endif  // MEASUREMENT_KIT_LIBNDT_INTERNAL_LOGGER_HPP

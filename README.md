@@ -16,25 +16,17 @@ TLS flavoured NDT code is in beta stage. Ndt7 code is in alpha stage.
 
 ## Getting started
 
-Make sure you download [nlohmann/json](https://github.com/nlohmann/json)
-single include header [json.hpp](
-https://github.com/nlohmann/json/blob/develop/single_include/nlohmann/json.hpp)
-before proceeding. The minimum supported version is v3.0.0. Put `json.hpp`
-in the current working directory.
-
 Libndt depends on OpenSSL (for TLS support and in the future for
-WebSocket support) and cURL (to autodiscover servers). CMake will
-fail if such dependencies are not installed.
+WebSocket support) and cURL (to autodiscover servers).
 
-Then, download [libndt.hpp](
-https://github.com/measurement-kit/libndt/blob/master/libndt.hpp) and
+Download [single_include/libndt.hpp](
+https://github.com/measurement-kit/libndt/blob/master/single_include/libndt.hpp) and
 put it in the current working directory.
 
 This example runs a NDT download-only nettest with a nearby server. Create
 a file named `main.cpp` with this content.
 
 ```C++
-#include "json.hpp"  // MUST be included before libndt
 #include "libndt.hpp"
 
 int main() {
@@ -48,29 +40,19 @@ Compile with `g++ -std=c++11 -Wall -Wextra -I. -o main main.cpp`.
 
 See [codedocs.xyz/measurement-kit/libndt](
 https://codedocs.xyz/measurement-kit/libndt/) for API documentation;
-[libndt.hpp](libndt.hpp) for the full API.
+[include/libndt/libndt.hpp](include/libndt/libndt.hpp) for the full API.
 
 See [libndt-client.cpp](libndt-client.cpp) for a comprehensive usage example.
 
 ## Cloning the repository
 
-To develop libndt or run tests, you need a clone of the repository. Make sure
-you pass the `--recursive` flag to properly fetch all sub-repositories.
+To develop libndt or run tests, you need a clone of the repository.
 
 ```
-git clone --recursive https://github.com/measurement-kit/libndt
+git clone https://github.com/measurement-kit/libndt
 ```
 
 ## Building and testing
-
-We use CMake for building libndt for testing. CMake will search for OpenSSL
-and cURL, defining the above described macros if they are found. CMake also
-downloads a recent version of nlohmann/json and puts it in the current
-directory, so you do not have to worry about this aspect.
-
-To see the exact dependencies required on Debian, please check out the
-[Dockerfile](https://github.com/measurement-kit/ci-common/blob/master/debian/Dockerfile)
-used when testing in Travis-CI.
 
 Build and run tests with:
 
@@ -88,3 +70,8 @@ by running:
 ```
 ./libndt-client -help
 ```
+
+## Updating dependencies
+
+Vendored dependencies are in `third_party`. We include the complete path to
+where they can be found such that updating is obvious.
