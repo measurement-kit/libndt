@@ -310,8 +310,8 @@ TEST_CASE("Client::query_mlabns() deals with incomplete JSON") {
 class FailNetxRecvn : public Client {
  public:
   using Client::Client;
-  Err netx_recvn(internal::Socket, void *, internal::Size) const noexcept override {
-    return Err::io_error;
+	internal::Err netx_recvn(internal::Socket, void *, internal::Size) const noexcept override {
+    return internal::Err::io_error;
   }
 };
 
@@ -323,8 +323,8 @@ TEST_CASE("Client::recv_kickoff() deals with Client::recvn() failure") {
 class NetxRecvnEof : public Client {
  public:
   using Client::Client;
-  Err netx_recvn(internal::Socket, void *, internal::Size) const noexcept override {
-    return Err::eof;
+	internal::Err netx_recvn(internal::Socket, void *, internal::Size) const noexcept override {
+    return internal::Err::eof;
   }
 };
 
@@ -336,14 +336,14 @@ TEST_CASE("Client::recv_kickoff() deals with Client::recvn() EOF") {
 class NetxRecvnInvalidKickoff : public Client {
  public:
   using Client::Client;
-  Err netx_recvn(  //
+	internal::Err netx_recvn(  //
       internal::Socket, void *buf, internal::Size siz) const noexcept override {
     REQUIRE(buf != nullptr);
     REQUIRE(siz >= 1);
     for (internal::Size i = 0; i < siz; ++i) {
       ((char *)buf)[i] = 'x';
     }
-    return Err::none;
+    return internal::Err::none;
   }
 };
 
@@ -544,9 +544,9 @@ class FailNetxMaybesocks5hConnect : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *) noexcept override {
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -563,10 +563,10 @@ class FailMsgExpectEmpty : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return false; }
 };
@@ -583,14 +583,14 @@ class FailNetxSelectDuringDownload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::io_error;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::io_error;
   }
 };
 
@@ -605,18 +605,18 @@ class FailRecvDuringDownload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+	internal::Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
 };
 
@@ -631,18 +631,18 @@ class RecvEofDuringDownload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+	internal::Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::eof;
+    return internal::Err::eof;
   }
 };
 
@@ -659,18 +659,18 @@ class FailMsgReadLegacyDuringDownload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+	internal::Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::eof;
+    return internal::Err::eof;
   }
   bool msg_read_legacy(MsgType *, std::string *) noexcept override {
     return false;
@@ -689,18 +689,18 @@ class RecvNonTestMsgDuringDownload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+	internal::Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::eof;
+    return internal::Err::eof;
   }
   bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
     *code = msg_logout;
@@ -719,18 +719,18 @@ class FailMsgWriteDuringDownload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+	internal::Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::eof;
+    return internal::Err::eof;
   }
   bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
     *code = msg_test_msg;
@@ -752,18 +752,18 @@ class FailMsgReadDuringDownload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+	internal::Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::eof;
+    return internal::Err::eof;
   }
   bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
     *code = msg_test_msg;
@@ -788,18 +788,18 @@ class RecvNonTestOrLogoutMsgDuringDownload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+	internal::Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::eof;
+    return internal::Err::eof;
   }
   bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
     *code = msg_test_msg;
@@ -825,18 +825,18 @@ class FailEmitResultDuringDownload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+	internal::Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::eof;
+    return internal::Err::eof;
   }
   bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
     *code = msg_test_msg;
@@ -863,18 +863,18 @@ class TooManyTestMsgsDuringDownload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
+	internal::Err netx_recv_nonblocking(internal::Socket, void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::eof;
+    return internal::Err::eof;
   }
   bool msg_read_legacy(MsgType *code, std::string *) noexcept override {
     *code = msg_test_msg;
@@ -1018,18 +1018,18 @@ class FailSendDuringUpload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_send_nonblocking(internal::Socket, const void *, internal::Size,
+	internal::Err netx_send_nonblocking(internal::Socket, const void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1051,18 +1051,18 @@ class FailMsgExpectDuringUpload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType) noexcept override { return true; }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_send_nonblocking(internal::Socket, const void *, internal::Size,
+	internal::Err netx_send_nonblocking(internal::Socket, const void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::io_error;
+    return internal::Err::io_error;
   }
   bool msg_expect(MsgType, std::string *) noexcept override {
     return false;
@@ -1080,20 +1080,20 @@ class FailFinalMsgExpectEmptyDuringUpload : public Client {
   bool msg_expect_test_prepare(std::string *, uint8_t *) noexcept override {
     return true;
   }
-  Err netx_maybesocks5h_dial(const std::string &, const std::string &,
+	internal::Err netx_maybesocks5h_dial(const std::string &, const std::string &,
                                      internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
   bool msg_expect_empty(MsgType code) noexcept override {
     return code != msg_test_finalize;
   }
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::none;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::none;
   }
-  Err netx_send_nonblocking(internal::Socket, const void *, internal::Size,
+	internal::Err netx_send_nonblocking(internal::Socket, const void *, internal::Size,
                                     internal::Size *) const noexcept override {
-    return Err::io_error;
+    return internal::Err::io_error;
   }
   bool msg_expect(MsgType, std::string *) noexcept override {
     return true;
@@ -1228,9 +1228,9 @@ TEST_CASE("Client::msg_write_legacy() deals with too-big messages") {
 class FailNetxSendn : public Client {
  public:
   using Client::Client;
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1247,9 +1247,9 @@ TEST_CASE(
 class FailLargeNetxSendn : public Client {
  public:
   using Client::Client;
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size siz) const noexcept override {
-    return siz == 3 ? Err::none : Err::io_error;
+    return siz == 3 ? internal::Err::none : internal::Err::io_error;
   }
 };
 
@@ -1438,16 +1438,16 @@ TEST_CASE(
 class FailLargeNetxRecvn : public Client {
  public:
   using Client::Client;
-  Err netx_recvn(internal::Socket, void *p,
+	internal::Err netx_recvn(internal::Socket, void *p,
                          internal::Size siz) const noexcept override {
     if (siz == 3) {
       char *usablep = (char *)p;
       usablep[0] = msg_login;
       uint16_t len = htons(155);
       memcpy(&usablep[1], &len, 2);
-      return Err::none;
+      return internal::Err::none;
     }
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1467,9 +1467,9 @@ TEST_CASE(
 class FailNetxConnect : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *) noexcept override {
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1481,20 +1481,20 @@ TEST_CASE(
   FailNetxConnect client{settings};
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::io_error);
+          internal::Err::io_error);
 }
 
 class Maybesocks5hConnectFailFirstNetxSendn : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1506,24 +1506,24 @@ TEST_CASE(
   Maybesocks5hConnectFailFirstNetxSendn client{settings};
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err ::io_error);
+          internal::Err ::io_error);
 }
 
 class Maybesocks5hConnectFailFirstNetxRecvn : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_recvn(internal::Socket, void *,
+	internal::Err netx_recvn(internal::Socket, void *,
                          internal::Size) const noexcept override {
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1535,28 +1535,28 @@ TEST_CASE(
   Maybesocks5hConnectFailFirstNetxRecvn client{settings};
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::io_error);
+          internal::Err::io_error);
 }
 
 class Maybesocks5hConnectInvalidAuthResponseVersion : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_recvn(internal::Socket, void *buf,
+	internal::Err netx_recvn(internal::Socket, void *buf,
                          internal::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 4;  // unexpected
     ((char *)buf)[1] = 0;
-    return Err::none;
+    return internal::Err::none;
   }
 };
 
@@ -1568,28 +1568,28 @@ TEST_CASE(
   Maybesocks5hConnectInvalidAuthResponseVersion client{settings};
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::socks5h);
+          internal::Err::socks5h);
 }
 
 class Maybesocks5hConnectInvalidAuthResponseMethod : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_recvn(internal::Socket, void *buf,
+	internal::Err netx_recvn(internal::Socket, void *buf,
                          internal::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 1;
-    return Err::none;
+    return internal::Err::none;
   }
 };
 
@@ -1601,28 +1601,28 @@ TEST_CASE(
   Maybesocks5hConnectInvalidAuthResponseMethod client{settings};
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::socks5h);
+          internal::Err::socks5h);
 }
 
 class Maybesocks5hConnectInitialHandshakeOkay : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_recvn(internal::Socket, void *buf,
+	internal::Err netx_recvn(internal::Socket, void *buf,
                          internal::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 0;
-    return Err::none;
+    return internal::Err::none;
   }
 };
 
@@ -1636,7 +1636,7 @@ TEST_CASE("Client::netx_maybesocks5h_dial() deals with too long hostname") {
     hostname += "A";
   }
   REQUIRE(client.netx_maybesocks5h_dial(hostname, "80", &sock) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
 }
 
 TEST_CASE("Client::netx_maybesocks5h_dial() deals with invalid port") {
@@ -1645,28 +1645,28 @@ TEST_CASE("Client::netx_maybesocks5h_dial() deals with invalid port") {
   Maybesocks5hConnectInitialHandshakeOkay client{settings};
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "xx", &sock) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
 }
 
 class Maybesocks5hConnectFailSecondNetxSendn : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size size) const noexcept override {
-    return size == 3 ? Err::none : Err::io_error;
+    return size == 3 ? internal::Err::none : internal::Err::io_error;
   }
-  Err netx_recvn(internal::Socket, void *buf,
+	internal::Err netx_recvn(internal::Socket, void *buf,
                          internal::Size size) const noexcept override {
     assert(size == 2);
     (void)size;
     ((char *)buf)[0] = 5;
     ((char *)buf)[1] = 0;
-    return Err::none;
+    return internal::Err::none;
   }
 };
 
@@ -1678,29 +1678,29 @@ TEST_CASE(
   Maybesocks5hConnectFailSecondNetxSendn client{settings};
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::io_error);
+          internal::Err::io_error);
 }
 
 class Maybesocks5hConnectFailSecondNetxRecvn : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_recvn(internal::Socket, void *buf,
+	internal::Err netx_recvn(internal::Socket, void *buf,
                          internal::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return Err::none;
+      return internal::Err::none;
     }
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1712,34 +1712,34 @@ TEST_CASE(
   Maybesocks5hConnectFailSecondNetxRecvn client{settings};
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::io_error);
+          internal::Err::io_error);
 }
 
 class Maybesocks5hConnectInvalidSecondVersion : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_recvn(internal::Socket, void *buf,
+	internal::Err netx_recvn(internal::Socket, void *buf,
                          internal::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return Err::none;
+      return internal::Err::none;
     }
     if (size == 4) {
       ((char *)buf)[0] = 4;  // unexpected
       ((char *)buf)[1] = 0;
-      return Err::none;
+      return internal::Err::none;
     }
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1751,34 +1751,34 @@ TEST_CASE(
   Maybesocks5hConnectInvalidSecondVersion client{settings};
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::socks5h);
+          internal::Err::socks5h);
 }
 
 class Maybesocks5hConnectErrorResult : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_recvn(internal::Socket, void *buf,
+	internal::Err netx_recvn(internal::Socket, void *buf,
                          internal::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return Err::none;
+      return internal::Err::none;
     }
     if (size == 4) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 1;  // error occurred
-      return Err::none;
+      return internal::Err::none;
     }
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1790,35 +1790,35 @@ TEST_CASE(
   Maybesocks5hConnectErrorResult client{settings};
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::io_error);
+          internal::Err::io_error);
 }
 
 class Maybesocks5hConnectInvalidReserved : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_recvn(internal::Socket, void *buf,
+	internal::Err netx_recvn(internal::Socket, void *buf,
                          internal::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return Err::none;
+      return internal::Err::none;
     }
     if (size == 4) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
       ((char *)buf)[2] = 1;  // should instead be zero
-      return Err::none;
+      return internal::Err::none;
     }
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1830,29 +1830,29 @@ TEST_CASE(
   Maybesocks5hConnectInvalidReserved client{settings};
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::socks5h);
+          internal::Err::socks5h);
 }
 
 class Maybesocks5hConnectFailAddressNetxRecvn : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::none;
+    return internal::Err::none;
   }
   uint8_t type = 0;
   std::shared_ptr<bool> seen = std::make_shared<bool>(false);
-  Err netx_recvn(internal::Socket, void *buf,
+	internal::Err netx_recvn(internal::Socket, void *buf,
                          internal::Size size) const noexcept override {
     if (size == 2) {
       ((char *)buf)[0] = 5;
       ((char *)buf)[1] = 0;
-      return Err::none;
+      return internal::Err::none;
     }
     if (size == 4 && !*seen) {
       *seen = true;  // use flag because IPv4 is also 4 bytes
@@ -1861,10 +1861,10 @@ class Maybesocks5hConnectFailAddressNetxRecvn : public Client {
       ((char *)buf)[1] = 0;
       ((char *)buf)[2] = 0;
       ((char *)buf)[3] = (char)type;  // Sign change safe b/c we're serializing
-      return Err::none;
+      return internal::Err::none;
     }
     // the subsequent recvn() will fail
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1877,7 +1877,7 @@ TEST_CASE(
   client.type = 1;
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::io_error);
+          internal::Err::io_error);
 }
 
 TEST_CASE(
@@ -1889,7 +1889,7 @@ TEST_CASE(
   client.type = 4;
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::io_error);
+          internal::Err::io_error);
 }
 
 TEST_CASE(
@@ -1901,33 +1901,33 @@ TEST_CASE(
   client.type = 7;
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::socks5h);
+          internal::Err::socks5h);
 }
 
 class Maybesocks5hConnectWithArray : public Client {
  public:
   using Client::Client;
-  Err netx_dial(const std::string &, const std::string &,
+	internal::Err netx_dial(const std::string &, const std::string &,
                         internal::Socket *sock) noexcept override {
     *sock = 17 /* Something "valid" */;
-    return Err::none;
+    return internal::Err::none;
   }
-  Err netx_sendn(internal::Socket, const void *,
+	internal::Err netx_sendn(internal::Socket, const void *,
                          internal::Size) const noexcept override {
-    return Err::none;
+    return internal::Err::none;
   }
   std::shared_ptr<std::deque<std::string>> array = std::make_shared<
       std::deque<std::string>>();
-  Err netx_recvn(internal::Socket, void *buf,
+	internal::Err netx_recvn(internal::Socket, void *buf,
                          internal::Size size) const noexcept override {
     if (!array->empty() && size == (*array)[0].size()) {
       for (size_t idx = 0; idx < (*array)[0].size(); ++idx) {
         ((char *)buf)[idx] = (*array)[0][idx];
       }
       array->pop_front();
-      return Err::none;
+      return internal::Err::none;
     }
-    return Err::io_error;
+    return internal::Err::io_error;
   }
 };
 
@@ -1943,7 +1943,7 @@ TEST_CASE(
   };
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::io_error);
+          internal::Err::io_error);
 }
 
 TEST_CASE(
@@ -1959,7 +1959,7 @@ TEST_CASE(
   };
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::io_error);
+          internal::Err::io_error);
 }
 
 TEST_CASE(
@@ -1976,7 +1976,7 @@ TEST_CASE(
   };
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::io_error);
+          internal::Err::io_error);
 }
 
 TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv4 (mocked)") {
@@ -1991,7 +1991,7 @@ TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv4 (mocked)") {
   };
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::none);
+          internal::Err::none);
 }
 
 TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv6 (mocked)") {
@@ -2006,7 +2006,7 @@ TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv6 (mocked)") {
   };
 	internal::Socket sock = (internal::Socket)-1;
   REQUIRE(client.netx_maybesocks5h_dial("www.google.com", "80", &sock) ==
-          Err::none);
+          internal::Err::none);
 }
 
 // Client::netx_map_errno() tests
@@ -2021,28 +2021,28 @@ TEST_CASE("Client::netx_maybesocks5h_dial() works with IPv6 (mocked)") {
 TEST_CASE("Client::netx_map_errno() correctly maps all errors") {
   using namespace measurement_kit::libndt;
 #ifdef NDEBUG  // There is an assertion that would fail in DEBUG mode
-  REQUIRE(Client::netx_map_errno(0) == Err::io_error);
+  REQUIRE(Client::netx_map_errno(0) == internal::Err::io_error);
 #endif
 #ifndef _WIN32
-  REQUIRE(Client::netx_map_errno(E(PIPE)) == Err::broken_pipe);
+  REQUIRE(Client::netx_map_errno(E(PIPE)) == internal::Err::broken_pipe);
 #endif
-  REQUIRE(Client::netx_map_errno(E(CONNABORTED)) == Err::connection_aborted);
-  REQUIRE(Client::netx_map_errno(E(CONNREFUSED)) == Err::connection_refused);
-  REQUIRE(Client::netx_map_errno(E(CONNRESET)) == Err::connection_reset);
-  REQUIRE(Client::netx_map_errno(E(HOSTUNREACH)) == Err::host_unreachable);
-  REQUIRE(Client::netx_map_errno(E(INTR)) == Err::interrupted);
-  REQUIRE(Client::netx_map_errno(E(INVAL)) == Err::invalid_argument);
+  REQUIRE(Client::netx_map_errno(E(CONNABORTED)) == internal::Err::connection_aborted);
+  REQUIRE(Client::netx_map_errno(E(CONNREFUSED)) == internal::Err::connection_refused);
+  REQUIRE(Client::netx_map_errno(E(CONNRESET)) == internal::Err::connection_reset);
+  REQUIRE(Client::netx_map_errno(E(HOSTUNREACH)) == internal::Err::host_unreachable);
+  REQUIRE(Client::netx_map_errno(E(INTR)) == internal::Err::interrupted);
+  REQUIRE(Client::netx_map_errno(E(INVAL)) == internal::Err::invalid_argument);
 #ifndef _WIN32
-  REQUIRE(Client::netx_map_errno(E(IO)) == Err::io_error);
+  REQUIRE(Client::netx_map_errno(E(IO)) == internal::Err::io_error);
 #endif
-  REQUIRE(Client::netx_map_errno(E(NETDOWN)) == Err::network_down);
-  REQUIRE(Client::netx_map_errno(E(NETRESET)) == Err::network_reset);
-  REQUIRE(Client::netx_map_errno(E(NETUNREACH)) == Err::network_unreachable);
-  REQUIRE(Client::netx_map_errno(E(INPROGRESS)) == Err::operation_in_progress);
-  REQUIRE(Client::netx_map_errno(E(WOULDBLOCK)) == Err::operation_would_block);
-  REQUIRE(Client::netx_map_errno(E(TIMEDOUT)) == Err::timed_out);
+  REQUIRE(Client::netx_map_errno(E(NETDOWN)) == internal::Err::network_down);
+  REQUIRE(Client::netx_map_errno(E(NETRESET)) == internal::Err::network_reset);
+  REQUIRE(Client::netx_map_errno(E(NETUNREACH)) == internal::Err::network_unreachable);
+  REQUIRE(Client::netx_map_errno(E(INPROGRESS)) == internal::Err::operation_in_progress);
+  REQUIRE(Client::netx_map_errno(E(WOULDBLOCK)) == internal::Err::operation_would_block);
+  REQUIRE(Client::netx_map_errno(E(TIMEDOUT)) == internal::Err::timed_out);
 #if !defined _WIN32 && EAGAIN != EWOULDBLOCK
-  REQUIRE(Client::netx_map_errno(E(AGAIN)) == Err::operation_would_block);
+  REQUIRE(Client::netx_map_errno(E(AGAIN)) == internal::Err::operation_would_block);
 #endif
 }
 
@@ -2052,13 +2052,13 @@ TEST_CASE("Client::netx_map_errno() correctly maps all errors") {
 TEST_CASE("Client::netx_map_eai() correctly maps all errors") {
   using namespace measurement_kit::libndt;
   Client client;
-  REQUIRE(client.netx_map_eai(EAI_AGAIN) == Err::ai_again);
-  REQUIRE(client.netx_map_eai(EAI_FAIL) == Err::ai_fail);
-  REQUIRE(client.netx_map_eai(EAI_NONAME) == Err::ai_noname);
+  REQUIRE(client.netx_map_eai(EAI_AGAIN) == internal::Err::ai_again);
+  REQUIRE(client.netx_map_eai(EAI_FAIL) == internal::Err::ai_fail);
+  REQUIRE(client.netx_map_eai(EAI_NONAME) == internal::Err::ai_noname);
 #ifdef EAI_SYSTEM
   {
     client.sys->SetLastError(E(WOULDBLOCK));
-    REQUIRE(client.netx_map_eai(EAI_SYSTEM) == Err::operation_would_block);
+    REQUIRE(client.netx_map_eai(EAI_SYSTEM) == internal::Err::operation_would_block);
     client.sys->SetLastError(0);
   }
 #endif
@@ -2073,32 +2073,32 @@ TEST_CASE("Client::netx_dial() requires initial socket to be -1") {
   Client client;
 	internal::Socket sock = 21;
   REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
 }
 
 class FailNetxResolve : public Client {
  public:
   using Client::Client;
-  Err netx_resolve(const std::string &,
+	internal::Err netx_resolve(const std::string &,
                            std::vector<std::string> *) noexcept override {
-    return Err::ai_again;
+    return internal::Err::ai_again;
   }
 };
 
 TEST_CASE("Client::netx_dial() deals with Client::netx_resolve() failure") {
   FailNetxResolve client;
 	internal::Socket sock = (internal::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::ai_again);
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == internal::Err::ai_again);
 }
 
 class FailGetaddrinfoInNetxConnectClient : public Client {
  public:
   using Client::Client;
-  Err netx_resolve(const std::string &str,
+	internal::Err netx_resolve(const std::string &str,
                            std::vector<std::string> *addrs) noexcept override {
     REQUIRE(str == "1.2.3.4");  // make sure it did not change
     addrs->push_back(str);
-    return Err::none;
+    return internal::Err::none;
   }
 };
 
@@ -2115,7 +2115,7 @@ TEST_CASE("Client::netx_dial() deals with Client::getaddrinfo() failure") {
   FailGetaddrinfoInNetxConnectClient client;
   client.sys.reset(new FailGetaddrinfoInNetxConnectSys{});
 	internal::Socket sock = (internal::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::ai_again);
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == internal::Err::ai_again);
 }
 
 class FailSocket : public internal::Sys {
@@ -2131,14 +2131,14 @@ TEST_CASE("Client::netx_dial() deals with Client::socket() failure") {
   Client client;
   client.sys.reset(new FailSocket{});
 	internal::Socket sock = (internal::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == internal::Err::io_error);
 }
 
 class FailSetnonblocking : public Client {
  public:
   using Client::Client;
-  Err netx_setnonblocking(internal::Socket, bool) noexcept override {
-    return Err::io_error;
+	internal::Err netx_setnonblocking(internal::Socket, bool) noexcept override {
+    return internal::Err::io_error;
   }
 };
 
@@ -2146,7 +2146,7 @@ TEST_CASE(
     "Client::netx_dial() deals with Client::netx_setnonblocking() failure") {
   FailSetnonblocking client;
 	internal::Socket sock = (internal::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == internal::Err::io_error);
 }
 
 class FailSocketConnectImmediate : public internal::Sys {
@@ -2164,7 +2164,7 @@ TEST_CASE(
   Client client{};
   client.sys.reset(new FailSocketConnectImmediate);
 	internal::Socket sock = (internal::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == internal::Err::io_error);
 }
 
 #ifdef _WIN32
@@ -2176,8 +2176,8 @@ TEST_CASE(
 class FailSocketConnectTimeoutClient : public Client {
  public:
   using Client::Client;
-  Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
-    return Err::timed_out;
+	internal::Err netx_poll(std::vector<pollfd> *, int) const noexcept override {
+    return internal::Err::timed_out;
   }
 };
 
@@ -2195,18 +2195,18 @@ TEST_CASE("Client::netx_dial() deals with Client::connect() timeout") {
   FailSocketConnectTimeoutClient client{};
   client.sys.reset(new FailSocketConnectTimeoutSys{});
 	internal::Socket sock = (internal::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == internal::Err::io_error);
 }
 
 class FailSocketConnectGetsockoptErrorClient : public Client {
  public:
   using Client::Client;
-  Err netx_poll(
+	internal::Err netx_poll(
       std::vector<pollfd> *pfds, int) const noexcept override {
     for (auto &fd : *pfds) {
       fd.revents = fd.events;
     }
-    return Err::none;
+    return internal::Err::none;
   }
 };
 
@@ -2230,18 +2230,18 @@ TEST_CASE(
   FailSocketConnectGetsockoptErrorClient client{};
   client.sys.reset(new FailSocketConnectGetsockoptErrorSys{});
 	internal::Socket sock = (internal::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == internal::Err::io_error);
 }
 
 class FailSocketConnectSocketErrorClient : public Client {
  public:
   using Client::Client;
-  Err netx_poll(
+	internal::Err netx_poll(
       std::vector<pollfd> *pfds, int) const noexcept override {
     for (auto &fd : *pfds) {
       fd.revents = fd.events;
     }
-    return Err::none;
+    return internal::Err::none;
   }
 };
 
@@ -2265,7 +2265,7 @@ TEST_CASE("Client::netx_dial() deals with Client::connect() socket error") {
   FailSocketConnectSocketErrorClient client{};
   client.sys.reset(new FailSocketConnectSocketErrorSys{});
 	internal::Socket sock = (internal::Socket)-1;
-  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == Err::io_error);
+  REQUIRE(client.netx_dial("1.2.3.4", "33", &sock) == internal::Err::io_error);
 }
 
 // Client::netx_recv_nonblocking() tests
@@ -2276,7 +2276,7 @@ TEST_CASE("Client::netx_recv_nonblocking() deals with zero recv correctly") {
   char buf{};
 	internal::Size n = 0;
   REQUIRE(client.netx_recv_nonblocking(0, &buf, 0, &n) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
 }
 
 // Client::netx_recvn() tests
@@ -2292,15 +2292,15 @@ TEST_CASE("Client::netx_recvn() deals with too-large buffer") {
   Client client;
   char buf{};
   REQUIRE(client.netx_recvn(0, &buf, (unsigned long long)OS_SSIZE_MAX + 1) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
 }
 
 class FailNetxRecv : public Client {
  public:
   using Client::Client;
-  Err netx_recv(internal::Socket, void *, internal::Size,
+	internal::Err netx_recv(internal::Socket, void *, internal::Size,
                         internal::Size *) const noexcept override {
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
 };
 
@@ -2308,7 +2308,7 @@ TEST_CASE("Client::netx_recvn() deals with Client::netx_recv() failure") {
   char buf[1024];
   FailNetxRecv client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
 }
 
 class RecvEof : public internal::Sys {
@@ -2324,7 +2324,7 @@ TEST_CASE("Client::netx_recvn() deals with Client::recv() EOF") {
   char buf[1024];
   Client client;
   client.sys.reset(new RecvEof{});
-  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == Err::eof);
+  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == internal::Err::eof);
 }
 
 class PartialNetxRecvAndThenError : public Client {
@@ -2332,7 +2332,7 @@ class PartialNetxRecvAndThenError : public Client {
   using Client::Client;
   static constexpr internal::Size amount = 11;
   static constexpr internal::Size good_amount = 3;
-  Err netx_recv(internal::Socket, void *buf, internal::Size size,
+	internal::Err netx_recv(internal::Socket, void *buf, internal::Size size,
                         internal::Size *rv) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
@@ -2340,10 +2340,10 @@ class PartialNetxRecvAndThenError : public Client {
         ((char *)buf)[i] = 'A';
       }
       *rv = good_amount;
-      return Err::none;
+      return internal::Err::none;
     }
     *rv = 0;
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
 };
 
@@ -2353,7 +2353,7 @@ TEST_CASE(
   char buf[PartialNetxRecvAndThenError::amount] = {};
   PartialNetxRecvAndThenError client;
   REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return -1, not a short read.
   for (size_t i = 0; i < sizeof(buf); ++i) {
@@ -2388,7 +2388,7 @@ TEST_CASE(
   char buf[PartialRecvAndThenEof::amount] = {};
   Client client;
   client.sys.reset(new PartialRecvAndThenEof{});
-  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == Err::eof);
+  REQUIRE(client.netx_recvn(0, buf, sizeof(buf)) == internal::Err::eof);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return zero, not a short read.
   for (size_t i = 0; i < sizeof(buf); ++i) {
@@ -2408,7 +2408,7 @@ TEST_CASE("Client::netx_send() deals with zero send correctly") {
 	internal::Size n = 0;
   char buf{};
   REQUIRE(client.netx_send_nonblocking(0, &buf, 0, &n) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
 }
 
 // Client::netx_sendn() tests
@@ -2418,7 +2418,7 @@ TEST_CASE("Client::netx_sendn() deals with too-large buffer") {
   Client client;
   char buf{};
   REQUIRE(client.netx_sendn(0, &buf, (unsigned long long)OS_SSIZE_MAX + 1) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
 }
 
 class FailSend : public internal::Sys {
@@ -2436,7 +2436,7 @@ TEST_CASE("Client::netx_sendn() deals with Client::send() failure") {
   Client client;
   client.sys.reset(new FailSend{});
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
 }
 
 // As much as EOF should not appear on a socket when sending, be ready.
@@ -2453,7 +2453,7 @@ TEST_CASE("Client::netx_sendn() deals with Client::send() EOF") {
   char buf[1024];
   Client client;
   client.sys.reset(new SendEof{});
-  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == Err::io_error);
+  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == internal::Err::io_error);
 }
 
 class PartialSendAndThenError : public internal::Sys {
@@ -2480,7 +2480,7 @@ TEST_CASE("Client::send() deals with partial Client::send() and then error") {
   auto sys = new PartialSendAndThenError{}; // managed by client
   client.sys.reset(sys);
   REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return -1, not a short write.
   //
@@ -2513,7 +2513,7 @@ TEST_CASE(
   Client client;
   auto sys = new PartialSendAndThenEof{}; // managed by client
   client.sys.reset(sys);
-  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == Err::io_error);
+  REQUIRE(client.netx_sendn(0, buf, sizeof(buf)) == internal::Err::io_error);
   // Just to make sure the code path was entered correctly. We still think that
   // the right behaviour here is to return zero, not a short write.
   //
@@ -2538,7 +2538,7 @@ TEST_CASE("Client::netx_resolve() deals with Client::getaddrinfo() failure") {
   Client client;
   client.sys.reset(new FailGetaddrinfo{});
   std::vector<std::string> addrs;
-  REQUIRE(client.netx_resolve("x.org", &addrs) == Err::ai_again);
+  REQUIRE(client.netx_resolve("x.org", &addrs) == internal::Err::ai_again);
 }
 
 class FailGetnameinfo : public internal::Sys {
@@ -2554,7 +2554,7 @@ TEST_CASE("Client::netx_resolve() deals with Client::getnameinfo() failure") {
   Client client;
   client.sys.reset(new FailGetnameinfo{});
   std::vector<std::string> addrs;
-  REQUIRE(client.netx_resolve("x.org", &addrs) == Err::ai_generic);
+  REQUIRE(client.netx_resolve("x.org", &addrs) == internal::Err::ai_generic);
 }
 
 // Client::netx_setnonblocking() tests
@@ -2583,12 +2583,12 @@ TEST_CASE(
   {
     sys->expect = 1UL;
     REQUIRE(client.netx_setnonblocking(17, true) ==
-            Err::invalid_argument);
+            internal::Err::invalid_argument);
   }
   {
     sys->expect = 0UL;
     REQUIRE(client.netx_setnonblocking(17, false) ==
-            Err::invalid_argument);
+            internal::Err::invalid_argument);
   }
 }
 
@@ -2610,7 +2610,7 @@ TEST_CASE(
   Client client;
   client.sys.reset(new FailFcntlGet{});
   REQUIRE(client.netx_setnonblocking(17, true) ==
-          Err::invalid_argument);
+          internal::Err::invalid_argument);
 }
 
 class FailFcntlSet : public internal::Sys {
@@ -2637,12 +2637,12 @@ TEST_CASE(
   {
     sys->expect = O_NONBLOCK;
     REQUIRE(client.netx_setnonblocking(17, true) ==
-            Err::invalid_argument);
+            internal::Err::invalid_argument);
   }
   {
     sys->expect = 0;
     REQUIRE(client.netx_setnonblocking(17, false) ==
-            Err::invalid_argument);
+            internal::Err::invalid_argument);
   }
 }
 
@@ -2678,7 +2678,7 @@ TEST_CASE("Client::netx_poll() deals with EINTR") {
   auto sys = new InterruptPoll{}; // managed by client
   client.sys.reset(sys);
   constexpr int timeout = 100;
-  REQUIRE(client.netx_poll(&pfds, timeout) == Err::io_error);
+  REQUIRE(client.netx_poll(&pfds, timeout) == internal::Err::io_error);
   REQUIRE(*sys->count == 2);
 }
 
@@ -2707,7 +2707,7 @@ TEST_CASE("Client::netx_poll() deals with timeout") {
   Client client;
   client.sys.reset(new TimeoutPoll{});
   constexpr int timeout = 100;
-  REQUIRE(client.netx_poll(&pfds, timeout) == Err::timed_out);
+  REQUIRE(client.netx_poll(&pfds, timeout) == internal::Err::timed_out);
 }
 
 // Client::query_mlabns_curl() tests

@@ -43,8 +43,10 @@
 /// the build to fail, because libndt uses nlohmann/json symbols.
 
 #ifndef LIBNDT_SINGLE_INCLUDE
+#include "libndt/internal/err.hpp"
 #include "libndt/internal/sys.hpp"
 #include "libndt/internal/curlx.hpp"
+#include "libndt/timeout.hpp"
 #endif // !LIBNDT_SINGLE_INCLUDE
 
 // Check dependencies
@@ -292,9 +294,6 @@ EventHandler::~EventHandler() noexcept {}
 // Settings
 // ````````
 
-/// Timeout expressed in seconds.
-using Timeout = unsigned int;
-
 constexpr const char *ndt_version_compat = "v3.7.0";
 
 /// NDT client settings. If you do not customize the settings when creating
@@ -371,53 +370,6 @@ class Settings {
   bool summary_only = false;
 };
 
-// Error codes
-// ```````````
-
-enum class Err {
-  none,
-  //
-  // Error codes that map directly to errno values. Here we use the naming used
-  // by the C++ library <https://en.cppreference.com/w/cpp/error/errc>.
-  //
-  broken_pipe,
-  connection_aborted,
-  connection_refused,
-  connection_reset,
-  function_not_supported,
-  host_unreachable,
-  interrupted,
-  invalid_argument,
-  io_error,
-  message_size,
-  network_down,
-  network_reset,
-  network_unreachable,
-  operation_in_progress,
-  operation_would_block,
-  timed_out,
-  value_too_large,
-  //
-  // Getaddrinfo() error codes. See <http://man.openbsd.org/gai_strerror>.
-  //
-  ai_generic,
-  ai_again,
-  ai_fail,
-  ai_noname,
-  //
-  // SSL error codes. See <http://man.openbsd.org/SSL_get_error>.
-  //
-  ssl_generic,
-  ssl_want_read,
-  ssl_want_write,
-  ssl_syscall,
-  //
-  // Libndt misc error codes.
-  //
-  eof,       // We got an unexpected EOF
-  socks5h,   // SOCKSv5 protocol error
-  ws_proto,  // WebSocket protocol error
-};
 
 // Client
 // ``````
@@ -559,10 +511,10 @@ class Client : public EventHandler {
   // This section contain a WebSocket implementation.
 
   // Send @p line over @p fd.
-  virtual Err ws_sendln(internal::Socket fd, std::string line) noexcept;
+  virtual internal::Err ws_sendln(internal::Socket fd, std::string line) noexcept;
 
   // Receive shorter-than @p maxlen @p *line over @p fd.
-  virtual Err ws_recvln(internal::Socket fd, std::string *line, size_t maxlen) noexcept;
+  virtual internal::Err ws_recvln(internal::Socket fd, std::string *line, size_t maxlen) noexcept;
 
   // Perform websocket handshake. @param fd is the socket to use. @param
   // ws_flags specifies what headers to send and to expect (for more information
@@ -570,7 +522,7 @@ class Client : public EventHandler {
   // what protocol to specify as Sec-WebSocket-Protocol in the upgrade request.
   // @param port is used to construct the Host header. @param url_path is the
   // URL path to use for performing the websocket upgrade.
-  virtual Err ws_handshake(internal::Socket fd, std::string port, uint64_t ws_flags,
+  virtual internal::Err ws_handshake(internal::Socket fd, std::string port, uint64_t ws_flags,
                            std::string ws_protocol,
                            std::string url_path) noexcept;
 
@@ -582,19 +534,19 @@ class Client : public EventHandler {
 
   // Send @p count bytes from @p base over @p sock as a frame whose first byte
   // @p first_byte should contain the opcode and possibly the FIN flag.
-  virtual Err ws_send_frame(internal::Socket sock, uint8_t first_byte, uint8_t *base,
+  virtual internal::Err ws_send_frame(internal::Socket sock, uint8_t first_byte, uint8_t *base,
                             internal::Size count) const noexcept;
 
   // Receive a frame from @p sock. Puts the opcode in @p *opcode. Puts whether
   // there is a FIN flag in @p *fin. The buffer starts at @p base and it
   // contains @p total bytes. Puts in @p *count the actual number of bytes
   // in the message. @return The error that occurred or Err::none.
-  Err ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin, uint8_t *base,
+  internal::Err ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin, uint8_t *base,
                         internal::Size total, internal::Size *count) const noexcept;
 
   // Receive a frame. Automatically and transparently responds to PING, ignores
   // PONG, and handles CLOSE frames. Arguments like ws_recv_any_frame().
-  Err ws_recv_frame(internal::Socket sock, uint8_t *opcode, bool *fin, uint8_t *base,
+  internal::Err ws_recv_frame(internal::Socket sock, uint8_t *opcode, bool *fin, uint8_t *base,
                     internal::Size total, internal::Size *count) const noexcept;
 
   // Receive a message consisting of one or more frames. Transparently handles
@@ -603,7 +555,7 @@ class Client : public EventHandler {
   // beginning of the buffer. @param total is the size of the buffer. @param
   // count contains the actual message size. @return An error on failure or
   // Err::none in case of success.
-  Err ws_recvmsg(internal::Socket sock, uint8_t *opcode, uint8_t *base, internal::Size total,
+  internal::Err ws_recvmsg(internal::Socket sock, uint8_t *opcode, uint8_t *base, internal::Size total,
                  internal::Size *count) const noexcept;
 
   // Networking layer
@@ -630,78 +582,78 @@ class Client : public EventHandler {
   // SSL, and SOCKSv5. This depends on the Settings. See the documentation
   // of ws_handshake() for more info on @p ws_flags, @p ws_protocol, and
   // @p url_path.
-  virtual Err netx_maybews_dial(const std::string &hostname,
+  virtual internal::Err netx_maybews_dial(const std::string &hostname,
                                 const std::string &port, uint64_t ws_flags,
                                 std::string ws_protocol, std::string url_path,
                                 internal::Socket *sock) noexcept;
 
   // Connect to @p hostname and @p port possibly using SSL and SOCKSv5. This
   // depends on the Settings you configured.
-  virtual Err netx_maybessl_dial(const std::string &hostname,
+  virtual internal::Err netx_maybessl_dial(const std::string &hostname,
                                  const std::string &port,
                                  internal::Socket *sock) noexcept;
 
   // Connect to @p hostname and @port possibly using SOCKSv5. This depends
   // on the Settings you configured.
-  virtual Err netx_maybesocks5h_dial(const std::string &hostname,
+  virtual internal::Err netx_maybesocks5h_dial(const std::string &hostname,
                                      const std::string &port,
                                      internal::Socket *sock) noexcept;
 
   // Map errno code into a Err value.
-  static Err netx_map_errno(int ec) noexcept;
+  static internal::Err netx_map_errno(int ec) noexcept;
 
   // Map getaddrinfo return value into a Err value.
-  Err netx_map_eai(int ec) noexcept;
+  internal::Err netx_map_eai(int ec) noexcept;
 
   // Connect to @p hostname and @p port.
-  virtual Err netx_dial(const std::string &hostname, const std::string &port,
+  virtual internal::Err netx_dial(const std::string &hostname, const std::string &port,
                         internal::Socket *sock) noexcept;
 
   // Receive from the network.
-  virtual Err netx_recv(internal::Socket fd, void *base, internal::Size count,
+  virtual internal::Err netx_recv(internal::Socket fd, void *base, internal::Size count,
                         internal::Size *actual) const noexcept;
 
   // Receive from the network without blocking.
-  virtual Err netx_recv_nonblocking(internal::Socket fd, void *base, internal::Size count,
+  virtual internal::Err netx_recv_nonblocking(internal::Socket fd, void *base, internal::Size count,
                                     internal::Size *actual) const noexcept;
 
   // Receive exactly N bytes from the network.
-  virtual Err netx_recvn(internal::Socket fd, void *base, internal::Size count) const noexcept;
+  virtual internal::Err netx_recvn(internal::Socket fd, void *base, internal::Size count) const noexcept;
 
   // Send data to the network.
-  virtual Err netx_send(internal::Socket fd, const void *base, internal::Size count,
+  virtual internal::Err netx_send(internal::Socket fd, const void *base, internal::Size count,
                         internal::Size *actual) const noexcept;
 
   // Send to the network without blocking.
-  virtual Err netx_send_nonblocking(internal::Socket fd, const void *base, internal::Size count,
+  virtual internal::Err netx_send_nonblocking(internal::Socket fd, const void *base, internal::Size count,
                                     internal::Size *actual) const noexcept;
 
   // Send exactly N bytes to the network.
-  virtual Err netx_sendn(
+  virtual internal::Err netx_sendn(
     internal::Socket fd, const void *base, internal::Size count) const noexcept;
 
   // Resolve hostname into a list of IP addresses.
-  virtual Err netx_resolve(const std::string &hostname,
+  virtual internal::Err netx_resolve(const std::string &hostname,
                            std::vector<std::string> *addrs) noexcept;
 
   // Set socket non blocking.
-  virtual Err netx_setnonblocking(internal::Socket fd, bool enable) noexcept;
+  virtual internal::Err netx_setnonblocking(internal::Socket fd, bool enable) noexcept;
 
   // Pauses until the socket becomes readable.
-  virtual Err netx_wait_readable(internal::Socket, Timeout timeout) const noexcept;
+  virtual internal::Err netx_wait_readable(internal::Socket, Timeout timeout) const noexcept;
 
   // Pauses until the socket becomes writeable.
-  virtual Err netx_wait_writeable(internal::Socket, Timeout timeout) const noexcept;
+  virtual internal::Err netx_wait_writeable(internal::Socket, Timeout timeout) const noexcept;
 
   // Main function for dealing with I/O patterned after poll(2).
-  virtual Err netx_poll(
+  virtual internal::Err netx_poll(
     std::vector<pollfd> *fds, int timeout_msec) const noexcept;
 
   // Shutdown both ends of a socket.
-  virtual Err netx_shutdown_both(internal::Socket fd) noexcept;
+  virtual internal::Err netx_shutdown_both(internal::Socket fd) noexcept;
 
   // Close a socket.
-  virtual Err netx_closesocket(internal::Socket fd) noexcept;
+  virtual internal::Err netx_closesocket(internal::Socket fd) noexcept;
 
   virtual bool query_mlabns_curl(const std::string &url, long timeout,
                                  std::string *body) noexcept;
@@ -882,11 +834,11 @@ static std::string ssl_format_error() noexcept {
 }
 
 // Map an error code to the corresponding string value.
-static std::string libndt_perror(Err err) noexcept {
+static std::string libndt_perror(internal::Err err) noexcept {
   std::string rv;
   //
 #define LIBNDT_PERROR(value) \
-  case Err::value:           \
+case internal::Err::value:   \
     rv = #value;             \
     break
   //
@@ -923,7 +875,7 @@ static std::string libndt_perror(Err err) noexcept {
   }
 #undef LIBNDT_PERROR  // Tidy
   //
-  if (err == Err::ssl_generic) {
+  if (err == internal::Err::ssl_generic) {
     rv += ": ";
     rv += ssl_format_error();
   }
@@ -1370,7 +1322,7 @@ bool Client::connect() noexcept {
              settings_.hostname, port,
              ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
                  ws_f_sec_ws_protocol,
-             ws_proto_control, "/ndt_protocol", &sock_) == Err::none;
+             ws_proto_control, "/ndt_protocol", &sock_) == internal::Err::none;
 }
 
 bool Client::send_login() noexcept {
@@ -1384,7 +1336,7 @@ bool Client::recv_kickoff() noexcept {
   }
   char buf[msg_kickoff_size];
   auto err = netx_recvn(sock_, buf, sizeof(buf));
-  if (err != Err::none) {
+  if (err != internal::Err::none) {
     LIBNDT_EMIT_WARNING("recv_kickoff: netx_recvn() failed");
     return false;
   }
@@ -1527,12 +1479,12 @@ bool Client::run_download() noexcept {
     // consistent with <https://tools.ietf.org/html/rfc6455#section-4.1>, and
     // namely with requirement 2: "If multiple connections to the same IP
     // address are attempted simultaneously, the client MUST serialize them".
-    Err err = netx_maybews_dial(  //
+    internal::Err err = netx_maybews_dial(  //
         settings_.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
           | ws_f_sec_ws_protocol, ws_proto_s2c, "/ndt_protocol",
         &sock);
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       break;
     }
     dload_socks.sockets.push_back(sock);
@@ -1573,13 +1525,13 @@ bool Client::run_download() noexcept {
         constexpr size_t ndt_bufsize = 131072;
         std::unique_ptr<char[]> buf(new char[ndt_bufsize]);
         for (;;) {
-          auto err = Err::none;
-					internal::Size n = 0;
+          auto err = internal::Err::none;
+          internal::Size n = 0;
           if (ws) {
             uint8_t op = 0;
             err = const_this->ws_recvmsg(
                     fd, &op, (uint8_t *)buf.get(), ndt_bufsize, &n);
-            if (err == Err::none && op != ws_opcode_binary) {
+            if (err == internal::Err::none && op != ws_opcode_binary) {
               LIBNDT_EMIT_WARNING_EX(const_this,
                 "run_download: unexpected opcode: " << (unsigned int)op);
               break;
@@ -1587,8 +1539,8 @@ bool Client::run_download() noexcept {
           } else {
             err = const_this->netx_recv(fd, buf.get(), ndt_bufsize, &n);
           }
-          if (err != Err::none) {
-            if (err != Err::eof) {
+          if (err != internal::Err::none) {
+            if (err != internal::Err::eof) {
               LIBNDT_EMIT_WARNING_EX(const_this,
                 "run_download: receiving: " << libndt_perror(err));
             }
@@ -1737,12 +1689,12 @@ bool Client::run_upload() noexcept {
     internal::Socket sock = (internal::Socket)-1;
     // Remark: in case we'll ever implement multi-stream here, remember that
     // WebSocket requires connections to be serialized. See above.
-    Err err = netx_maybews_dial(  //
+		internal::Err err = netx_maybews_dial(  //
         settings_.hostname, port,
         ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept
           | ws_f_sec_ws_protocol, ws_proto_c2s, "/ndt_protocol",
         &sock);
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       return false;
     }
     upload_socks.sockets.push_back(sock);
@@ -1787,17 +1739,17 @@ bool Client::run_upload() noexcept {
             ws_opcode_binary | ws_fin_flag, (uint8_t *)buf.get(), ndt_bufsize);
         for (;;) {
 					internal::Size n = 0;
-          auto err = Err::none;
+          auto err = internal::Err::none;
           if (ws) {
             err = const_this->netx_sendn(fd, frame.data(), frame.size());
-            if (err == Err::none) {
+            if (err == internal::Err::none) {
               n = frame.size();
             }
           } else {
             err = const_this->netx_send(fd, buf.get(), ndt_bufsize, &n);
           }
-          if (err != Err::none) {
-            if (err != Err::broken_pipe) {
+          if (err != internal::Err::none) {
+            if (err != internal::Err::broken_pipe) {
               LIBNDT_EMIT_WARNING_EX(const_this,
                 "run_upload: sending: " << libndt_perror(err));
             }
@@ -1898,9 +1850,9 @@ bool Client::ndt7_download() noexcept {
     }
     uint8_t opcode = 0;
 		internal::Size count = 0;
-    Err err = ws_recvmsg(sock_, &opcode, buff.get(), ndt7_bufsiz, &count);
-    if (err != Err::none) {
-      if (err == Err::eof) {
+		internal::Err err = ws_recvmsg(sock_, &opcode, buff.get(), ndt7_bufsiz, &count);
+    if (err != internal::Err::none) {
+      if (err == internal::Err::eof) {
         break;
       }
       return false;
@@ -2017,16 +1969,16 @@ bool Client::ndt7_upload() noexcept {
         on_result("ndt7", "upload", json);
       }
       // Send measurement to the server.
-      Err err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
+			internal::Err err = ws_send_frame(sock_, ws_opcode_text | ws_fin_flag,
                               (uint8_t *)json.data(), json.size());
-      if (err != Err::none) {
+      if (err != internal::Err::none) {
         LIBNDT_EMIT_WARNING("ndt7: cannot send measurement");
         return false;
       }
       latest = now;
     }
-    Err err = netx_sendn(sock_, frame.data(), frame.size());
-    if (err != Err::none) {
+		internal::Err err = netx_sendn(sock_, frame.data(), frame.size());
+    if (err != internal::Err::none) {
       LIBNDT_EMIT_WARNING("ndt7: cannot send frame");
       return false;
     }
@@ -2049,12 +2001,12 @@ bool Client::ndt7_connect(std::string url_path) noexcept {
   }
   // Note: ndt7 implies WebSocket and TLS
   settings_.protocol_flags |= protocol_flag_websocket | protocol_flag_tls;
-  Err err = netx_maybews_dial(
+	internal::Err err = netx_maybews_dial(
       settings_.hostname, port,
       ws_f_connection | ws_f_upgrade | ws_f_sec_ws_accept |
           ws_f_sec_ws_protocol,
       ws_proto_ndt7, url_path, &sock_);
-  if (err != Err::none) {
+  if (err != internal::Err::none) {
     return false;
   }
   LIBNDT_EMIT_DEBUG("ndt7: WebSocket connection established");
@@ -2146,7 +2098,7 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
     LIBNDT_EMIT_DEBUG("msg_write_legacy: header[1] (len-high): " << (int)header[1]);
     LIBNDT_EMIT_DEBUG("msg_write_legacy: header[2] (len-low): " << (int)header[2]);
     {
-      auto err = Err::none;
+      auto err = internal::Err::none;
       if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
         err = ws_send_frame(
             sock_,
@@ -2155,7 +2107,7 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
       } else {
         err = netx_sendn(sock_, header, sizeof(header));
       }
-      if (err != Err::none) {
+      if (err != internal::Err::none) {
         LIBNDT_EMIT_WARNING("msg_write_legacy: cannot send NDT message header");
         return false;
       }
@@ -2167,14 +2119,14 @@ bool Client::msg_write_legacy(MsgType code, std::string &&msg) noexcept {
     return true;
   }
   {
-    auto err = Err::none;
+    auto err = internal::Err::none;
     if ((settings_.protocol_flags & protocol_flag_websocket) != 0) {
       err = ws_send_frame(sock_, ws_opcode_continue | ws_fin_flag,
                           (uint8_t *)msg.data(), msg.size());
     } else {
       err = netx_sendn(sock_, msg.data(), msg.size());
     }
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       LIBNDT_EMIT_WARNING("msg_write_legacy: cannot send NDT message body");
       return false;
     }
@@ -2303,7 +2255,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
       uint8_t opcode = 0;
       auto err = ws_recvmsg(  //
           sock_, &opcode, (uint8_t *)buffer, sizeof(buffer), &ws_msg_len);
-      if (err != Err::none) {
+      if (err != internal::Err::none) {
         LIBNDT_EMIT_WARNING(
             "msg_read_legacy: cannot read NDT message using websocket");
         return false;
@@ -2322,7 +2274,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
       static_assert(sizeof(buffer) >= header_size,
                     "Not enough room in buffer to read the NDT header");
       auto err = netx_recvn(sock_, buffer, header_size);
-      if (err != Err::none) {
+      if (err != internal::Err::none) {
         LIBNDT_EMIT_WARNING("msg_read_legacy: cannot read NDT message header");
         return false;
       }
@@ -2352,7 +2304,7 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
     assert(sizeof(buffer) >= header_size &&
            sizeof(buffer) - header_size >= len);
     auto err = netx_recvn(sock_, &buffer[header_size], len);
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       LIBNDT_EMIT_WARNING("msg_read_legacy: cannot read NDT message body");
       return false;
     }
@@ -2374,22 +2326,22 @@ bool Client::msg_read_legacy(MsgType *code, std::string *msg) noexcept {
 //
 // - - - BEGIN WEBSOCKET IMPLEMENTATION - - - {
 
-Err Client::ws_sendln(internal::Socket fd, std::string line) noexcept {
+internal::Err Client::ws_sendln(internal::Socket fd, std::string line) noexcept {
   LIBNDT_EMIT_DEBUG("> " << line);
   line += "\r\n";
   return netx_sendn(fd, line.c_str(), line.size());
 }
 
-Err Client::ws_recvln(internal::Socket fd, std::string *line, size_t maxlen) noexcept {
+internal::Err Client::ws_recvln(internal::Socket fd, std::string *line, size_t maxlen) noexcept {
   if (line == nullptr || maxlen <= 0) {
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
   line->reserve(maxlen);
   line->clear();
   while (line->size() < maxlen) {
     char ch = {};
     auto err = netx_recvn(fd, &ch, sizeof(ch));
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       return err;
     }
     if (ch == '\r') {
@@ -2397,15 +2349,15 @@ Err Client::ws_recvln(internal::Socket fd, std::string *line, size_t maxlen) noe
     }
     if (ch == '\n') {
       LIBNDT_EMIT_DEBUG("< " << *line);
-      return Err::none;
+      return internal::Err::none;
     }
     *line += ch;
   }
   LIBNDT_EMIT_WARNING("ws_recvln: line too long");
-  return Err::value_too_large;
+  return internal::Err::value_too_large;
 }
 
-Err Client::ws_handshake(internal::Socket fd, std::string port, uint64_t ws_flags,
+internal::Err Client::ws_handshake(internal::Socket fd, std::string port, uint64_t ws_flags,
                          std::string ws_proto, std::string url_path) noexcept {
   std::string proto_header;
   {
@@ -2433,15 +2385,15 @@ Err Client::ws_handshake(internal::Socket fd, std::string port, uint64_t ws_flag
     }
     std::stringstream request_line;
     request_line << "GET " << url_path << " HTTP/1.1";
-    Err err = Err::none;
-    if ((err = ws_sendln(fd, request_line.str())) != Err::none ||
-        (err = ws_sendln(fd, host_header.str())) != Err::none ||
-        (err = ws_sendln(fd, "Upgrade: websocket")) != Err::none ||
-        (err = ws_sendln(fd, "Connection: Upgrade")) != Err::none ||
-        (err = ws_sendln(fd, key_header)) != Err::none ||
-        (err = ws_sendln(fd, proto_header)) != Err::none ||
-        (err = ws_sendln(fd, "Sec-WebSocket-Version: 13")) != Err::none ||
-        (err = ws_sendln(fd, "")) != Err::none) {
+		internal::Err err = internal::Err::none;
+    if ((err = ws_sendln(fd, request_line.str())) != internal::Err::none ||
+        (err = ws_sendln(fd, host_header.str())) != internal::Err::none ||
+        (err = ws_sendln(fd, "Upgrade: websocket")) != internal::Err::none ||
+        (err = ws_sendln(fd, "Connection: Upgrade")) != internal::Err::none ||
+        (err = ws_sendln(fd, key_header)) != internal::Err::none ||
+        (err = ws_sendln(fd, proto_header)) != internal::Err::none ||
+        (err = ws_sendln(fd, "Sec-WebSocket-Version: 13")) != internal::Err::none ||
+        (err = ws_sendln(fd, "")) != internal::Err::none) {
       LIBNDT_EMIT_WARNING("ws_handshake: cannot send HTTP upgrade request");
       return err;
     }
@@ -2464,13 +2416,13 @@ Err Client::ws_handshake(internal::Socket fd, std::string port, uint64_t ws_flag
     static constexpr size_t max_line_length = 8000;
     std::string line;
     auto err = ws_recvln(fd, &line, max_line_length);
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       return err;
     }
     // TODO(bassosimone): ignore text after 101
     if (line != "HTTP/1.1 101 Switching Protocols") {
       LIBNDT_EMIT_WARNING("ws_handshake: unexpected response line");
-      return Err::ws_proto;
+      return internal::Err::ws_proto;
     }
     uint64_t flags = 0;
     // TODO(bassosimone): use the same value used by ndt-project/ndt
@@ -2478,7 +2430,7 @@ Err Client::ws_handshake(internal::Socket fd, std::string port, uint64_t ws_flag
     for (size_t i = 0; i < max_headers; ++i) {
       // TODO(bassosimone): make header processing case insensitive.
       auto recvln_err = ws_recvln(fd, &line, max_line_length);
-      if (recvln_err != Err::none) {
+      if (recvln_err != internal::Err::none) {
         return recvln_err;
       }
       if (line == "Upgrade: websocket") {
@@ -2492,15 +2444,15 @@ Err Client::ws_handshake(internal::Socket fd, std::string port, uint64_t ws_flag
       } else if (line == "") {
         if ((flags & ws_flags) != ws_flags) {
           LIBNDT_EMIT_WARNING("ws_handshake: received incorrect handshake");
-          return Err::ws_proto;
+          return internal::Err::ws_proto;
         }
         LIBNDT_EMIT_DEBUG("ws_handshake: complete");
-        return Err::none;
+        return internal::Err::none;
       }
     }
   }
   LIBNDT_EMIT_DEBUG("ws_handshake: got too many headers");
-  return Err::value_too_large;
+  return internal::Err::value_too_large;
 }
 
 std::string Client::ws_prepare_frame(uint8_t first_byte, uint8_t *base,
@@ -2582,26 +2534,26 @@ std::string Client::ws_prepare_frame(uint8_t first_byte, uint8_t *base,
   return ss.str();
 }
 
-Err Client::ws_send_frame(internal::Socket sock, uint8_t first_byte, uint8_t *base,
+internal::Err Client::ws_send_frame(internal::Socket sock, uint8_t first_byte, uint8_t *base,
                           internal::Size count) const noexcept {
   std::string prep = ws_prepare_frame(first_byte, base, count);
   return netx_sendn(sock, prep.c_str(), prep.size());
 }
 
-Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
+internal::Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
       uint8_t *base, internal::Size total, internal::Size *count) const noexcept {
   // TODO(bassosimone): in this function we should consider an EOF as an
   // error, because with WebSocket we have explicit FIN mechanism.
   if (opcode == nullptr || fin == nullptr || count == nullptr) {
     LIBNDT_EMIT_WARNING("ws_recv_any_frame: passed invalid return arguments");
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
   *opcode = 0;
   *fin = false;
   *count = 0;
   if (base == nullptr || total <= 0) {
     LIBNDT_EMIT_WARNING("ws_recv_any_frame: passed invalid buffer arguments");
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
   // Message header
 	internal::Size length = 0;
@@ -2614,7 +2566,7 @@ Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
   {
     uint8_t buf[2];
     auto err = netx_recvn(sock, buf, sizeof(buf));
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       LIBNDT_EMIT_WARNING("ws_recv_any_frame: netx_recvn() failed for header");
       return err;
     }
@@ -2627,7 +2579,7 @@ Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
       // They only make sense for extensions, which we don't use. So we return
       // error. See <https://tools.ietf.org/html/rfc6455#section-5.2>.
       LIBNDT_EMIT_WARNING("ws_recv_any_frame: invalid reserved bits: " << reserved);
-      return Err::ws_proto;
+      return internal::Err::ws_proto;
     }
     *opcode = (uint8_t)(buf[0] & ws_opcode_mask);
     LIBNDT_EMIT_DEBUG("ws_recv_any_frame: opcode: " << (unsigned int)*opcode);
@@ -2643,7 +2595,7 @@ Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
       default:
         // See <https://tools.ietf.org/html/rfc6455#section-5.2>.
         LIBNDT_EMIT_WARNING("ws_recv_any_frame: invalid opcode");
-        return Err::ws_proto;
+        return internal::Err::ws_proto;
     }
     auto hasmask = (buf[1] & ws_mask_flag) != 0;
     // We do not expect to receive a masked frame. This is client code and
@@ -2652,7 +2604,7 @@ Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
     // See <https://tools.ietf.org/html/rfc6455#section-5.1>.
     if (hasmask) {
       LIBNDT_EMIT_WARNING("ws_recv_any_frame: received masked frame");
-      return Err::invalid_argument;
+      return internal::Err::invalid_argument;
     }
     length = (buf[1] & ws_len_mask);
     switch (*opcode) {
@@ -2663,7 +2615,7 @@ Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
           LIBNDT_EMIT_WARNING("ws_recv_any_frame: control messages MUST have a "
                        "payload length of 125 bytes or less and MUST NOT "
                        "be fragmented (see RFC6455 Sect 5.5.)");
-          return Err::ws_proto;
+          return internal::Err::ws_proto;
         }
         break;
     }
@@ -2679,7 +2631,7 @@ Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
     if (length == 126) {
       uint8_t len_buf[2];
       auto recvn_err = netx_recvn(sock, len_buf, sizeof(len_buf));
-      if (recvn_err != Err::none) {
+      if (recvn_err != internal::Err::none) {
         LIBNDT_EMIT_WARNING(
             "ws_recv_any_frame: netx_recvn() failed for 16 bit length");
         return recvn_err;
@@ -2692,7 +2644,7 @@ Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
     } else if (length == 127) {
       uint8_t len_buf[8];
       auto recvn_err = netx_recvn(sock, len_buf, sizeof(len_buf));
-      if (recvn_err != Err::none) {
+      if (recvn_err != internal::Err::none) {
         LIBNDT_EMIT_WARNING(
             "ws_recv_any_frame: netx_recvn() failed for 64 bit length");
         return recvn_err;
@@ -2705,7 +2657,7 @@ Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
         // See <https://tools.ietf.org/html/rfc6455#section-5.2>: "[...] the
         // most significant bit MUST be 0."
         LIBNDT_EMIT_WARNING("ws_recv_any_frame: 64 bit length: invalid first bit");
-        return Err::ws_proto;
+        return internal::Err::ws_proto;
       }
       AL(((internal::Size)len_buf[1]) << 48);
       AL(((internal::Size)len_buf[2]) << 40);
@@ -2718,7 +2670,7 @@ Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
 #undef AL  // Tidy
     if (length > total) {
       LIBNDT_EMIT_WARNING("ws_recv_any_frame: buffer too small");
-      return Err::message_size;
+      return internal::Err::message_size;
     }
     LIBNDT_EMIT_DEBUG("ws_recv_any_frame: length: " << length);
   }
@@ -2727,7 +2679,7 @@ Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
   if (length > 0) {
     assert(length <= total);
     auto err = netx_recvn(sock, base, length);
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       LIBNDT_EMIT_WARNING("ws_recv_any_frame: netx_recvn() failed for body");
       return err;
     }
@@ -2742,29 +2694,29 @@ Err Client::ws_recv_any_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
     LIBNDT_EMIT_DEBUG("ws_recv_any_frame: no body in this message");
     assert(*count == 0);
   }
-  return Err::none;
+  return internal::Err::none;
 }
 
-Err Client::ws_recv_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
+internal::Err Client::ws_recv_frame(internal::Socket sock, uint8_t *opcode, bool *fin,
       uint8_t *base, internal::Size total, internal::Size *count) const noexcept {
   // "Control frames (see Section 5.5) MAY be injected in the middle of
   // a fragmented message.  Control frames themselves MUST NOT be fragmented."
   //    -- RFC6455 Section 5.4.
   if (opcode == nullptr || fin == nullptr || count == nullptr) {
     LIBNDT_EMIT_WARNING("ws_recv_frame: passed invalid return arguments");
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
   if (base == nullptr || total <= 0) {
     LIBNDT_EMIT_WARNING("ws_recv_frame: passed invalid buffer arguments");
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
-  auto err = Err::none;
+  auto err = internal::Err::none;
 again:
   *opcode = 0;
   *fin = false;
   *count = 0;
   err = ws_recv_any_frame(sock, opcode, fin, base, total, count);
-  if (err != Err::none) {
+  if (err != internal::Err::none) {
     LIBNDT_EMIT_WARNING("ws_recv_frame: ws_recv_any_frame() failed");
     return err;
   }
@@ -2780,7 +2732,7 @@ again:
     (void)ws_send_frame(sock, ws_opcode_close | ws_fin_flag, nullptr, 0);
     // TODO(bassosimone): distinguish between a shutdown at the socket layer
     // and a proper shutdown implemented at the WebSocket layer.
-    return Err::eof;
+    return internal::Err::eof;
   }
   if (*opcode == ws_opcode_pong) {
     // RFC6455 Sect. 5.5.3 says that we must ignore a PONG.
@@ -2793,17 +2745,17 @@ again:
     LIBNDT_EMIT_DEBUG("ws_recv_frame: received PING frame; PONGing back");
     assert(*count <= total);
     err = ws_send_frame(sock, ws_opcode_pong | ws_fin_flag, base, *count);
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       LIBNDT_EMIT_WARNING("ws_recv_frame: ws_send_frame() failed for PONG frame");
       return err;
     }
     LIBNDT_EMIT_DEBUG("ws_recv_frame: continuing to read after PONG");
     goto again;
   }
-  return Err::none;
+  return internal::Err::none;
 }
 
-Err Client::ws_recvmsg(  //
+internal::Err Client::ws_recvmsg(  //
     internal::Socket sock, uint8_t *opcode, uint8_t *base, internal::Size total,
     internal::Size *count) const noexcept {
   // General remark from RFC6455 Sect. 5.4: "[I]n absence of extensions, senders
@@ -2816,60 +2768,60 @@ Err Client::ws_recvmsg(  //
   // general we attempt to use messages smaller than 256K.
   if (opcode == nullptr || count == nullptr) {
     LIBNDT_EMIT_WARNING("ws_recv: passed invalid return arguments");
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
   if (base == nullptr || total <= 0) {
     LIBNDT_EMIT_WARNING("ws_recv: passed invalid buffer arguments");
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
   bool fin = false;
   *opcode = 0;
   *count = 0;
   auto err = ws_recv_frame(sock, opcode, &fin, base, total, count);
-  if (err != Err::none) {
+  if (err != internal::Err::none) {
     // We don't want to scary the user in case of clean EOF
-    if (err != Err::eof) {
+    if (err != internal::Err::eof) {
       LIBNDT_EMIT_WARNING("ws_recv: ws_recv_frame() failed for first frame");
     }
     return err;
   }
   if (*opcode != ws_opcode_binary && *opcode != ws_opcode_text) {
     LIBNDT_EMIT_WARNING("ws_recv: received unexpected opcode: " << *opcode);
-    return Err::ws_proto;
+    return internal::Err::ws_proto;
   }
   if (fin) {
     LIBNDT_EMIT_DEBUG("ws_recv: the first frame is also the last frame");
-    return Err::none;
+    return internal::Err::none;
   }
   while (*count < total) {
     if ((uintptr_t)base > UINTPTR_MAX - *count) {
       LIBNDT_EMIT_WARNING("ws_recv: avoiding pointer overflow");
-      return Err::value_too_large;
+      return internal::Err::value_too_large;
     }
     uint8_t op = 0;
 		internal::Size n = 0;
     err = ws_recv_frame(sock, &op, &fin, base + *count, total - *count, &n);
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       LIBNDT_EMIT_WARNING("ws_recv: ws_recv_frame() failed for continuation frame");
       return err;
     }
     if (*count > internal::SizeMax - n) {
       LIBNDT_EMIT_WARNING("ws_recv: avoiding integer overflow");
-      return Err::value_too_large;
+      return internal::Err::value_too_large;
     }
     *count += n;
     if (op != ws_opcode_continue) {
       LIBNDT_EMIT_WARNING("ws_recv: received unexpected opcode: " << op);
-      return Err::ws_proto;
+      return internal::Err::ws_proto;
     }
     if (fin) {
       LIBNDT_EMIT_DEBUG("ws_recv: this is the last frame");
-      return Err::none;
+      return internal::Err::none;
     }
     LIBNDT_EMIT_DEBUG("ws_recv: this is not the last frame");
   }
   LIBNDT_EMIT_WARNING("ws_recv: buffer smaller than incoming message");
-  return Err::message_size;
+  return internal::Err::message_size;
 }
 
 // } - - - END WEBSOCKET IMPLEMENTATION - - -
@@ -2955,7 +2907,7 @@ static int libndt_bio_operation(
   if (rv < 0) {
     assert(rv == -1);
     auto err = clnt->netx_map_errno(clnt->sys->GetLastError());
-    if (err == Err::operation_would_block) {
+    if (err == internal::Err::operation_would_block) {
       set_retry(bio);
     }
     return -1;
@@ -3032,82 +2984,82 @@ static BIO_METHOD *libndt_bio_method() noexcept {
 // } - - - END BIO IMPLEMENTATION - - -
 
 // Common function to map OpenSSL errors to Err.
-static Err map_ssl_error(const Client *client, SSL *ssl, int ret) noexcept {
+static internal::Err map_ssl_error(const Client *client, SSL *ssl, int ret) noexcept {
   auto reason = ::SSL_get_error(ssl, ret);
   switch (reason) {
     case SSL_ERROR_NONE:
-      return Err::none;
+      return internal::Err::none;
     case SSL_ERROR_ZERO_RETURN:
       // TODO(bassosimone): consider the issue of dirty shutdown.
-      return Err::eof;
+      return internal::Err::eof;
     case SSL_ERROR_WANT_READ:
-      return Err::ssl_want_read;
+      return internal::Err::ssl_want_read;
     case SSL_ERROR_WANT_WRITE:
-      return Err::ssl_want_write;
+      return internal::Err::ssl_want_write;
     case SSL_ERROR_SYSCALL:
       auto ecode = client->sys->GetLastError();
       if (ecode) {
         return client->netx_map_errno(ecode);
       }
-      return Err::ssl_syscall;
+      return internal::Err::ssl_syscall;
   }
   // TODO(bassosimone): in this case it may be nice to print the error queue
   // so to give the user a better understanding of what has happened.
-  return Err::ssl_generic;
+  return internal::Err::ssl_generic;
 }
 
 // Retry simple, nonblocking OpenSSL operations such as handshake or shutdown.
-static Err ssl_retry_unary_op(std::string opname, Client *client, SSL *ssl,
+static internal::Err ssl_retry_unary_op(std::string opname, Client *client, SSL *ssl,
                               internal::Socket fd, Timeout timeout,
                               std::function<int(SSL *)> unary_op) noexcept {
-  auto err = Err::none;
+  auto err = internal::Err::none;
 again:
   err = map_ssl_error(client, ssl, unary_op(ssl));
   // Retry if needed
-  if (err == Err::ssl_want_read) {
+  if (err == internal::Err::ssl_want_read) {
     err = client->netx_wait_readable(fd, timeout);
-    if (err == Err::none) {
+    if (err == internal::Err::none) {
       // TODO(bassosimone): make sure we don't loop in this function forever.
       goto again;
     }
-  } else if (err == Err::ssl_want_write) {
+  } else if (err == internal::Err::ssl_want_write) {
     err = client->netx_wait_writeable(fd, timeout);
-    if (err == Err::none) {
+    if (err == internal::Err::none) {
       goto again;
     }
   }
   // Otherwise let the caller know
-  if (err != Err::none) {
+  if (err != internal::Err::none) {
     LIBNDT_EMIT_WARNING_EX(client, opname << " failed: " << libndt_perror(err));
   }
   return err;
 }
 
-Err Client::netx_maybews_dial(const std::string &hostname,
+internal::Err Client::netx_maybews_dial(const std::string &hostname,
                               const std::string &port, uint64_t ws_flags,
                               std::string ws_protocol, std::string url_path,
                               internal::Socket *sock) noexcept {
   auto err = netx_maybessl_dial(hostname, port, sock);
-  if (err != Err::none) {
+  if (err != internal::Err::none) {
     return err;
   }
   LIBNDT_EMIT_DEBUG("netx_maybews_dial: netx_maybessl_dial() returned successfully");
   if ((settings_.protocol_flags & protocol_flag_websocket) == 0) {
     LIBNDT_EMIT_DEBUG("netx_maybews_dial: websocket not enabled");
-    return Err::none;
+    return internal::Err::none;
   }
   LIBNDT_EMIT_DEBUG("netx_maybews_dial: about to start websocket handhsake");
   err = ws_handshake(*sock, port, ws_flags, ws_protocol, url_path);
-  if (err != Err::none) {
+  if (err != internal::Err::none) {
     (void)netx_closesocket(*sock);
     *sock = (internal::Socket)-1;
     return err;
   }
   LIBNDT_EMIT_DEBUG("netx_maybews_dial: established websocket channel");
-  return Err::none;
+  return internal::Err::none;
 }
 
-Err Client::netx_maybessl_dial(const std::string &hostname,
+internal::Err Client::netx_maybessl_dial(const std::string &hostname,
                                const std::string &port, internal::Socket *sock) noexcept {
   // Temporarily clear the TLS flag because I/O functions inside of socks5h
   // code would otherwise fail given we've not established TLS yet. Then restore
@@ -3116,14 +3068,14 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
   settings_.protocol_flags &= ~protocol_flag_tls;
   auto err = netx_maybesocks5h_dial(hostname, port, sock);
   settings_.protocol_flags = flags;
-  if (err != Err::none) {
+  if (err != internal::Err::none) {
     return err;
   }
   LIBNDT_EMIT_DEBUG(
       "netx_maybessl_dial: netx_maybesocks5h_dial() returned successfully");
   if ((settings_.protocol_flags & protocol_flag_tls) == 0) {
     LIBNDT_EMIT_DEBUG("netx_maybessl_dial: TLS not enabled");
-    return Err::none;
+    return internal::Err::none;
   }
   LIBNDT_EMIT_DEBUG("netx_maybetls_dial: about to start TLS handshake");
   if (settings_.ca_bundle_path.empty() && settings_.tls_verify_peer) {
@@ -3146,7 +3098,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
           "You did not provide me with a CA bundle path. Without this "
           "information I cannot validate the other TLS endpoint. So, "
           "I will not continue to run this test.");
-      return Err::invalid_argument;
+      return internal::Err::invalid_argument;
 #ifndef _WIN32
     }
 #endif
@@ -3159,7 +3111,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     if (ctx == nullptr) {
       LIBNDT_EMIT_WARNING("SSL_CTX_new() failed");
       netx_closesocket(*sock);
-      return Err::ssl_generic;
+      return internal::Err::ssl_generic;
     }
     LIBNDT_EMIT_DEBUG("SSL_CTX created");
     if (settings_.tls_verify_peer) {
@@ -3168,7 +3120,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
         LIBNDT_EMIT_WARNING("Cannot load the CA bundle path from the file system");
         ::SSL_CTX_free(ctx);
         netx_closesocket(*sock);
-        return Err::ssl_generic;
+        return internal::Err::ssl_generic;
       }
       LIBNDT_EMIT_DEBUG("Loaded the CA bundle path");
     }
@@ -3177,7 +3129,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
       LIBNDT_EMIT_WARNING("SSL_new() failed");
       ::SSL_CTX_free(ctx);
       netx_closesocket(*sock);
-      return Err::ssl_generic;
+      return internal::Err::ssl_generic;
     }
     LIBNDT_EMIT_DEBUG("SSL created");
     ::SSL_CTX_free(ctx);  // Referenced by `ssl` so safe to free here
@@ -3191,7 +3143,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
     LIBNDT_EMIT_WARNING("BIO_new() failed");
     netx_closesocket(*sock);
     //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
-    return Err::ssl_generic;
+    return internal::Err::ssl_generic;
   }
   LIBNDT_EMIT_DEBUG("libndt BIO created");
   // We use BIO_NOCLOSE because it's the socket that owns the BIO and the SSL
@@ -3220,7 +3172,7 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
       LIBNDT_EMIT_WARNING("Cannot set the hostname for hostname validation");
       netx_closesocket(*sock);
       //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
-      return Err::ssl_generic;
+      return internal::Err::ssl_generic;
     }
     SSL_set_verify(ssl, SSL_VERIFY_PEER, nullptr);
     LIBNDT_EMIT_DEBUG("SSL_VERIFY_PEER configured");
@@ -3230,16 +3182,16 @@ Err Client::netx_maybessl_dial(const std::string &hostname,
                              ERR_clear_error();
                              return ::SSL_do_handshake(ssl);
                            });
-  if (err != Err::none) {
+  if (err != internal::Err::none) {
     netx_closesocket(*sock);
     //::SSL_free(ssl); // MUST NOT be called because of fd_to_ssl
-    return Err::ssl_generic;
+    return internal::Err::ssl_generic;
   }
   LIBNDT_EMIT_DEBUG("SSL handshake complete");
-  return Err::none;
+  return internal::Err::none;
 }
 
-Err Client::netx_maybesocks5h_dial(const std::string &hostname,
+internal::Err Client::netx_maybesocks5h_dial(const std::string &hostname,
                                    const std::string &port,
                                    internal::Socket *sock) noexcept {
   if (settings_.socks5h_port.empty()) {
@@ -3248,7 +3200,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
   }
   {
     auto err = netx_dial("127.0.0.1", settings_.socks5h_port, sock);
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       return err;
     }
   }
@@ -3260,7 +3212,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         0   // "no auth" method
     };
     auto err = netx_sendn(*sock, auth_request, sizeof(auth_request));
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       LIBNDT_EMIT_WARNING("socks5h: cannot send auth_request");
       netx_closesocket(*sock);
       *sock = (libndt::internal::Socket)-1;
@@ -3275,7 +3227,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         0   // method
     };
     auto err = netx_recvn(*sock, auth_response, sizeof(auth_response));
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       LIBNDT_EMIT_WARNING("socks5h: cannot recv auth_response");
       netx_closesocket(*sock);
       *sock = (libndt::internal::Socket)-1;
@@ -3286,14 +3238,14 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       LIBNDT_EMIT_WARNING("socks5h: received unexpected version number");
       netx_closesocket(*sock);
       *sock = (libndt::internal::Socket)-1;
-      return Err::socks5h;
+      return internal::Err::socks5h;
     }
     constexpr uint8_t auth_method = 0;
     if (auth_response[1] != auth_method) {
       LIBNDT_EMIT_WARNING("socks5h: received unexpected auth_method");
       netx_closesocket(*sock);
       *sock = (libndt::internal::Socket)-1;
-      return Err::socks5h;
+      return internal::Err::socks5h;
     }
     LIBNDT_EMIT_DEBUG("socks5h: authenticated with proxy; response: "
                << represent(std::string{auth_response, sizeof(auth_response)}));
@@ -3310,7 +3262,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         LIBNDT_EMIT_WARNING("socks5h: hostname is too long");
         netx_closesocket(*sock);
         *sock = (libndt::internal::Socket)-1;
-        return Err::invalid_argument;
+        return internal::Err::invalid_argument;
       }
       ss << (uint8_t)hostname.size();
       ss << hostname;
@@ -3322,7 +3274,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
           LIBNDT_EMIT_WARNING("socks5h: invalid port number: " << errstr);
           netx_closesocket(*sock);
           *sock = (libndt::internal::Socket)-1;
-          return Err::invalid_argument;
+          return internal::Err::invalid_argument;
         }
       }
       portno = htons(portno);
@@ -3332,7 +3284,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     }
     auto err = netx_sendn(  //
         *sock, connect_request.data(), connect_request.size());
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       LIBNDT_EMIT_WARNING("socks5h: cannot send connect_request");
       netx_closesocket(*sock);
       *sock = (libndt::internal::Socket)-1;
@@ -3349,7 +3301,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     };
     auto err = netx_recvn(  //
         *sock, connect_response_hdr, sizeof(connect_response_hdr));
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       LIBNDT_EMIT_WARNING("socks5h: cannot recv connect_response_hdr");
       netx_closesocket(*sock);
       *sock = (libndt::internal::Socket)-1;
@@ -3362,7 +3314,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       LIBNDT_EMIT_WARNING("socks5h: invalid message version");
       netx_closesocket(*sock);
       *sock = (libndt::internal::Socket)-1;
-      return Err::socks5h;
+      return internal::Err::socks5h;
     }
     if (connect_response_hdr[1] != 0) {
       // TODO(bassosimone): map the socks5 error to a system error
@@ -3370,13 +3322,13 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
                    << (unsigned)(uint8_t)connect_response_hdr[1]);
       netx_closesocket(*sock);
       *sock = (libndt::internal::Socket)-1;
-      return Err::io_error;
+      return internal::Err::io_error;
     }
     if (connect_response_hdr[2] != 0) {
       LIBNDT_EMIT_WARNING("socks5h: invalid reserved field");
       netx_closesocket(*sock);
       *sock = (libndt::internal::Socket)-1;
-      return Err::socks5h;
+      return internal::Err::socks5h;
     }
     // receive IP or domain
     switch (connect_response_hdr[3]) {
@@ -3385,7 +3337,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         constexpr internal::Size expected = 4;  // ipv4
         char buf[expected];
         auto recvn_err = netx_recvn(*sock, buf, sizeof(buf));
-        if (recvn_err != Err::none) {
+        if (recvn_err != internal::Err::none) {
           LIBNDT_EMIT_WARNING("socks5h: cannot recv ipv4 address");
           netx_closesocket(*sock);
           *sock = (libndt::internal::Socket)-1;
@@ -3399,7 +3351,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
       {
         uint8_t len = 0;
         auto recvn_err = netx_recvn(*sock, &len, sizeof(len));
-        if (recvn_err != Err::none) {
+        if (recvn_err != internal::Err::none) {
           LIBNDT_EMIT_WARNING("socks5h: cannot recv domain length");
           netx_closesocket(*sock);
           *sock = (libndt::internal::Socket)-1;
@@ -3407,7 +3359,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         }
         char domain[UINT8_MAX + 1];  // space for final '\0'
         recvn_err = netx_recvn(*sock, domain, len);
-        if (recvn_err != Err::none) {
+        if (recvn_err != internal::Err::none) {
           LIBNDT_EMIT_WARNING("socks5h: cannot recv domain");
           netx_closesocket(*sock);
           *sock = (libndt::internal::Socket)-1;
@@ -3422,7 +3374,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         constexpr internal::Size expected = 16;  // ipv6
         char buf[expected];
         auto recvn_err = netx_recvn(*sock, buf, sizeof(buf));
-        if (recvn_err != Err::none) {
+        if (recvn_err != internal::Err::none) {
           LIBNDT_EMIT_WARNING("socks5h: cannot recv ipv6 address");
           netx_closesocket(*sock);
           *sock = (libndt::internal::Socket)-1;
@@ -3436,13 +3388,13 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
         LIBNDT_EMIT_WARNING("socks5h: invalid address type");
         netx_closesocket(*sock);
         *sock = (libndt::internal::Socket)-1;
-        return Err::socks5h;
+        return internal::Err::socks5h;
     }
     // receive the port
     {
       uint16_t real_port = 0;
       auto recvn_err = netx_recvn(*sock, &real_port, sizeof(real_port));
-      if (recvn_err != Err::none) {
+      if (recvn_err != internal::Err::none) {
         LIBNDT_EMIT_WARNING("socks5h: cannot recv port");
         netx_closesocket(*sock);
         *sock = (libndt::internal::Socket)-1;
@@ -3453,7 +3405,7 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
     }
   }
   LIBNDT_EMIT_INFO("socks5h: the proxy has successfully connected");
-  return Err::none;
+  return internal::Err::none;
 }
 
 #ifdef _WIN32
@@ -3462,47 +3414,47 @@ Err Client::netx_maybesocks5h_dial(const std::string &hostname,
 #define E(name) E##name
 #endif
 
-/*static*/ Err Client::netx_map_errno(int ec) noexcept {
+/*static*/ internal::Err Client::netx_map_errno(int ec) noexcept {
   // clang-format off
   switch (ec) {
     case 0: {
       assert(false);  // we don't expect `errno` to be zero
-      return Err::io_error;
+      return internal::Err::io_error;
     }
 #ifndef _WIN32
-    case E(PIPE): return Err::broken_pipe;
+		case E(PIPE): return internal::Err::broken_pipe;
 #endif
-    case E(CONNABORTED): return Err::connection_aborted;
-    case E(CONNREFUSED): return Err::connection_refused;
-    case E(CONNRESET): return Err::connection_reset;
-    case E(HOSTUNREACH): return Err::host_unreachable;
-    case E(INTR): return Err::interrupted;
-    case E(INVAL): return Err::invalid_argument;
+		case E(CONNABORTED): return internal::Err::connection_aborted;
+		case E(CONNREFUSED): return internal::Err::connection_refused;
+		case E(CONNRESET): return internal::Err::connection_reset;
+		case E(HOSTUNREACH): return internal::Err::host_unreachable;
+		case E(INTR): return internal::Err::interrupted;
+		case E(INVAL): return internal::Err::invalid_argument;
 #ifndef _WIN32
-    case E(IO): return Err::io_error;
+		case E(IO): return internal::Err::io_error;
 #endif
-    case E(NETDOWN): return Err::network_down;
-    case E(NETRESET): return Err::network_reset;
-    case E(NETUNREACH): return Err::network_unreachable;
-    case E(INPROGRESS): return Err::operation_in_progress;
-    case E(WOULDBLOCK): return Err::operation_would_block;
+		case E(NETDOWN): return internal::Err::network_down;
+		case E(NETRESET): return internal::Err::network_reset;
+		case E(NETUNREACH): return internal::Err::network_unreachable;
+		case E(INPROGRESS): return internal::Err::operation_in_progress;
+		case E(WOULDBLOCK): return internal::Err::operation_would_block;
 #if !defined _WIN32 && EAGAIN != EWOULDBLOCK
-    case E(AGAIN): return Err::operation_would_block;
+		case E(AGAIN): return internal::Err::operation_would_block;
 #endif
-    case E(TIMEDOUT): return Err::timed_out;
+		case E(TIMEDOUT): return internal::Err::timed_out;
   }
   // clang-format on
-  return Err::io_error;
+  return internal::Err::io_error;
 }
 
 #undef E  // Tidy up
 
-Err Client::netx_map_eai(int ec) noexcept {
+internal::Err Client::netx_map_eai(int ec) noexcept {
   // clang-format off
   switch (ec) {
-    case EAI_AGAIN: return Err::ai_again;
-    case EAI_FAIL: return Err::ai_fail;
-    case EAI_NONAME: return Err::ai_noname;
+		case EAI_AGAIN: return internal::Err::ai_again;
+		case EAI_FAIL: return internal::Err::ai_fail;
+		case EAI_NONAME: return internal::Err::ai_noname;
 #ifdef EAI_SYSTEM
     case EAI_SYSTEM: {
       return netx_map_errno(sys->GetLastError());
@@ -3510,31 +3462,31 @@ Err Client::netx_map_eai(int ec) noexcept {
 #endif
   }
   // clang-format on
-  return Err::ai_generic;
+  return internal::Err::ai_generic;
 }
 
 #ifdef _WIN32
 // Depending on the version of Winsock it's either EAGAIN or EINPROGRESS
 #define CONNECT_IN_PROGRESS(e) \
-  (e == Err::operation_would_block || e == Err::operation_in_progress)
+  (e == internal::Err::operation_would_block || e == internal::Err::operation_in_progress)
 #else
-#define CONNECT_IN_PROGRESS(e) (e == Err::operation_in_progress)
+#define CONNECT_IN_PROGRESS(e) (e == internal::Err::operation_in_progress)
 #endif
 
-Err Client::netx_dial(const std::string &hostname, const std::string &port,
+internal::Err Client::netx_dial(const std::string &hostname, const std::string &port,
                       internal::Socket *sock) noexcept {
   assert(sock != nullptr);
   if (*sock != -1) {
     LIBNDT_EMIT_WARNING("netx_dial: socket already connected");
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
   // Implementation note: we could perform getaddrinfo() in one pass but having
   // a virtual API that resolves a hostname to a vector of IP addresses makes
   // life easier when you want to override hostname resolution, because you have
   // to reimplement a simpler method, compared to reimplementing getaddrinfo().
   std::vector<std::string> addresses;
-  Err err;
-  if ((err = netx_resolve(hostname, &addresses)) != Err::none) {
+	internal::Err err;
+  if ((err = netx_resolve(hostname, &addresses)) != internal::Err::none) {
     return err;
   }
   for (auto &addr : addresses) {
@@ -3569,7 +3521,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         }
       }
 #endif  // SO_NOSIGPIPE
-      if (netx_setnonblocking(*sock, true) != Err::none) {
+      if (netx_setnonblocking(*sock, true) != internal::Err::none) {
         LIBNDT_EMIT_WARNING("netx_dial: netx_setnonblocking() failed");
         sys->Closesocket(*sock);
         *sock = (libndt::internal::Socket)-1;
@@ -3594,7 +3546,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
       auto connect_err = netx_map_errno(sys->GetLastError());
       if (CONNECT_IN_PROGRESS(connect_err)) {
         connect_err = netx_wait_writeable(*sock, settings_.timeout);
-        if (connect_err == Err::none) {
+        if (connect_err == internal::Err::none) {
           int soerr = 0;
           socklen_t soerrlen = sizeof(soerr);
           if (sys->Getsockopt(*sock, SOL_SOCKET, SO_ERROR, (void *)&soerr,
@@ -3619,25 +3571,25 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
     }
   }
   // TODO(bassosimone): it's possible to write a better algorithm here
-  return *sock != -1 ? Err::none : Err::io_error;
+  return *sock != -1 ? internal::Err::none : internal::Err::io_error;
 }
 
 #undef CONNECT_IN_PROGRESS  // Tidy
 
-Err Client::netx_recv(internal::Socket fd, void *base, internal::Size count,
+internal::Err Client::netx_recv(internal::Socket fd, void *base, internal::Size count,
                       internal::Size *actual) const noexcept {
-  auto err = Err::none;
+  auto err = internal::Err::none;
 again:
   err = netx_recv_nonblocking(fd, base, count, actual);
-  if (err == Err::none) {
-    return Err::none;
+  if (err == internal::Err::none) {
+    return internal::Err::none;
   }
-  if (err == Err::operation_would_block || err == Err::ssl_want_read) {
+  if (err == internal::Err::operation_would_block || err == internal::Err::ssl_want_read) {
     err = netx_wait_readable(fd, settings_.timeout);
-  } else if (err == Err::ssl_want_write) {
+  } else if (err == internal::Err::ssl_want_write) {
     err = netx_wait_writeable(fd, settings_.timeout);
   }
-  if (err == Err::none) {
+  if (err == internal::Err::none) {
     goto again;
   }
   LIBNDT_EMIT_DEBUG(
@@ -3645,7 +3597,7 @@ again:
   return err;
 }
 
-Err Client::netx_recv_nonblocking(internal::Socket fd, void *base, internal::Size count,
+internal::Err Client::netx_recv_nonblocking(internal::Socket fd, void *base, internal::Size count,
                                   internal::Size *actual) const noexcept {
   assert(base != nullptr && actual != nullptr);
   *actual = 0;
@@ -3653,15 +3605,15 @@ Err Client::netx_recv_nonblocking(internal::Socket fd, void *base, internal::Siz
     LIBNDT_EMIT_WARNING(
         "netx_recv_nonblocking: explicitly disallowing zero read; use "
         "netx_poll() to check the state of a socket");
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
   sys->SetLastError(0);
   if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (count > INT_MAX) {
-      return Err::invalid_argument;
+      return internal::Err::invalid_argument;
     }
     if (fd_to_ssl_.count(fd) != 1) {
-      return Err::invalid_argument;
+      return internal::Err::invalid_argument;
     }
     auto ssl = fd_to_ssl_.at(fd);
     // TODO(bassosimone): add mocks and regress tests for OpenSSL.
@@ -3671,7 +3623,7 @@ Err Client::netx_recv_nonblocking(internal::Socket fd, void *base, internal::Siz
       return map_ssl_error(this, ssl, ret);
     }
     *actual = (internal::Size)ret;
-    return Err::none;
+    return internal::Err::none;
   }
   auto rv = sys->Recv(fd, base, count);
   if (rv < 0) {
@@ -3680,45 +3632,45 @@ Err Client::netx_recv_nonblocking(internal::Socket fd, void *base, internal::Siz
   }
   if (rv == 0) {
     assert(count > 0);  // guaranteed by the above check
-    return Err::eof;
+    return internal::Err::eof;
   }
   *actual = (internal::Size)rv;
-  return Err::none;
+  return internal::Err::none;
 }
 
-Err Client::netx_recvn(internal::Socket fd, void *base, internal::Size count) const noexcept {
+internal::Err Client::netx_recvn(internal::Socket fd, void *base, internal::Size count) const noexcept {
 	internal::Size off = 0;
   while (off < count) {
 		internal::Size n = 0;
     if ((uintptr_t)base > UINTPTR_MAX - off) {
-      return Err::value_too_large;
+      return internal::Err::value_too_large;
     }
-    Err err = netx_recv(fd, ((char *)base) + off, count - off, &n);
-    if (err != Err::none) {
+		internal::Err err = netx_recv(fd, ((char *)base) + off, count - off, &n);
+    if (err != internal::Err::none) {
       return err;
     }
     if (off > internal::SizeMax - n) {
-      return Err::value_too_large;
+      return internal::Err::value_too_large;
     }
     off += n;
   }
-  return Err::none;
+  return internal::Err::none;
 }
 
-Err Client::netx_send(internal::Socket fd, const void *base, internal::Size count,
+internal::Err Client::netx_send(internal::Socket fd, const void *base, internal::Size count,
                       internal::Size *actual) const noexcept {
-  auto err = Err::none;
+  auto err = internal::Err::none;
 again:
   err = netx_send_nonblocking(fd, base, count, actual);
-  if (err == Err::none) {
-    return Err::none;
+  if (err == internal::Err::none) {
+    return internal::Err::none;
   }
-  if (err == Err::ssl_want_read) {
+  if (err == internal::Err::ssl_want_read) {
     err = netx_wait_readable(fd, settings_.timeout);
-  } else if (err == Err::operation_would_block || err == Err::ssl_want_write) {
+  } else if (err == internal::Err::operation_would_block || err == internal::Err::ssl_want_write) {
     err = netx_wait_writeable(fd, settings_.timeout);
   }
-  if (err == Err::none) {
+  if (err == internal::Err::none) {
     goto again;
   }
   LIBNDT_EMIT_DEBUG(
@@ -3726,7 +3678,7 @@ again:
   return err;
 }
 
-Err Client::netx_send_nonblocking(internal::Socket fd, const void *base, internal::Size count,
+internal::Err Client::netx_send_nonblocking(internal::Socket fd, const void *base, internal::Size count,
                                   internal::Size *actual) const noexcept {
   assert(base != nullptr && actual != nullptr);
   *actual = 0;
@@ -3734,15 +3686,15 @@ Err Client::netx_send_nonblocking(internal::Socket fd, const void *base, interna
     LIBNDT_EMIT_WARNING(
         "netx_send_nonblocking: explicitly disallowing zero send; use "
         "netx_poll() to check the state of a socket");
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
   sys->SetLastError(0);
   if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (count > INT_MAX) {
-      return Err::invalid_argument;
+      return internal::Err::invalid_argument;
     }
     if (fd_to_ssl_.count(fd) != 1) {
-      return Err::invalid_argument;
+      return internal::Err::invalid_argument;
     }
     auto ssl = fd_to_ssl_.at(fd);
     ERR_clear_error();
@@ -3752,7 +3704,7 @@ Err Client::netx_send_nonblocking(internal::Socket fd, const void *base, interna
       return map_ssl_error(this, ssl, ret);
     }
     *actual = (internal::Size)ret;
-    return Err::none;
+    return internal::Err::none;
   }
   auto rv = sys->Send(fd, base, count);
   if (rv < 0) {
@@ -3763,32 +3715,32 @@ Err Client::netx_send_nonblocking(internal::Socket fd, const void *base, interna
   // return value as an I/O error rather than EOF.
   if (rv == 0) {
     assert(count > 0);  // guaranteed by the above check
-    return Err::io_error;
+    return internal::Err::io_error;
   }
   *actual = (internal::Size)rv;
-  return Err::none;
+  return internal::Err::none;
 }
 
-Err Client::netx_sendn(internal::Socket fd, const void *base, internal::Size count) const noexcept {
+internal::Err Client::netx_sendn(internal::Socket fd, const void *base, internal::Size count) const noexcept {
 	internal::Size off = 0;
   while (off < count) {
 		internal::Size n = 0;
     if ((uintptr_t)base > UINTPTR_MAX - off) {
-      return Err::value_too_large;
+      return internal::Err::value_too_large;
     }
-    Err err = netx_send(fd, ((char *)base) + off, count - off, &n);
-    if (err != Err::none) {
+		internal::Err err = netx_send(fd, ((char *)base) + off, count - off, &n);
+    if (err != internal::Err::none) {
       return err;
     }
     if (off > internal::SizeMax - n) {
-      return Err::value_too_large;
+      return internal::Err::value_too_large;
     }
     off += n;
   }
-  return Err::none;
+  return internal::Err::none;
 }
 
-Err Client::netx_resolve(const std::string &hostname,
+internal::Err Client::netx_resolve(const std::string &hostname,
                          std::vector<std::string> *addrs) noexcept {
   assert(addrs != nullptr);
   LIBNDT_EMIT_DEBUG("netx_resolve: " << hostname);
@@ -3811,7 +3763,7 @@ Err Client::netx_resolve(const std::string &hostname,
   }
   assert(rp);
   LIBNDT_EMIT_DEBUG("netx_resolve: getaddrinfo(): okay");
-  Err result = Err::none;
+	internal::Err result = internal::Err::none;
   for (auto aip = rp; (aip); aip = aip->ai_next) {
     char address[NI_MAXHOST], port[NI_MAXSERV];
     // The following casts from `size_t` to `socklen_t` are safe for sure
@@ -3825,7 +3777,7 @@ Err Client::netx_resolve(const std::string &hostname,
 #ifdef _WIN32
     if (aip->ai_addrlen > sizeof(sockaddr_in6)) {
       LIBNDT_EMIT_WARNING("netx_resolve: unexpected size of aip->ai_addrlen");
-      result = Err::value_too_large;
+      result = internal::Err::value_too_large;
       break;
     }
 #endif
@@ -3834,7 +3786,7 @@ Err Client::netx_resolve(const std::string &hostname,
                         (socklen_t)sizeof(port),
                         NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
       LIBNDT_EMIT_WARNING("netx_resolve: unexpected getnameinfo() failure");
-      result = Err::ai_generic;
+      result = internal::Err::ai_generic;
       break;
     }
     addrs->push_back(address);  // we only care about address
@@ -3844,7 +3796,7 @@ Err Client::netx_resolve(const std::string &hostname,
   return result;
 }
 
-Err Client::netx_setnonblocking(internal::Socket fd, bool enable) noexcept {
+internal::Err Client::netx_setnonblocking(internal::Socket fd, bool enable) noexcept {
 #ifdef _WIN32
   u_long lv = (enable) ? 1UL : 0UL;
   if (sys->Ioctlsocket(fd, FIONBIO, &lv) != 0) {
@@ -3865,10 +3817,10 @@ Err Client::netx_setnonblocking(internal::Socket fd, bool enable) noexcept {
     return netx_map_errno(sys->GetLastError());
   }
 #endif
-  return Err::none;
+  return internal::Err::none;
 }
 
-static Err netx_wait(const Client *client, internal::Socket fd, Timeout timeout,
+static internal::Err netx_wait(const Client *client, internal::Socket fd, Timeout timeout,
                      short expected_events) noexcept {
   pollfd pfd{};
   pfd.fd = fd;
@@ -3892,24 +3844,24 @@ static Err netx_wait(const Client *client, internal::Socket fd, Timeout timeout,
   // calling the system implementation of poll().
   //
   // See also Stack Overflow: <https://stackoverflow.com/a/25249958>.
-  assert((err == Err::none && pfds[0].revents != 0) ||
-         (err != Err::none && pfds[0].revents == 0));
+  assert((err == internal::Err::none && pfds[0].revents != 0) ||
+         (err != internal::Err::none && pfds[0].revents == 0));
   return err;
 }
 
-Err Client::netx_wait_readable(internal::Socket fd, Timeout timeout) const noexcept {
+internal::Err Client::netx_wait_readable(internal::Socket fd, Timeout timeout) const noexcept {
   return netx_wait(this, fd, timeout, POLLIN);
 }
 
-Err Client::netx_wait_writeable(internal::Socket fd, Timeout timeout) const noexcept {
+internal::Err Client::netx_wait_writeable(internal::Socket fd, Timeout timeout) const noexcept {
   return netx_wait(this, fd, timeout, POLLOUT);
 }
 
-Err Client::netx_poll(
+internal::Err Client::netx_poll(
       std::vector<pollfd> *pfds, int timeout_msec) const noexcept {
   if (pfds == nullptr) {
     LIBNDT_EMIT_WARNING("netx_poll: passed a null vector of descriptors");
-    return Err::invalid_argument;
+    return internal::Err::invalid_argument;
   }
   for (auto &pfd : *pfds) {
     pfd.revents = 0;  // clear unconditionally
@@ -3924,7 +3876,7 @@ again:
   // it to the correct integer. We don't need many fds in any case.
   if (pfds->size() > UINT8_MAX) {
     LIBNDT_EMIT_WARNING("netx_poll: avoiding overflow");
-    return Err::value_too_large;
+    return internal::Err::value_too_large;
   }
   rv = sys->Poll(pfds->data(), (uint8_t)pfds->size(), timeout_msec);
   // TODO(bassosimone): handle the case where POLLNVAL is returned.
@@ -3936,19 +3888,19 @@ again:
   if (rv < 0) {
     assert(rv == -1);
     auto err = netx_map_errno(sys->GetLastError());
-    if (err == Err::interrupted) {
+    if (err == internal::Err::interrupted) {
       goto again;
     }
     return err;
   }
 #endif
-  return (rv == 0) ? Err::timed_out : Err::none;
+  return (rv == 0) ? internal::Err::timed_out : internal::Err::none;
 }
 
-Err Client::netx_shutdown_both(internal::Socket fd) noexcept {
+internal::Err Client::netx_shutdown_both(internal::Socket fd) noexcept {
   if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (fd_to_ssl_.count(fd) != 1) {
-      return Err::invalid_argument;
+      return internal::Err::invalid_argument;
     }
     auto ssl = fd_to_ssl_.at(fd);
     auto err = ssl_retry_unary_op(  //
@@ -3957,20 +3909,20 @@ Err Client::netx_shutdown_both(internal::Socket fd) noexcept {
           ERR_clear_error();
           return ::SSL_shutdown(ssl);
         });
-    if (err != Err::none) {
+    if (err != internal::Err::none) {
       return err;
     }
   }
   if (sys->Shutdown(fd, LIBNDT_OS_SHUT_RDWR) != 0) {
     return netx_map_errno(sys->GetLastError());
   }
-  return Err::none;
+  return internal::Err::none;
 }
 
-Err Client::netx_closesocket(internal::Socket fd) noexcept {
+internal::Err Client::netx_closesocket(internal::Socket fd) noexcept {
   if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (fd_to_ssl_.count(fd) != 1) {
-      return Err::invalid_argument;
+      return internal::Err::invalid_argument;
     }
     ::SSL_free(fd_to_ssl_.at(fd));
     fd_to_ssl_.erase(fd);
@@ -3978,7 +3930,7 @@ Err Client::netx_closesocket(internal::Socket fd) noexcept {
   if (sys->Closesocket(fd) != 0) {
     return netx_map_errno(sys->GetLastError());
   }
-  return Err::none;
+  return internal::Err::none;
 }
 
 // Curl helpers
