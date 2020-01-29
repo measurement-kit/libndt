@@ -462,21 +462,21 @@ bool Client::run() noexcept {
   return false;
 }
 
-void Client::on_warning(const std::string &msg) const {
+void Client::on_warning(const std::string &msg) const noexcept {
   std::clog << "[!] " << msg << std::endl;
 }
 
-void Client::on_info(const std::string &msg) const {
+void Client::on_info(const std::string &msg) const noexcept {
   std::clog << msg << std::endl;
 }
 
-void Client::on_debug(const std::string &msg) const {
+void Client::on_debug(const std::string &msg) const noexcept {
   std::clog << "[D] " << msg << std::endl;
 }
 
 void Client::on_performance(NettestFlags tid, uint8_t nflows,
                             double measured_bytes,
-                            double elapsed_time, double max_runtime) {
+                            double elapsed_time, double max_runtime) noexcept {
   auto percent = 0.0;
   if (max_runtime > 0.0) {
     percent = (elapsed_time * 100.0 / max_runtime);
@@ -493,11 +493,11 @@ void Client::on_performance(NettestFlags tid, uint8_t nflows,
                   << "; measured_bytes: " << measured_bytes);
 }
 
-void Client::on_result(std::string scope, std::string name, std::string value) {
+void Client::on_result(std::string scope, std::string name, std::string value) noexcept {
   LIBNDT_EMIT_INFO("  - [" << scope << "] " << name << ": " << value);
 }
 
-void Client::on_server_busy(std::string msg) {
+void Client::on_server_busy(std::string msg) noexcept {
   LIBNDT_EMIT_WARNING("server is busy: " << msg);
 }
 

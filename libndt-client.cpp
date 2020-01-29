@@ -27,20 +27,20 @@ using namespace measurement_kit;
 class BatchClient : public libndt::Client {
   public:
     using libndt::Client::Client;
-    void on_result(std::string, std::string, std::string value) override;
+    void on_result(std::string, std::string, std::string value) noexcept override;
     void on_performance(libndt::NettestFlags, uint8_t, double, double,
-                        double) override;
+                        double) noexcept override;
     void summary() noexcept override;
 };
 
 // on_result is overridden to only print the JSON value on stdout.
-void BatchClient::on_result(std::string, std::string,  std::string value) {
+void BatchClient::on_result(std::string, std::string, std::string value) noexcept {
   std::cout << value << std::endl;
 }
 // on_performance is overridded to hide the user-friendly output messages.
 void BatchClient::on_performance(libndt::NettestFlags tid, uint8_t nflows,
                             double measured_bytes,
-                            double elapsed_time, double) {
+                            double elapsed_time, double) noexcept {
   nlohmann::json performance;
   performance["ElapsedTime"] = elapsed_time;
   performance["NumFlows"] = nflows;

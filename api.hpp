@@ -220,6 +220,72 @@ constexpr MsgType msg_logout = MsgType{9};
 constexpr MsgType msg_waiting = MsgType{10};
 constexpr MsgType msg_extended_login = MsgType{11};
 
+// EventHandler
+// ------------
+
+/// EventHandler handles events.
+class EventHandler {
+ public:
+  /// Called when a warning message is emitted. The default behavior is to write
+  /// the warning onto the `std::clog` standard stream. \warning This method
+  /// could be called from a different thread context.
+  virtual void on_warning(const std::string &s) const noexcept = 0;
+
+  /// Called when an informational message is emitted. The default behavior is
+  /// to write the message onto the `std::clog` standard stream. \warning This method
+  /// could be called from a different thread context.
+  virtual void on_info(const std::string &s) const noexcept = 0;
+
+  /// Called when a debug message is emitted. The default behavior is
+  /// to write the message onto the `std::clog` standard stream. \warning This method
+  /// could be called from a different thread context.
+  virtual void on_debug(const std::string &s) const noexcept = 0;
+
+  /// Called to inform you about the measured speed. The default behavior is
+  /// to write the provided information as an info message. @param tid is either
+  /// nettest_flag_download or nettest_flag_upload. @param nflows is the number
+  /// of used flows. @param measured_bytes is the number of bytes received
+  /// or sent since the beginning of the measurement. @param elapsed
+  /// is the number of seconds elapsed since the beginning of the nettest.
+  /// @param max_runtime is the maximum runtime of this nettest, as copied from
+  /// the Settings. @remark By dividing @p elapsed by @p max_runtime, you can
+  /// get the percentage of completion of the current nettest. @remark We
+  /// provide you with @p tid, so you know whether the nettest is downloading
+  /// bytes from the server or uploading bytes to the server. \warning This
+  /// method could be called from another thread context.
+  virtual void on_performance(NettestFlags tid, uint8_t nflows,
+                              double measured_bytes, double elapsed,
+                              double max_runtime) noexcept = 0;
+
+  /// Called to provide you with NDT results. The default behavior is
+  /// to write the provided information as an info message. @param scope is
+  /// "web100", when we're passing you Web 100 variables, "tcp_info" when
+  /// we're passing you TCP info variables, "summary" when we're passing you
+  /// summary variables, or "ndt7" when we're passing you results returned
+  /// by a ndt7 server. @param name is the name of the variable; if @p scope
+  /// is "ndt7", then @p name should be "download". @param value is the
+  /// variable value; variables are typically int, float, or string when
+  /// running ndt5 tests, instead they are serialized JSON returned by the
+  /// server when running a ndt7 test. \warning This method could be called
+  /// from another thread context.
+  virtual void on_result(std::string scope, std::string name,
+                         std::string value) noexcept = 0;
+
+  /// Called when the server is busy. The default behavior is to write a
+  /// warning message. @param msg is the reason why the server is busy, encoded
+  /// according to the NDT protocol. @remark when Settings::hostname is empty,
+  /// we will autodiscover one or more servers, depending on the configured
+  /// policy; in the event in which we autodiscover more than one server, we
+  /// will attempt to use each of them, hence, this method may be called more
+  /// than once if some of these servers happen to be busy. \warning This
+  /// method could be called from another thread context.
+  virtual void on_server_busy(std::string msg) noexcept = 0;
+
+  /// ~EventHandler is the destructor.
+  virtual ~EventHandler() noexcept;
+};
+EventHandler::~EventHandler() noexcept {}
+
 // Settings
 // ````````
 
@@ -362,7 +428,7 @@ class Sys;
 /// default behavior. For instance, you may probably want to override the
 /// on_result() method that is called when processing NDT results to either
 /// show such results to a user or store them on the disk.
-class Client {
+class Client : public EventHandler {
  public:
   /// Constructs a Client with default settings.
   Client() noexcept;
@@ -388,66 +454,22 @@ class Client {
   /// Runs a NDT test using the configured (or default) settings.
   bool run() noexcept;
 
-  // Implementation note: currently SWIG does not propagate `noexcept` even
-  // though that is implemented in master [1], hence we have removed this
-  // qualifiers from the functions that SWIG needs to wrap.
-  //
-  // .. [1] https://github.com/swig/swig/issues/526
+  void on_warning(const std::string &s) const noexcept override;
 
-  /// Called when a warning message is emitted. The default behavior is to write
-  /// the warning onto the `std::clog` standard stream. \warning This method
-  /// could be called from a different thread context.
-  virtual void on_warning(const std::string &s) const;
+  void on_info(const std::string &s) const noexcept override;
 
-  /// Called when an informational message is emitted. The default behavior is
-  /// to write the message onto the `std::clog` standard stream. \warning This method
-  /// could be called from a different thread context.
-  virtual void on_info(const std::string &s) const;
+  void on_debug(const std::string &s) const noexcept override;
 
-  /// Called when a debug message is emitted. The default behavior is
-  /// to write the message onto the `std::clog` standard stream. \warning This method
-  /// could be called from a different thread context.
-  virtual void on_debug(const std::string &s) const;
+  void on_performance(NettestFlags tid,
+                      uint8_t nflows,
+                      double measured_bytes,
+                      double elapsed,
+                      double max_runtime) noexcept override;
 
-  /// Called to inform you about the measured speed. The default behavior is
-  /// to write the provided information as an info message. @param tid is either
-  /// nettest_flag_download or nettest_flag_upload. @param nflows is the number
-  /// of used flows. @param measured_bytes is the number of bytes received
-  /// or sent since the beginning of the measurement. @param elapsed
-  /// is the number of seconds elapsed since the beginning of the nettest.
-  /// @param max_runtime is the maximum runtime of this nettest, as copied from
-  /// the Settings. @remark By dividing @p elapsed by @p max_runtime, you can
-  /// get the percentage of completion of the current nettest. @remark We
-  /// provide you with @p tid, so you know whether the nettest is downloading
-  /// bytes from the server or uploading bytes to the server. \warning This
-  /// method could be called from another thread context.
-  virtual void on_performance(NettestFlags tid, uint8_t nflows,
-                              double measured_bytes, double elapsed,
-                              double max_runtime);
+  void on_result(std::string scope, std::string name,
+                 std::string value) noexcept override;
 
-  /// Called to provide you with NDT results. The default behavior is
-  /// to write the provided information as an info message. @param scope is
-  /// "web100", when we're passing you Web 100 variables, "tcp_info" when
-  /// we're passing you TCP info variables, "summary" when we're passing you
-  /// summary variables, or "ndt7" when we're passing you results returned
-  /// by a ndt7 server. @param name is the name of the variable; if @p scope
-  /// is "ndt7", then @p name should be "download". @param value is the
-  /// variable value; variables are typically int, float, or string when
-  /// running ndt5 tests, instead they are serialized JSON returned by the
-  /// server when running a ndt7 test. \warning This method could be called
-  /// from another thread context.
-  virtual void on_result(std::string scope, std::string name,
-                         std::string value);
-
-  /// Called when the server is busy. The default behavior is to write a
-  /// warning message. @param msg is the reason why the server is busy, encoded
-  /// according to the NDT protocol. @remark when Settings::hostname is empty,
-  /// we will autodiscover one or more servers, depending on the configured
-  /// policy; in the event in which we autodiscover more than one server, we
-  /// will attempt to use each of them, hence, this method may be called more
-  /// than once if some of these servers happen to be busy. \warning This
-  /// method could be called from another thread context.
-  virtual void on_server_busy(std::string msg);
+  void on_server_busy(std::string msg) noexcept override;
 
   /*
                _        __             _    _ _                _
