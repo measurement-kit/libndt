@@ -9,17 +9,17 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #else
-#include <sys/socket.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #endif
 
 #include <limits.h>
-#include <stdlib.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 namespace measurement_kit {
 namespace libndt {
@@ -81,7 +81,7 @@ class Sys {
   virtual Ssize Recv(Socket fd, void *base, Size count) const noexcept;
 
   virtual Ssize Send(
-    Socket fd, const void *base, Size count) const noexcept;
+      Socket fd, const void *base, Size count) const noexcept;
 
   virtual int Shutdown(Socket fd, int shutdown_how) const noexcept;
 
@@ -213,7 +213,7 @@ int Sys::Getaddrinfo(const char *domain, const char *port,
 }
 
 int Sys::Getnameinfo(const sockaddr *sa, socklen_t salen, char *host,
-                    socklen_t hostlen, char *serv, socklen_t servlen,
+                     socklen_t hostlen, char *serv, socklen_t servlen,
                      int flags) const noexcept {
   return ::getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
 }
