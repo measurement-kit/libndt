@@ -6,12 +6,12 @@
 
 // libndt/internal/curlx.hpp - libcurl wrappers
 
+#include <curl/curl.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <sstream>
-
-#include <curl/curl.h>
 
 #ifndef LIBNDT_SINGLE_INCLUDE
 #include "libndt/internal/assert.hpp"
@@ -32,30 +32,24 @@ class CurlDeleter {
 using UniqueCurl = std::unique_ptr<CURL, CurlDeleter>;
 
 // CurlWriteCb is the signature of the callback used by curl.
-using CurlWriteCb = size_t (*)(
-    char *ptr, size_t size, size_t nmemb, void *userdata);
+using CurlWriteCb = size_t (*)(char *ptr, size_t size, size_t nmemb, void *userdata);
 
 // Curlx allows to emulate failures in libcurl code.
 class Curlx {
  public:
   explicit Curlx(const Logger &logger) noexcept;
 
-  virtual bool GetMaybeSOCKS5(const std::string &proxy_port,
-                              const std::string &url,
-                              long timeout,
-                              std::string *body) noexcept;
+  virtual bool GetMaybeSOCKS5(const std::string &proxy_port, const std::string &url,
+                              long timeout, std::string *body) noexcept;
 
   virtual bool Get(UniqueCurl &handle, const std::string &url, long timeout,
                    std::string *body) noexcept;
 
-  virtual CURLcode SetoptURL(
-      UniqueCurl &handle, const std::string &url) noexcept;
+  virtual CURLcode SetoptURL(UniqueCurl &handle, const std::string &url) noexcept;
 
-  virtual CURLcode SetoptProxy(UniqueCurl &handle,
-                               const std::string &url) noexcept;
+  virtual CURLcode SetoptProxy(UniqueCurl &handle, const std::string &url) noexcept;
 
-  virtual CURLcode SetoptWriteFunction(
-      UniqueCurl &handle, CurlWriteCb callback) noexcept;
+  virtual CURLcode SetoptWriteFunction(UniqueCurl &handle, CurlWriteCb callback) noexcept;
 
   virtual CURLcode SetoptWriteData(UniqueCurl &handle, void *pointer) noexcept;
 
@@ -67,8 +61,7 @@ class Curlx {
 
   virtual UniqueCurl NewUniqueCurl() noexcept;
 
-  virtual CURLcode GetinfoResponseCode(
-      UniqueCurl &handle, long *response_code) noexcept;
+  virtual CURLcode GetinfoResponseCode(UniqueCurl &handle, long *response_code) noexcept;
 
   virtual ~Curlx() noexcept;
 
@@ -81,8 +74,7 @@ class Curlx {
 }  // namespace measurement_kit
 extern "C" {
 
-static size_t libndt_curl_callback(char *ptr, size_t size, size_t nmemb,
-                                   void *userdata) {
+static size_t libndt_curl_callback(char *ptr, size_t size, size_t nmemb, void *userdata) {
   // Note: I have this habit of using `<= 0` rather than `== 0` even for
   // unsigned numbers because that makes the check robust when there is a
   // refactoring in which the number later becomes signed. In this case
@@ -119,9 +111,8 @@ void CurlDeleter::operator()(CURL *handle) noexcept {
 
 Curlx::Curlx(const Logger &logger) noexcept : logger_{logger} {}
 
-bool Curlx::GetMaybeSOCKS5(const std::string &proxy_port,
-                           const std::string &url, long timeout,
-                           std::string *body) noexcept {
+bool Curlx::GetMaybeSOCKS5(const std::string &proxy_port, const std::string &url,
+                           long timeout, std::string *body) noexcept {
   auto handle = this->NewUniqueCurl();
   if (!handle) {
     LIBNDT_LOGGER_WARNING(logger_, "curlx: cannot initialize cURL");
@@ -224,16 +215,12 @@ CURLcode Curlx::Perform(UniqueCurl &handle) noexcept {
   return ::curl_easy_perform(handle.get());
 }
 
-UniqueCurl Curlx::NewUniqueCurl() noexcept {
-  return UniqueCurl{::curl_easy_init()};
-}
+UniqueCurl Curlx::NewUniqueCurl() noexcept { return UniqueCurl{::curl_easy_init()}; }
 
-CURLcode Curlx::GetinfoResponseCode(
-    UniqueCurl &handle, long *response_code) noexcept {
+CURLcode Curlx::GetinfoResponseCode(UniqueCurl &handle, long *response_code) noexcept {
   LIBNDT_ASSERT(handle);
   LIBNDT_ASSERT(response_code);
-  return ::curl_easy_getinfo(
-      handle.get(), CURLINFO_RESPONSE_CODE, response_code);
+  return ::curl_easy_getinfo(handle.get(), CURLINFO_RESPONSE_CODE, response_code);
 }
 
 Curlx::~Curlx() noexcept {}

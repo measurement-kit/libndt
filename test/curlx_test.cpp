@@ -15,9 +15,7 @@ using namespace measurement_kit::libndt::internal;
 class FailCurlxEasyInit : public Curlx {
  public:
   using Curlx::Curlx;
-  virtual UniqueCurl NewUniqueCurl() noexcept override {
-      return {};
-  }
+  UniqueCurl NewUniqueCurl() noexcept override { return {}; }
 };
 
 TEST_CASE("Curlx::GetMaybeSOSCKS5() deals with Curlx::NewUniqueCurl() failure") {
@@ -29,14 +27,12 @@ TEST_CASE("Curlx::GetMaybeSOSCKS5() deals with Curlx::NewUniqueCurl() failure") 
 class FailCurlxSetoptProxy : public Curlx {
  public:
   using Curlx::Curlx;
-  virtual CURLcode SetoptProxy(
-      UniqueCurl &, const std::string &) noexcept override {
-    return CURLE_UNSUPPORTED_PROTOCOL; // any error is okay here
+  CURLcode SetoptProxy(UniqueCurl &, const std::string &) noexcept override {
+    return CURLE_UNSUPPORTED_PROTOCOL;  // any error is okay here
   }
 };
 
-TEST_CASE(
-    "Curlx::GetMaybeSOCKS5() deals with Curlx::SetoptProxy() failure") {
+TEST_CASE("Curlx::GetMaybeSOCKS5() deals with Curlx::SetoptProxy() failure") {
   FailCurlxSetoptProxy curlx{NoLogger{}};
   std::string body;
   REQUIRE(!curlx.GetMaybeSOCKS5("9050", "http://x.org", 1, &body));
@@ -54,10 +50,7 @@ TEST_CASE("Curlx::Get() deals with null body") {
 class FailCurlxSetoptUrl : public Curlx {
  public:
   using Curlx::Curlx;
-  virtual CURLcode SetoptURL(
-      UniqueCurl &, const std::string &) noexcept {
-    return CURLE_AGAIN;
-  }
+  CURLcode SetoptURL(UniqueCurl &, const std::string &) noexcept { return CURLE_AGAIN; }
 };
 
 TEST_CASE("Curlx::Get() deals with Curlx::SetoptURL() failure") {
@@ -70,8 +63,7 @@ TEST_CASE("Curlx::Get() deals with Curlx::SetoptURL() failure") {
 class FailCurlxSetoptWritefunction : public Curlx {
  public:
   using Curlx::Curlx;
-  virtual CURLcode SetoptWriteFunction(
-      UniqueCurl &, CurlWriteCb) noexcept override {
+  CURLcode SetoptWriteFunction(UniqueCurl &, CurlWriteCb) noexcept override {
     return CURLE_AGAIN;
   }
 };
@@ -86,10 +78,7 @@ TEST_CASE("Curlx::Get() deals with Curlx::SetoptWriteFunction() failure") {
 class FailCurlxSetoptWritedata : public Curlx {
  public:
   using Curlx::Curlx;
-  virtual CURLcode SetoptWriteData(
-      UniqueCurl &, void *) noexcept override {
-    return CURLE_AGAIN;
-  }
+  CURLcode SetoptWriteData(UniqueCurl &, void *) noexcept override { return CURLE_AGAIN; }
 };
 
 TEST_CASE("Curlx::Get() deals with Curlx::SetoptWriteData() failure") {
@@ -102,10 +91,7 @@ TEST_CASE("Curlx::Get() deals with Curlx::SetoptWriteData() failure") {
 class FailCurlxSetoptTimeout : public Curlx {
  public:
   using Curlx::Curlx;
-  virtual CURLcode SetoptTimeout(
-      UniqueCurl &, long) noexcept override {
-    return CURLE_AGAIN;
-  }
+  CURLcode SetoptTimeout(UniqueCurl &, long) noexcept override { return CURLE_AGAIN; }
 };
 
 TEST_CASE("Curlx::Get() deals with Curlx::SetoptTimeout() failure") {
@@ -118,10 +104,7 @@ TEST_CASE("Curlx::Get() deals with Curlx::SetoptTimeout() failure") {
 class FailCurlxSetoptFailonerror : public Curlx {
  public:
   using Curlx::Curlx;
-  virtual CURLcode SetoptFailonerr(
-      UniqueCurl &) noexcept override {
-    return CURLE_AGAIN;
-  }
+  CURLcode SetoptFailonerr(UniqueCurl &) noexcept override { return CURLE_AGAIN; }
 };
 
 TEST_CASE("Curlx::Get() deals with Curlx::SetoptFailonerror() failure") {
@@ -134,8 +117,7 @@ TEST_CASE("Curlx::Get() deals with Curlx::SetoptFailonerror() failure") {
 class FailCurlxPerform : public Curlx {
  public:
   using Curlx::Curlx;
-  virtual CURLcode Perform(
-    UniqueCurl &) noexcept override { return CURLE_AGAIN; }
+  CURLcode Perform(UniqueCurl &) noexcept override { return CURLE_AGAIN; }
 };
 
 TEST_CASE("Curlx::Get() deals with Curlx::Perform() failure") {
@@ -151,6 +133,5 @@ TEST_CASE("Curlx::Get() deals with Curlx::Perform() failure") {
 TEST_CASE("Curlx::SetoptProxy() works") {
   Curlx curlx{NoLogger{}};
   UniqueCurl handle{curlx.NewUniqueCurl()};
-  REQUIRE(curlx.SetoptProxy(
-    handle, "socks5h://127.0.0.1:9050") == CURLE_OK);
+  REQUIRE(curlx.SetoptProxy(handle, "socks5h://127.0.0.1:9050") == CURLE_OK);
 }
