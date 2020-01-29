@@ -1242,7 +1242,7 @@ TEST_CASE(
     "sending header") {
   FailNetxSendn client;
   std::string m{"foo"};
-  client.sys->set_last_error(0);
+  client.sys->SetLastError(0);
   REQUIRE(client.msg_write_legacy(  //
               libndt::msg_test_start, std::move(m)) == false);
 }
@@ -1261,7 +1261,7 @@ TEST_CASE(
     "sending message") {
   FailLargeNetxSendn client;
   std::string m{"foobar"};
-  client.sys->set_last_error(0);
+  client.sys->SetLastError(0);
   REQUIRE(client.msg_write_legacy(  //
               libndt::msg_test_start, std::move(m)) == false);
 }
@@ -1432,7 +1432,7 @@ TEST_CASE(
     "Client::msg_read_legacy() deals with Client::recv() failure when reading "
     "header") {
   FailNetxRecvn client;
-  client.sys->set_last_error(0);
+  client.sys->SetLastError(0);
   libndt::MsgType code = libndt::MsgType{0};
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
@@ -1458,7 +1458,7 @@ TEST_CASE(
     "Client::msg_read_legacy() deals with Client::recvn() failure when reading "
     "message") {
   FailLargeNetxRecvn client;
-  client.sys->set_last_error(0);
+  client.sys->SetLastError(0);
   libndt::MsgType code = libndt::MsgType{0};
   std::string s;
   REQUIRE(client.msg_read_legacy(&code, &s) == false);
@@ -2060,9 +2060,9 @@ TEST_CASE("Client::netx_map_eai() correctly maps all errors") {
   REQUIRE(client.netx_map_eai(EAI_NONAME) == Err::ai_noname);
 #ifdef EAI_SYSTEM
   {
-    client.sys->set_last_error(E(WOULDBLOCK));
+    client.sys->SetLastError(E(WOULDBLOCK));
     REQUIRE(client.netx_map_eai(EAI_SYSTEM) == Err::operation_would_block);
-    client.sys->set_last_error(0);
+    client.sys->SetLastError(0);
   }
 #endif
 }
@@ -2108,7 +2108,7 @@ class FailGetaddrinfoInNetxConnectClient : public libndt::Client {
 class FailGetaddrinfoInNetxConnectSys : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  int getaddrinfo(const char *, const char *, const addrinfo *,
+  int Getaddrinfo(const char *, const char *, const addrinfo *,
                   addrinfo **) const noexcept override {
     return EAI_AGAIN;
   }
@@ -2124,8 +2124,8 @@ TEST_CASE("Client::netx_dial() deals with Client::getaddrinfo() failure") {
 class FailSocket : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  libndt::Socket socket(int, int, int) const noexcept override {
-    set_last_error(OS_EINVAL);
+  libndt::Socket NewSocket(int, int, int) const noexcept override {
+    this->SetLastError(OS_EINVAL);
     return (libndt::Socket)-1;
   }
 };
@@ -2155,9 +2155,9 @@ TEST_CASE(
 class FailSocketConnectImmediate : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  int connect(  //
+  int Connect(  //
       libndt::Socket, const sockaddr *, socklen_t) const noexcept override {
-    set_last_error(OS_EINVAL);
+    this->SetLastError(OS_EINVAL);
     return -1;
   }
 };
@@ -2187,9 +2187,9 @@ class FailSocketConnectTimeoutClient : public libndt::Client {
 class FailSocketConnectTimeoutSys : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  int connect(  //
+  int Connect(  //
       libndt::Socket, const sockaddr *, socklen_t) const noexcept override {
-    set_last_error(OS_EINPROGRESS);
+    this->SetLastError(OS_EINPROGRESS);
     return -1;
   }
 };
@@ -2216,14 +2216,14 @@ class FailSocketConnectGetsockoptErrorClient : public libndt::Client {
 class FailSocketConnectGetsockoptErrorSys : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  int connect(  //
+  int Connect(  //
       libndt::Socket, const sockaddr *, socklen_t) const noexcept override {
-    set_last_error(OS_EINPROGRESS);
+    this->SetLastError(OS_EINPROGRESS);
     return -1;
   }
-  int getsockopt(libndt::Socket, int, int, void *,
+  int Getsockopt(libndt::Socket, int, int, void *,
                  socklen_t *) const noexcept override {
-    set_last_error(OS_EINVAL);
+    this->SetLastError(OS_EINVAL);
     return -1;
   }
 };
@@ -2251,12 +2251,12 @@ class FailSocketConnectSocketErrorClient : public libndt::Client {
 class FailSocketConnectSocketErrorSys : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  int connect(  //
+  int Connect(  //
       libndt::Socket, const sockaddr *, socklen_t) const noexcept override {
-    set_last_error(OS_EINPROGRESS);
+    this->SetLastError(OS_EINPROGRESS);
     return -1;
   }
-  virtual int getsockopt(libndt::Socket, int, int, void *value,
+  virtual int Getsockopt(libndt::Socket, int, int, void *value,
                          socklen_t *) const noexcept override {
     int *ivalue = static_cast<int *>(value);
     *ivalue = OS_EINVAL;  // Any error would actually do here
@@ -2317,7 +2317,7 @@ TEST_CASE("Client::netx_recvn() deals with Client::netx_recv() failure") {
 class RecvEof : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  libndt::Ssize recv(libndt::Socket, void *,
+  libndt::Ssize Recv(libndt::Socket, void *,
                      libndt::Size) const noexcept override {
     return 0;
   }
@@ -2373,7 +2373,7 @@ class PartialRecvAndThenEof : public libndt::Sys {
   using libndt::Sys::Sys;
   static constexpr libndt::Size amount = 7;
   static constexpr libndt::Size good_amount = 5;
-  libndt::Ssize recv(libndt::Socket, void *buf,
+  libndt::Ssize Recv(libndt::Socket, void *buf,
                      libndt::Size size) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
@@ -2427,9 +2427,9 @@ TEST_CASE("Client::netx_sendn() deals with too-large buffer") {
 class FailSend : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  libndt::Ssize send(libndt::Socket, const void *,
+  libndt::Ssize Send(libndt::Socket, const void *,
                      libndt::Size) const noexcept override {
-    set_last_error(OS_EINVAL);
+    this->SetLastError(OS_EINVAL);
     return -1;
   }
 };
@@ -2446,7 +2446,7 @@ TEST_CASE("Client::netx_sendn() deals with Client::send() failure") {
 class SendEof : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  libndt::Ssize send(libndt::Socket, const void *,
+  libndt::Ssize Send(libndt::Socket, const void *,
                      libndt::Size) const noexcept override {
     return 0;
   }
@@ -2465,14 +2465,14 @@ class PartialSendAndThenError : public libndt::Sys {
   static constexpr libndt::Size amount = 11;
   static constexpr libndt::Size good_amount = 3;
   std::shared_ptr<libndt::Size> successful = std::make_shared<libndt::Size>(0);
-  libndt::Ssize send(libndt::Socket, const void *,
+  libndt::Ssize Send(libndt::Socket, const void *,
                      libndt::Size size) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
       *successful += good_amount;
       return good_amount;
     }
-    set_last_error(OS_EINVAL);
+    this->SetLastError(OS_EINVAL);
     return -1;
   }
 };
@@ -2499,7 +2499,7 @@ class PartialSendAndThenEof : public libndt::Sys {
   static constexpr libndt::Size amount = 7;
   static constexpr libndt::Size good_amount = 5;
   std::shared_ptr<libndt::Size> successful = std::make_shared<libndt::Size>(0);
-  libndt::Ssize send(libndt::Socket, const void *,
+  libndt::Ssize Send(libndt::Socket, const void *,
                      libndt::Size size) const noexcept override {
     if (size == amount) {
       assert(size >= good_amount);
@@ -2531,7 +2531,7 @@ TEST_CASE(
 class FailGetaddrinfo : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  int getaddrinfo(const char *, const char *, const addrinfo *,
+  int Getaddrinfo(const char *, const char *, const addrinfo *,
                   addrinfo **) const noexcept override {
     return EAI_AGAIN;
   }
@@ -2547,7 +2547,7 @@ TEST_CASE("Client::netx_resolve() deals with Client::getaddrinfo() failure") {
 class FailGetnameinfo : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  int getnameinfo(const sockaddr *, socklen_t, char *, socklen_t, char *,
+  int Getnameinfo(const sockaddr *, socklen_t, char *, socklen_t, char *,
                   socklen_t, int) const noexcept override {
     return EAI_AGAIN;
   }
@@ -2569,11 +2569,11 @@ class FailIoctlsocket : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
   u_long expect = 2UL;  // value that should not be used
-  int ioctlsocket(libndt::Socket, long cmd,
+  int Ioctlsocket(libndt::Socket, long cmd,
                   u_long *value) const noexcept override {
     REQUIRE(cmd == FIONBIO);
     REQUIRE(*value == expect);
-    ::SetLastError(WSAEINVAL);
+    this->SetLastError(WSAEINVAL);
     return -1;
   }
 };
@@ -2600,8 +2600,8 @@ TEST_CASE(
 class FailFcntlGet : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  using libndt::Sys::fcntl;
-  int fcntl(libndt::Socket, int cmd) const noexcept override {
+  using libndt::Sys::Fcntl;
+  int Fcntl(libndt::Socket, int cmd) const noexcept override {
     REQUIRE(cmd == F_GETFL);
     errno = EINVAL;
     return -1;
@@ -2619,12 +2619,12 @@ TEST_CASE(
 class FailFcntlSet : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
-  int fcntl(libndt::Socket, int cmd) const noexcept override {
+  int Fcntl(libndt::Socket, int cmd) const noexcept override {
     REQUIRE(cmd == F_GETFL);
     return 0;
   }
   int expect = ~0;  // value that should never appear
-  int fcntl(libndt::Socket, int cmd, int flags) const noexcept override {
+  int Fcntl(libndt::Socket, int cmd, int flags) const noexcept override {
     REQUIRE(cmd == F_SETFL);
     REQUIRE(flags == expect);
     errno = EINVAL;
@@ -2660,11 +2660,11 @@ class InterruptPoll : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
   std::shared_ptr<unsigned int> count = std::make_shared<unsigned int>();
-  int poll(pollfd *, nfds_t, int) const noexcept override {
+  int Poll(pollfd *, nfds_t, int) const noexcept override {
     if ((*count)++ == 0) {
-      set_last_error(EINTR);
+      this->SetLastError(EINTR);
     } else {
-      set_last_error(EIO);
+      this->SetLastError(EIO);
     }
     return -1;
   }
@@ -2691,9 +2691,9 @@ class TimeoutPoll : public libndt::Sys {
  public:
   using libndt::Sys::Sys;
 #ifdef _WIN32
-  int poll(LPWSAPOLLFD, ULONG, INT) const noexcept override
+  int Poll(LPWSAPOLLFD, ULONG, INT) const noexcept override
 #else
-  int poll(pollfd *, nfds_t, int) const noexcept override
+  int Poll(pollfd *, nfds_t, int) const noexcept override
 #endif
   {
     return 0;
@@ -2725,7 +2725,7 @@ TEST_CASE("Client::query_mlabns_curl() deals with Curl{} failure") {
 }
 #endif
 
-// Client::sys->get_last_error() tests
+// Client::sys->GetLastError() tests
 // ----------------------------------
 
 #ifdef _WIN32
@@ -2734,12 +2734,12 @@ TEST_CASE("Client::query_mlabns_curl() deals with Curl{} failure") {
 #define OS_EINVAL EINVAL
 #endif
 
-TEST_CASE("Client::sys->get_last_error() works as expected") {
+TEST_CASE("Client::sys->GetLastError() works as expected") {
   libndt::Client client;
-  client.sys->set_last_error(OS_EINVAL);
-  REQUIRE(client.sys->get_last_error() == OS_EINVAL);
-  client.sys->set_last_error(0);  // clear
-  REQUIRE(client.sys->get_last_error() == 0);
+  client.sys->SetLastError(OS_EINVAL);
+  REQUIRE(client.sys->GetLastError() == OS_EINVAL);
+  client.sys->SetLastError(0);  // clear
+  REQUIRE(client.sys->GetLastError() == 0);
 }
 
 // Client::recv() tests
@@ -2747,7 +2747,7 @@ TEST_CASE("Client::sys->get_last_error() works as expected") {
 
 TEST_CASE("Sys::recv() deals with too-large buffer") {
   libndt::Client client;
-  REQUIRE(client.sys->recv(
+  REQUIRE(client.sys->Recv(
         0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
 }
 
@@ -2756,6 +2756,6 @@ TEST_CASE("Sys::recv() deals with too-large buffer") {
 
 TEST_CASE("Sys::send() deals with too-large buffer") {
   libndt::Client client;
-  REQUIRE(client.sys->send(
+  REQUIRE(client.sys->Send(
         0, nullptr, (unsigned long long)OS_SSIZE_MAX + 1) == -1);
 }

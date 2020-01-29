@@ -1237,7 +1237,7 @@ bool Client::ndt7_upload() noexcept {
       // Read tcp_info data for the socket and print it as JSON.
       struct tcp_info tcpinfo{};
       socklen_t tcpinfolen = sizeof(tcpinfo);
-      if (sys->getsockopt(sock_, IPPROTO_TCP, TCP_INFO, (void *)&tcpinfo,
+      if (sys->Getsockopt(sock_, IPPROTO_TCP, TCP_INFO, (void *)&tcpinfo,
                           &tcpinfolen) == 0) {
         measurement["TCPInfo"] = nlohmann::json();
         measurement["TCPInfo"]["ElapsedTime"] = (std::uint64_t) elapsed_usec.count();
@@ -2204,7 +2204,7 @@ static int libndt_bio_operation(
   Ssize rv = operation(clnt, (Socket)sock, base, (Size)count);
   if (rv < 0) {
     assert(rv == -1);
-    auto err = clnt->netx_map_errno(clnt->sys->get_last_error());
+    auto err = clnt->netx_map_errno(clnt->sys->GetLastError());
     if (err == Err::operation_would_block) {
       set_retry(bio);
     }
@@ -2222,7 +2222,7 @@ static int libndt_bio_write(BIO *bio, const char *base, int count) noexcept {
   return libndt_bio_operation(
       bio, (char *)base, count,
       [](Client *clnt, Socket sock, char *base, Size count) noexcept {
-        return clnt->sys->send(sock, (const char *)base, count);
+        return clnt->sys->Send(sock, (const char *)base, count);
       },
       [](BIO *bio) noexcept { ::BIO_set_retry_write(bio); });
   // clang-format on
@@ -2234,7 +2234,7 @@ static int libndt_bio_read(BIO *bio, char *base, int count) noexcept {
   return libndt_bio_operation(
       bio, base, count,
       [](Client *clnt, Socket sock, char *base, Size count) noexcept {
-        return clnt->sys->recv(sock, base, count);
+        return clnt->sys->Recv(sock, base, count);
       },
       [](BIO *bio) noexcept { ::BIO_set_retry_read(bio); });
   // clang-format on
@@ -2295,7 +2295,7 @@ static Err map_ssl_error(const Client *client, SSL *ssl, int ret) noexcept {
     case SSL_ERROR_WANT_WRITE:
       return Err::ssl_want_write;
     case SSL_ERROR_SYSCALL:
-      auto ecode = client->sys->get_last_error();
+      auto ecode = client->sys->GetLastError();
       if (ecode) {
         return client->netx_map_errno(ecode);
       }
@@ -2755,7 +2755,7 @@ Err Client::netx_map_eai(int ec) noexcept {
     case EAI_NONAME: return Err::ai_noname;
 #ifdef EAI_SYSTEM
     case EAI_SYSTEM: {
-      return netx_map_errno(sys->get_last_error());
+      return netx_map_errno(sys->GetLastError());
     }
 #endif
   }
@@ -2792,15 +2792,15 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
     addrinfo *rp = nullptr;
-    int rv = sys->getaddrinfo(addr.data(), port.data(), &hints, &rp);
+    int rv = sys->Getaddrinfo(addr.data(), port.data(), &hints, &rp);
     if (rv != 0) {
       LIBNDT_EMIT_WARNING("netx_dial: unexpected getaddrinfo() failure");
       return netx_map_eai(rv);
     }
     assert(rp);
     for (auto aip = rp; (aip); aip = aip->ai_next) {
-      sys->set_last_error(0);
-      *sock = sys->socket(aip->ai_family, aip->ai_socktype, 0);
+      sys->SetLastError(0);
+      *sock = sys->NewSocket(aip->ai_family, aip->ai_socktype, 0);
       if (!is_socket_valid(*sock)) {
         LIBNDT_EMIT_WARNING("netx_dial: socket() failed");
         continue;
@@ -2813,7 +2813,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
         if (::setsockopt(  //
                 *sock, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on)) != 0) {
           LIBNDT_EMIT_WARNING("netx_dial: setsockopt(..., SO_NOSIGPIPE) failed");
-          sys->closesocket(*sock);
+          sys->Closesocket(*sock);
           *sock = -1;
           continue;
         }
@@ -2821,7 +2821,7 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
 #endif  // SO_NOSIGPIPE
       if (netx_setnonblocking(*sock, true) != Err::none) {
         LIBNDT_EMIT_WARNING("netx_dial: netx_setnonblocking() failed");
-        sys->closesocket(*sock);
+        sys->Closesocket(*sock);
         *sock = (libndt::Socket)-1;
         continue;
       }
@@ -2832,38 +2832,38 @@ Err Client::netx_dial(const std::string &hostname, const std::string &port,
 #ifdef _WIN32
       if (aip->ai_addrlen > sizeof(sockaddr_in6)) {
         LIBNDT_EMIT_WARNING("netx_dial: unexpected size of aip->ai_addrlen");
-        sys->closesocket(*sock);
+        sys->Closesocket(*sock);
         *sock = (libndt::Socket)-1;
         continue;
       }
 #endif
-      if (sys->connect(*sock, aip->ai_addr, (socklen_t)aip->ai_addrlen) == 0) {
+      if (sys->Connect(*sock, aip->ai_addr, (socklen_t)aip->ai_addrlen) == 0) {
         LIBNDT_EMIT_DEBUG("netx_dial: connect(): okay immediately");
         break;
       }
-      auto connect_err = netx_map_errno(sys->get_last_error());
+      auto connect_err = netx_map_errno(sys->GetLastError());
       if (CONNECT_IN_PROGRESS(connect_err)) {
         connect_err = netx_wait_writeable(*sock, settings_.timeout);
         if (connect_err == Err::none) {
           int soerr = 0;
           socklen_t soerrlen = sizeof(soerr);
-          if (sys->getsockopt(*sock, SOL_SOCKET, SO_ERROR, (void *)&soerr,
+          if (sys->Getsockopt(*sock, SOL_SOCKET, SO_ERROR, (void *)&soerr,
                              &soerrlen) == 0) {
             assert(soerrlen == sizeof(soerr));
             if (soerr == 0) {
               LIBNDT_EMIT_DEBUG("netx_dial: connect(): okay");
               break;
             }
-            sys->set_last_error(soerr);
+            sys->SetLastError(soerr);
           }
         }
       }
       LIBNDT_EMIT_WARNING("netx_dial: connect() failed: "
-                   << libndt_perror(netx_map_errno(sys->get_last_error())));
-      sys->closesocket(*sock);
+                   << libndt_perror(netx_map_errno(sys->GetLastError())));
+      sys->Closesocket(*sock);
       *sock = (libndt::Socket)-1;
     }
-    sys->freeaddrinfo(rp);
+    sys->Freeaddrinfo(rp);
     if (*sock != -1) {
       break;  // we have a connection!
     }
@@ -2905,7 +2905,7 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
         "netx_poll() to check the state of a socket");
     return Err::invalid_argument;
   }
-  sys->set_last_error(0);
+  sys->SetLastError(0);
   if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (count > INT_MAX) {
       return Err::invalid_argument;
@@ -2923,10 +2923,10 @@ Err Client::netx_recv_nonblocking(Socket fd, void *base, Size count,
     *actual = (Size)ret;
     return Err::none;
   }
-  auto rv = sys->recv(fd, base, count);
+  auto rv = sys->Recv(fd, base, count);
   if (rv < 0) {
     assert(rv == -1);
-    return netx_map_errno(sys->get_last_error());
+    return netx_map_errno(sys->GetLastError());
   }
   if (rv == 0) {
     assert(count > 0);  // guaranteed by the above check
@@ -2986,7 +2986,7 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
         "netx_poll() to check the state of a socket");
     return Err::invalid_argument;
   }
-  sys->set_last_error(0);
+  sys->SetLastError(0);
   if ((settings_.protocol_flags & protocol_flag_tls) != 0) {
     if (count > INT_MAX) {
       return Err::invalid_argument;
@@ -3004,10 +3004,10 @@ Err Client::netx_send_nonblocking(Socket fd, const void *base, Size count,
     *actual = (Size)ret;
     return Err::none;
   }
-  auto rv = sys->send(fd, base, count);
+  auto rv = sys->Send(fd, base, count);
   if (rv < 0) {
     assert(rv == -1);
-    return netx_map_errno(sys->get_last_error());
+    return netx_map_errno(sys->GetLastError());
   }
   // Send() should not return zero unless count is zero. So consider a zero
   // return value as an I/O error rather than EOF.
@@ -3047,10 +3047,10 @@ Err Client::netx_resolve(const std::string &hostname,
   hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
   addrinfo *rp = nullptr;
   constexpr const char *portno = "80";  // any port would do
-  int rv = sys->getaddrinfo(hostname.data(), portno, &hints, &rp);
+  int rv = sys->Getaddrinfo(hostname.data(), portno, &hints, &rp);
   if (rv != 0) {
     hints.ai_flags &= ~AI_NUMERICHOST;
-    rv = sys->getaddrinfo(hostname.data(), portno, &hints, &rp);
+    rv = sys->Getaddrinfo(hostname.data(), portno, &hints, &rp);
     if (rv != 0) {
       auto err = netx_map_eai(rv);
       LIBNDT_EMIT_WARNING(
@@ -3079,7 +3079,7 @@ Err Client::netx_resolve(const std::string &hostname,
       break;
     }
 #endif
-    if (sys->getnameinfo(aip->ai_addr, (socklen_t)aip->ai_addrlen, address,
+    if (sys->Getnameinfo(aip->ai_addr, (socklen_t)aip->ai_addrlen, address,
                         (socklen_t)sizeof(address), port,
                         (socklen_t)sizeof(port),
                         NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
@@ -3090,29 +3090,29 @@ Err Client::netx_resolve(const std::string &hostname,
     addrs->push_back(address);  // we only care about address
     LIBNDT_EMIT_DEBUG("netx_resolve: - " << address);
   }
-  sys->freeaddrinfo(rp);
+  sys->Freeaddrinfo(rp);
   return result;
 }
 
 Err Client::netx_setnonblocking(Socket fd, bool enable) noexcept {
 #ifdef _WIN32
   u_long lv = (enable) ? 1UL : 0UL;
-  if (sys->ioctlsocket(fd, FIONBIO, &lv) != 0) {
-    return netx_map_errno(sys->get_last_error());
+  if (sys->Ioctlsocket(fd, FIONBIO, &lv) != 0) {
+    return netx_map_errno(sys->GetLastError());
   }
 #else
-  auto flags = sys->fcntl(fd, F_GETFL);
+  auto flags = sys->Fcntl(fd, F_GETFL);
   if (flags < 0) {
     assert(flags == -1);
-    return netx_map_errno(sys->get_last_error());
+    return netx_map_errno(sys->GetLastError());
   }
   if (enable) {
     flags |= O_NONBLOCK;
   } else {
     flags &= ~O_NONBLOCK;
   }
-  if (sys->fcntl(fd, F_SETFL, flags) != 0) {
-    return netx_map_errno(sys->get_last_error());
+  if (sys->Fcntl(fd, F_SETFL, flags) != 0) {
+    return netx_map_errno(sys->GetLastError());
   }
 #endif
   return Err::none;
@@ -3176,16 +3176,16 @@ again:
     LIBNDT_EMIT_WARNING("netx_poll: avoiding overflow");
     return Err::value_too_large;
   }
-  rv = sys->poll(pfds->data(), (uint8_t)pfds->size(), timeout_msec);
+  rv = sys->Poll(pfds->data(), (uint8_t)pfds->size(), timeout_msec);
   // TODO(bassosimone): handle the case where POLLNVAL is returned.
 #ifdef _WIN32
   if (rv == SOCKET_ERROR) {
-    return netx_map_errno(sys->get_last_error());
+    return netx_map_errno(sys->GetLastError());
   }
 #else
   if (rv < 0) {
     assert(rv == -1);
-    auto err = netx_map_errno(sys->get_last_error());
+    auto err = netx_map_errno(sys->GetLastError());
     if (err == Err::interrupted) {
       goto again;
     }
@@ -3211,8 +3211,8 @@ Err Client::netx_shutdown_both(Socket fd) noexcept {
       return err;
     }
   }
-  if (sys->shutdown(fd, LIBNDT_OS_SHUT_RDWR) != 0) {
-    return netx_map_errno(sys->get_last_error());
+  if (sys->Shutdown(fd, LIBNDT_OS_SHUT_RDWR) != 0) {
+    return netx_map_errno(sys->GetLastError());
   }
   return Err::none;
 }
@@ -3225,8 +3225,8 @@ Err Client::netx_closesocket(Socket fd) noexcept {
     ::SSL_free(fd_to_ssl_.at(fd));
     fd_to_ssl_.erase(fd);
   }
-  if (sys->closesocket(fd) != 0) {
-    return netx_map_errno(sys->get_last_error());
+  if (sys->Closesocket(fd) != 0) {
+    return netx_map_errno(sys->GetLastError());
   }
   return Err::none;
 }
