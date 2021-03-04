@@ -2,7 +2,10 @@
 
 [![GitHub license](https://img.shields.io/github/license/measurement-kit/libndt.svg)](https://raw.githubusercontent.com/measurement-kit/libndt/master/LICENSE) [![Github Releases](https://img.shields.io/github/release/measurement-kit/libndt.svg)](https://github.com/measurement-kit/libndt/releases) [![Build Status](https://img.shields.io/travis/measurement-kit/libndt/master.svg?label=travis)](https://travis-ci.org/measurement-kit/libndt) [![codecov](https://codecov.io/gh/measurement-kit/libndt/branch/master/graph/badge.svg)](https://codecov.io/gh/measurement-kit/libndt) [![Build status](https://img.shields.io/appveyor/ci/bassosimone/libndt/master.svg?label=appveyor)](https://ci.appveyor.com/project/bassosimone/libndt/branch/master) [![Documentation](https://codedocs.xyz/measurement-kit/libndt.svg)](https://codedocs.xyz/measurement-kit/libndt/)
 
-**Note**: this project is currently unmaintained due to lack of time.
+**Note**: this project is currently unmaintained due to lack of time. Maybe
+one day we'll find a fix for this issue and resume development...
+
+![It's not supposed to make that noise. You leave the brakes on](docs/tardis.gif)
 
 Libndt is a [Network-Diagnostic-Tool](
 https://github.com/ndt-project/ndt/wiki/NDTProtocol) (NDT) single-include
