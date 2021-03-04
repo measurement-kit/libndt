@@ -5,7 +5,7 @@
 **Note**: this project is currently unmaintained due to lack of time. Maybe
 one day we'll find a fix for this issue and resume development...
 
-![It's not supposed to make that noise. You leave the brakes on](docs/tardis.gif)
+![It's not supposed to make that noise. You leave the brakes on.](docs/tardis.gif)
 
 Libndt is a [Network-Diagnostic-Tool](
 https://github.com/ndt-project/ndt/wiki/NDTProtocol) (NDT) single-include
